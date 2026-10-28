@@ -312,7 +312,7 @@ export async function handleComponentMapperDataRequest(
 
   const access = await engineAdminReadAccess(request, env);
   if (!access.ok) return json({ error: access.error }, { status: access.status });
-  if (!sameOrigin(request)) return json({ error: "Invalid request origin." }, { status: 403 });
+  // Authenticated GET is read-only; browsers do not normally send an Origin header.
   if (!(await processingSchemaReady(env)))
     return json(
       { contractVersion: 1, schemaReady: false, error: "Component mapper schema dependencies are not installed." },

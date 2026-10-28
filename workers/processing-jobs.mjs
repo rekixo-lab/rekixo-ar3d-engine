@@ -454,7 +454,7 @@ export async function handleProcessingRequest(
 
   const access = await engineAdminReadAccess(request, env);
   if (!access.ok) return json({ error: access.error }, { status: access.status });
-  if (!sameOrigin(request)) return json({ error: "Invalid request origin." }, { status: 403 });
+  if (request.method !== "GET" && !sameOrigin(request)) return json({ error: "Invalid request origin." }, { status: 403 });
   if (!(await schemaReady(env)))
     return json(
       {
