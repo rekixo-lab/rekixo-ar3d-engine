@@ -42,6 +42,7 @@ export default function EngineDashboard() {
   const [geoState, setGeoState] = useState<CloudGeoReleaseState>();
   const [experienceItems, setExperienceItems] = useState<EngineExperienceSummary[]>([]);
   const [sourcePack, setSourcePack] = useState<SourcePackState["latestPack"]>(null);
+  const [sourcePackError, setSourcePackError] = useState("");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
@@ -88,15 +89,20 @@ export default function EngineDashboard() {
     let live = true;
     setDetailLoading(true);
     setError("");
+    setSourcePackError("");
     const sourcePackRequest = fetch(
       `${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(selectedSlug)}/source-pack-review`,
       { headers: { Accept: "application/json" }, cache: "no-store" },
     )
       .then(async (response) => {
-        if (!response.ok) return { latestPack: null } as SourcePackState;
-        return (await response.json()) as SourcePackState;
+        const payload = (await response.json()) as SourcePackState & { error?: string };
+        if (!response.ok) throw Error(payload.error || `Source Pack API returned HTTP ${response.status}.`);
+        return payload;
       })
-      .catch(() => ({ latestPack: null } as SourcePackState));
+      .catch((reason: unknown) => {
+        if (live) setSourcePackError(reason instanceof Error ? reason.message : "Source Pack API unavailable.");
+        return { latestPack: null } as SourcePackState;
+      });
 
     void Promise.all([
       releases(selectedSlug),
@@ -162,6 +168,9 @@ export default function EngineDashboard() {
         action: "create" as const,
       };
     }
+    if (sourcePackError) {
+      return { label: "Source Pack API unavailable", help: sourcePackError, href: projectHref("source-pack", selectedProject.slug), action: "link" as const };
+    }
     if (!sourceReady) {
       return {
         label: "Review Source Pack",
@@ -200,7 +209,7 @@ export default function EngineDashboard() {
       href: projectHref("releases", selectedProject.slug),
       action: "link" as const,
     };
-  }, [selectedProject, sourceReady, activeBuilding, geoExperience, activeGeo]);
+  }, [selectedProject, sourceReady, activeBuilding, geoExperience, activeGeo, sourcePackError]);
 
   function selectProject(slug: string) {
     setSelectedSlug(slug);
@@ -332,9 +341,9 @@ export default function EngineDashboard() {
                 <article className="engine-control-card">
                   <div className="engine-overview-card-head">
                     <span>SOURCE PACK</span>
-                    <i className={statusTone(sourceReady ? "ready" : sourcePack ? "warning" : "idle")}>{sourceReady ? "READY" : sourcePack ? sourcePack.status.toUpperCase() : "NOT STARTED"}</i>
+                    <i className={statusTone(sourceReady ? "ready" : sourcePackError || sourcePack ? "warning" : "idle")}>{sourceReady ? "READY" : sourcePackError ? "API ERROR" : sourcePack ? sourcePack.status.toUpperCase() : "NOT STARTED"}</i>
                   </div>
-                  <h3>{sourcePack ? `Source Pack v${sourcePack.version}` : "Verified originals"}</h3>
+                  <h3>{sourcePackError ? "Source Pack unavailable" : sourcePack ? `Source Pack v${sourcePack.version}` : "Verified originals"}</h3>
                   <p>Files, geometry authority, scale, component review and durable processing.</p>
                   <a href={projectHref("source-pack", selectedProject.slug)}>Open Source Pack</a>
                 </article>

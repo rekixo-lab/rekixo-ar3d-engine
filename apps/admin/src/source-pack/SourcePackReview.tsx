@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ADMIN_BASE_PATH } from "@rekixo/3d-contracts";
 import ProcessingSpine from "./ProcessingSpine";
+import SourceOriginalUploader from "./SourceOriginalUploader";
 import "./source-pack-review.css";
 
 type AuthoritySuggestion =
@@ -302,6 +303,8 @@ export default function SourcePackReview() {
       {error ? <div className="source-review__alert source-review__alert--error">{error}</div> : null}
       {message ? <div className="source-review__alert source-review__alert--ok">{message}</div> : null}
 
+      <SourceOriginalUploader slug={slug} locked={pack?.status === "draft"} onVerified={load} />
+
       <section className="source-review__summary" id="source-step-sources">
         <article>
           <span>AUTO SUGGESTION</span>
@@ -314,12 +317,12 @@ export default function SourcePackReview() {
         </article>
         <article>
           <span>SOURCE PACK</span>
-          <strong>{pack ? `v${pack.version} · ${pack.status.toUpperCase()}` : "Not started"}</strong>
+          <strong>{pack ? `v${pack.version} · ${pack.status.toUpperCase()}` : data ? "Not started" : "Unavailable"}</strong>
           <small>{pack?.manifestSha256 ? `Manifest ${pack.manifestSha256.slice(0, 12)}…` : "Seal creates immutable manifest"}</small>
         </article>
         <article>
           <span>VERIFIED FILES</span>
-          <strong>{pack?.readiness.verifiedSourceCount ?? data?.suggestions.length ?? 0}</strong>
+          <strong>{data ? (pack?.readiness.verifiedSourceCount ?? data.suggestions.length) : "—"}</strong>
           <small>{dirty ? "Unsaved review changes" : pack?.readiness.ready ? "Review complete" : "Review / authority selection pending"}</small>
         </article>
       </section>
