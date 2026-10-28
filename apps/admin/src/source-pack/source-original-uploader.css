@@ -26,3 +26,14 @@
 .source-originals__progress { color: #8ac3ff; font-size: 13px; }
 .source-originals__error { color: #ff9ca1; font-size: 13px; overflow-wrap: anywhere; }
 @media (max-width: 660px) { .source-originals__header { flex-direction: column; align-items: stretch; } .source-originals__pick { width: 100%; } }
+
+.source-originals__fallback { margin-top: 18px; padding-top: 18px; border-top: 1px solid #283952; }
+.source-originals__fallback h3 { margin: 0 0 8px; font-size: 16px; }
+.source-originals__pick--secondary { margin-top: 12px; background: #233b60; }
+.source-originals__scale { margin-top: 14px; display: grid; gap: 7px; }
+.source-originals__scale p { margin: 0; color: #b9c9df; font-size: 13px; }
+.source-originals__scale > label:not(.source-originals__confirmation) { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+.source-originals__scale input[type="number"] { width: 160px; border: 1px solid #43516c; border-radius: 6px; background: #070c16; color: white; padding: 8px; }
+.source-originals__confirmation { display: flex; align-items: start; gap: 10px; font-size: 13px; color: #cad7e8; }
+.source-originals__convert { justify-self: start; padding: 10px 14px; background: #177c56; color: white; font-weight: 700; border: 0; border-radius: 8px; cursor: pointer; }
+.source-originals__convert:disabled { opacity: .45; cursor: not-allowed; }

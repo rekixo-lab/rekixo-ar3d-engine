@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ADMIN_BASE_PATH } from "@rekixo/3d-contracts";
+import { analyseBrowserFbx, exportReviewedBrowserGlb, reviewedDimensions, type BrowserFbxAnalysis } from "./browserFbxConverter";
 import "./source-original-uploader.css";
 
 type SourceOriginal = {
@@ -112,6 +113,10 @@ export default function SourceOriginalUploader({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
+  const [reviewFile, setReviewFile] = useState<File | null>(null);
+  const [fbxAnalysis, setFbxAnalysis] = useState<BrowserFbxAnalysis | null>(null);
+  const [metresPerUnit, setMetresPerUnit] = useState("");
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
 
   async function refresh() {
     const data = await responseJson<{ sources: SourceOriginal[] }>(
@@ -154,6 +159,60 @@ export default function SourceOriginalUploader({
     }
   }
 
+  async function inspectSelectedFbx(file: File | undefined) {
+    setReviewFile(null);
+    setFbxAnalysis(null);
+    setReviewConfirmed(false);
+    if (!file || !slug || locked || busy) return;
+    setBusy(true);
+    setError("");
+    setProgress("Inspecting local FBX mesh and source units…");
+    try {
+      const inspected = await analyseBrowserFbx(file);
+      setFbxAnalysis(inspected);
+      setReviewFile(file);
+      setMetresPerUnit(String(inspected.declaredMetresPerUnit));
+      setProgress("Check the proposed metre dimensions against the approved survey layout.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "FBX geometry inspection failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createReviewedGlb() {
+    if (!slug || locked || busy || !reviewFile || !fbxAnalysis || !reviewConfirmed) return;
+    setBusy(true);
+    setError("");
+    try {
+      const scale = Number(metresPerUnit);
+      reviewedDimensions(fbxAnalysis, scale);
+      setProgress("Converting reviewed FBX to GLB locally (no Cloudflare Container)…");
+      const converted = await exportReviewedBrowserGlb(reviewFile, fbxAnalysis, scale);
+      await completeOriginal(slug, converted, setProgress);
+      await refresh();
+      await sendJson(
+        `${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(slug)}/source-classification`,
+        "POST",
+      );
+      await onVerified();
+      setProgress(`${converted.name} verified. Start the NEXT Source Pack version and approve this GLB as geometry authority.`);
+      setReviewFile(null);
+      setFbxAnalysis(null);
+      setReviewConfirmed(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Reviewed GLB conversion failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  let metresDimensions: [number, number, number] | null = null;
+  if (fbxAnalysis) {
+    try { metresDimensions = reviewedDimensions(fbxAnalysis, Number(metresPerUnit)); }
+    catch { metresDimensions = null; }
+  }
+
   return (
     <section className="source-originals" aria-label="Upload source originals">
       <div className="source-originals__header">
@@ -192,6 +251,48 @@ export default function SourceOriginalUploader({
         ))}
       </ul>
       {!sources.length && !error ? <p className="source-originals__note">No originals registered for this project yet.</p> : null}
+      <div className="source-originals__fallback">
+        <h3>FBX processor unavailable? Convert to GLB in this browser</h3>
+        <p className="source-originals__note">
+          No Cloudflare Containers required. Select the same FBX again, verify real-world scale,
+          and create a separate GLB. Your sealed FBX Source Pack and live releases stay untouched.
+        </p>
+        <label className="source-originals__pick source-originals__pick--secondary">
+          Choose FBX for local conversion
+          <input type="file" accept=".fbx" disabled={locked || busy || !slug}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              void inspectSelectedFbx(file);
+            }} />
+        </label>
+        {fbxAnalysis && reviewFile ? (
+          <div className="source-originals__scale">
+            <p>Source: <strong>{reviewFile.name}</strong> · {fbxAnalysis.meshCount} meshes</p>
+            <p>Raw bounds X/Y/Z: {fbxAnalysis.rawDimensions.map((n) => n.toFixed(2)).join(" × ")} units</p>
+            <p>Declared FBX unit: {fbxAnalysis.declaredMetresPerUnit} m/source unit</p>
+            <label>Reviewed metres per source unit
+              <input type="number" min="0.000001" max="1000000" step="any"
+                value={metresPerUnit}
+                onChange={(event) => { setMetresPerUnit(event.target.value); setReviewConfirmed(false); }} />
+            </label>
+            <p>Result X/Y/Z: <strong>
+              {metresDimensions ? metresDimensions.map((n) => n.toFixed(2)).join(" × ") + " metres" : "Invalid scale"}
+            </strong></p>
+            <label className="source-originals__confirmation">
+              <input type="checkbox" checked={reviewConfirmed}
+                onChange={(event) => setReviewConfirmed(event.target.checked)} />
+              I checked these dimensions against the approved layout and accept the reviewed GLB as a separate source.
+            </label>
+            <button type="button" className="source-originals__convert"
+              disabled={busy || locked || !reviewConfirmed || !metresDimensions}
+              onClick={() => void createReviewedGlb()}>
+              Generate & verify reviewed GLB
+            </button>
+          </div>
+        ) : null}
+      </div>
+
     </section>
   );
 }
