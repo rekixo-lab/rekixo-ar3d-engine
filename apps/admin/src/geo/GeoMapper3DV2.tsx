@@ -617,6 +617,7 @@ export default function GeoMapper3DV2() {
   async function verify() {
     if (verificationBlocker) throw new Error(verificationBlocker);
     if (!state?.draft) throw new Error("Geo draft missing.");
+    if (previewVariant !== "canonical") throw new Error("Verify in Canonical GLB mode only.");
     await verifyGeoPreview(selectedSlug, state.draft.revision);
     await reload(selectedSlug);
     setMessage("Current saved revision verified from the integrated same-map Building preview.");
@@ -692,11 +693,23 @@ export default function GeoMapper3DV2() {
           </section>
 
           <section className="geo3d-workspace geo-v2-workspace--integrated">
-            <article className="geo3d-map-card geo-v2-integrated-card">
-              <div className="geo3d-section-head">
-                <div><p className="eyebrow">WGS84 + RIGID BUILDING</p><h3>Integrated exact-placement preview</h3></div>
-                <div className="geo3d-preview-status"><strong>{renderModel?.variant || "building"}</strong><span>{renderModel?.name || "No active immutable preview"}</span></div>
+            <article className={`geo3d-map-card geo-v2-integrated-card${focusMode ? " geo-v2-integrated-card--focus" : ""}${!dockOpen ? " geo-v2-integrated-card--dock-closed" : ""}`}>
+              <div className="geo3d-section-head geo-v2-focus-header">
+                <div><p className="eyebrow">GEO SITE ALIGNMENT</p><h3>3D Plot Site · Satellite Alignment</h3></div>
+                <div className="geo-v2-focus-actions">
+                  {geoDerivativeAvailable && <label className="geo-v2-variant-control"><span>COMPARE GEOMETRY</span>
+                    <select aria-label="3D preview geometry variant" value={previewVariant} onChange={(event) => setPreviewVariant(event.target.value as "canonical" | "geo")}>
+                      <option value="canonical">Canonical GLB (alignment)</option>
+                      <option value="geo">Geo derivative (diagnostic)</option>
+                    </select>
+                  </label>}
+                  {focusMode && <button type="button" onClick={() => setDockOpen((open) => !open)}>{dockOpen ? "Hide Tools" : "Show Tools"}</button>}
+                  <button type="button" className="geo-v2-focus-button" aria-pressed={focusMode} onClick={() => setFocusMode((open) => !open)}>
+                    {focusMode ? "Exit Focus Mode" : "Full Screen Focus"}
+                  </button>
+                </div>
               </div>
+              {previewVariant === "geo" && <p className="geo-v2-variant-note" role="status">Derivative diagnostic only: origin can differ. Return to Canonical GLB before verifying.</p>}
               <div className="geo-v2-exact-placement-grid">
                 <div className="geo-v2-map-column">
                   <GeoIntegratedAuthoringMap
@@ -714,7 +727,7 @@ export default function GeoMapper3DV2() {
                     onPreviewStateChange={setPreviewState}
                   />
                 </div>
-                <GeoGuidedRigidAlignment
+                <div className="geo-v2-guided-dock"><GeoGuidedRigidAlignment
                   modelUrl={renderModel?.url || null}
                   modelName={renderModel?.name || "Building"}
                   coordinate={previewCoordinate}
@@ -730,7 +743,7 @@ export default function GeoMapper3DV2() {
                   onAllowScaleChange={setGuidedAllowScale}
                   onApply={applyGuidedSolution}
                   onFineAdjust={fineAdjustGuided}
-                />
+                /></div>
               </div>
               <p className="geo3d-help">Normal map click/drag moves the WGS84 anchor. While a P1–P4 Map capture is active, the WGS84 anchor is locked and the next map click records only that real-site control point.</p>
               <p className="geo3d-help">Guided alignment solves a rigid least-squares Building fit only. P1/P2 provide heading + East/North; P3/P4 expose residual error without homography, shear, or Building deformation.</p>
