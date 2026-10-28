@@ -39,6 +39,11 @@ const MIN_SOURCE_SPREAD_M2 = 0.01;
 const MIN_TARGET_SPREAD_M2 = 0.01;
 const MIN_GUIDED_SCALE = 0.5;
 const MAX_GUIDED_SCALE = 1.5;
+// An operator must explicitly acknowledge the source unit and ground survey
+// discrepancy before expanding the fitting envelope. Never silently loosen
+// ordinary drafting limits or mutate the underlying canonical geometry.
+const MIN_EXTENDED_GUIDED_SCALE = 0.1;
+const MAX_EXTENDED_GUIDED_SCALE = 5;
 
 function finite(value: number, label: string) {
   if (!Number.isFinite(value)) throw new Error(`${label} must be finite.`);
@@ -109,17 +114,22 @@ export function geoCanonicalPointToAnchorEnu(
  * - minimum 2 pairs: heading + East/North translation
  * - 3/4 pairs: least-squares fit with real residual diagnostics
  * - uniform scale is fixed at 1 by default and can only be solved explicitly
+ * - opt-in extended scale requires at least 3 real paired points and operator review
  * - no shear, homography, perspective warp, or non-uniform scale can enter
  */
 export function solveGeoGuidedRigidAlignment(
   origin: GeoGuidedLatLng,
   anchor: GeoGuidedSourcePoint,
   pairs: GeoGuidedControlPair[],
-  options: { allowScale?: boolean } = {},
+  options: { allowScale?: boolean; allowExtendedScale?: boolean } = {},
 ): GeoGuidedRigidSolution {
   validLatLng(origin);
   if (pairs.length < 2) throw new Error("Guided rigid alignment needs at least 2 paired points.");
   if (pairs.length > 12) throw new Error("Guided rigid alignment supports at most 12 paired points.");
+  if (options.allowExtendedScale && !options.allowScale)
+    throw new Error("Extended scale requires explicit uniform-scale solving.");
+  if (options.allowExtendedScale && pairs.length < 3)
+    throw new Error("Extended scale needs at least 3 independently matched site points.");
   const ids = new Set<string>();
   for (const pair of pairs) {
     if (!pair.id.trim()) throw new Error("Guided point id is required.");
@@ -164,9 +174,11 @@ export function solveGeoGuidedRigidAlignment(
   let scale = 1;
   if (options.allowScale) {
     scale = Math.hypot(dot, cross) / sourceEnergy;
-    if (!Number.isFinite(scale) || scale < MIN_GUIDED_SCALE || scale > MAX_GUIDED_SCALE)
+    const minimum = options.allowExtendedScale ? MIN_EXTENDED_GUIDED_SCALE : MIN_GUIDED_SCALE;
+    const maximum = options.allowExtendedScale ? MAX_EXTENDED_GUIDED_SCALE : MAX_GUIDED_SCALE;
+    if (!Number.isFinite(scale) || scale < minimum || scale > maximum)
       throw new Error(
-        `Guided uniform scale must stay between ${MIN_GUIDED_SCALE} and ${MAX_GUIDED_SCALE}. Recheck point pairs.`,
+        `Measured uniform scale ${Number.isFinite(scale) ? scale.toFixed(3) : "invalid"}x is outside ${minimum}–${maximum}x. Review the canonical model units and real plot dimensions.`,
       );
   }
 

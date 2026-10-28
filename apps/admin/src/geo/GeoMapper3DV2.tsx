@@ -563,7 +563,7 @@ export default function GeoMapper3DV2() {
       const heading = Number(current.headingDeg);
       const scale = Number(current.scale);
       const nextScale = delta.scaleMultiplier
-        ? Math.min(1.5, Math.max(0.5, (Number.isFinite(scale) ? scale : 1) * delta.scaleMultiplier))
+        ? Math.min(100, Math.max(0.01, (Number.isFinite(scale) ? scale : 1) * delta.scaleMultiplier))
         : (Number.isFinite(scale) ? scale : 1);
       return {
         ...current,
