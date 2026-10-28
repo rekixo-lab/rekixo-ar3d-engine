@@ -744,7 +744,7 @@ export default function GeoIntegratedAuthoringMap({
           <b>Loaded 3D geometry · {modelName}</b>
           <span>{modelDiagnostics || "Loading geometry statistics…"}</span>
           <small>This does not prove real-world scale or completeness. Compare original FBX and canonical GLB before publish.</small>
-        </div>
+        </div>}
         {alignmentCaptureId && (
           <div className="geo-v2-map-capture-banner" role="status">
             Click exact <strong>{alignmentCaptureId}</strong> ground corner · WGS84 anchor is locked while capture is active
