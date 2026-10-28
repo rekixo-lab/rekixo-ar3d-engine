@@ -448,6 +448,7 @@ export async function buildAndActivateRelease(
   actor,
   project,
   expectedDraftRevision,
+  requireCanonicalSource = false,
 ) {
   if (!(await releaseSchemaReady(env)))
     throw Error("Immutable release schema is not installed.");
@@ -481,6 +482,22 @@ export async function buildAndActivateRelease(
 
   if (!experience.scenes.length && !experience.model && !cloudDraft)
     throw Error("Nothing publishable is available for this project.");
+
+  // First-release plotting path is explicit and fail-closed. Never fall back
+  // to an empty Studio or legacy model if canonical provenance is unavailable.
+  if (requireCanonicalSource) {
+    if (!cloudDraft || experience.model ||
+        cloudDraft.draft?.scene?.modelId ||
+        cloudDraft.draft?.scene?.publishModelId ||
+        currentProject.active_release_id ||
+        Number(versionRow?.version || 1) !== 1)
+      throw Error("First canonical site release requires a new, unpublished project with a Studio draft and no alternate model.");
+    const approvedCanonical = await resolveCanonicalReleaseSource(
+      env, currentProject, cloudDraft.draft,
+    );
+    if (!approvedCanonical)
+      throw Error("Verified succeeded canonical model and manifest are required for site release.");
+  }
 
   const version = Number(versionRow?.version || 1);
   const releaseId = `release_${crypto.randomUUID()}`;

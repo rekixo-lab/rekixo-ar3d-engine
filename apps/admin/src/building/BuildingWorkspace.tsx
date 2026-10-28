@@ -13,6 +13,7 @@ import type {
   BuildingEnvironmentLandscapePreset,
   Project,
 } from "../studio/domain";
+import PlotSiteHandoff from "./PlotSiteHandoff";
 import "./building-workspace.css";
 
 function selectedProjectSlug() {
@@ -124,6 +125,24 @@ export default function BuildingWorkspace() {
           ) : null}
         </div>
       </section>
+
+      {project && !loading ? (
+        <PlotSiteHandoff
+          key={project.id}
+          project={project}
+          draft={presentationDraft}
+          draftRevision={draftRevision}
+          releaseItems={releaseItems}
+          onDraftReady={(next, revision) => {
+            setPresentationDraft(next);
+            setDraftRevision(revision);
+          }}
+          onReleaseReady={(items) => {
+            setReleaseItems(items);
+            setProject((current) => current ? { ...current, status: "published" } : current);
+          }}
+        />
+      ) : null}
 
       <section className="building-workspace__environment engine-control-card">
         <div>

@@ -263,3 +263,26 @@
     gap: 16px;
   }
 }
+
+/* Opt-in plotting/site path; existing Building workflow remains unchanged. */
+.plot-site-handoff { padding: 20px; display: grid; gap: 15px; }
+.plot-site-handoff header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.plot-site-handoff header p { color: #48dca4; font-size: 10px; letter-spacing: .12em; margin: 0; font-weight: 900; }
+.plot-site-handoff h3 { font-size: 21px; margin: 8px 0; }
+.plot-site-handoff header span:not(.plot-site-handoff__state),
+.plot-site-handoff__steps li > span { color: #96a9c4; font-size: 12px; line-height: 1.5; }
+.plot-site-handoff__state { flex-shrink: 0; padding: 8px 11px; border-radius: 18px; background: #23334a; color: #bec9d9; font-size: 10px; font-weight: 850; }
+.plot-site-handoff__state--ready { background: #124a36; color: #7df0b8; }
+.plot-site-handoff__steps { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; padding: 0; margin: 0; list-style: none; }
+.plot-site-handoff__steps li { border: 1px solid #344563; background: #091627; border-radius: 12px; padding: 16px; display: grid; align-content: start; gap: 12px; }
+.plot-site-handoff__steps li b { font-size: 13px; }
+.plot-site-handoff__steps a, .plot-site-handoff__steps button { color: #e7f6ff; font-size: 11px; border: 1px solid #36597d; border-radius: 8px; padding: 10px; text-decoration: none; background: #143b65; text-align: center; cursor: pointer; }
+.plot-site-handoff__steps button:disabled { opacity: .45; cursor: not-allowed; }
+.plot-site-handoff__confirm { display: flex; gap: 9px; color: #c9d7e7; font-size: 11px; line-height: 1.5; }
+.plot-site-handoff__confirm input { align-self: flex-start; }
+.plot-site-handoff__message { color: #93ecc1; }
+.plot-site-handoff__error { color: #ffb0b5; }
+.plot-site-handoff__done { font-weight: 700; color: #6deaba !important; }
+.plot-site-handoff__footer-link { color: #96ceff; font-size: 12px; }
+@media (max-width: 1100px) { .plot-site-handoff__steps { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 620px) { .plot-site-handoff header { align-items: start; flex-direction: column; } .plot-site-handoff__steps { grid-template-columns: 1fr; } }

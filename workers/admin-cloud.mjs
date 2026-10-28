@@ -1121,6 +1121,8 @@ async function projectReleases(request, env, actor, project, parts) {
     const body = await request.json().catch(() => ({}));
     if (String(body.action || "publish") !== "publish")
       return json({ error: "Unsupported release action." }, { status: 400 });
+    if (body.requireCanonicalSource !== undefined && body.requireCanonicalSource !== true)
+      return json({ error: "Invalid canonical release requirement." }, { status: 400 });
 
     const expectedDraftRevision =
       body.expectedDraftRevision === null ||
@@ -1140,6 +1142,7 @@ async function projectReleases(request, env, actor, project, parts) {
         actor,
         project,
         expectedDraftRevision,
+        body.requireCanonicalSource === true,
       );
       return json({ release }, { status: 201 });
     } catch (error) {

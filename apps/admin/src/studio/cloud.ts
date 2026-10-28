@@ -674,6 +674,7 @@ export async function releases(slug: string) {
 export async function publishRelease(
   slug: string,
   expectedDraftRevision?: number,
+  requireCanonicalSource = false,
 ) {
   return api<{ release: CloudReleaseSummary & { assetCount: number } }>(
     `${CLOUD_BASE}/projects/${encodeURIComponent(slug)}/releases`,
@@ -682,6 +683,7 @@ export async function publishRelease(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "publish",
+        ...(requireCanonicalSource ? { requireCanonicalSource: true } : {}),
         ...(expectedDraftRevision
           ? { expectedDraftRevision }
           : {}),
