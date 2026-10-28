@@ -765,3 +765,14 @@
   .geo-v2-integrated-card--focus .geo-v2-guided-dock { display:none; }
   .geo-v2-integrated-card--focus .geo-v2-focus-header h3 { font-size:13px; }
 }
+
+/* Precision picker becomes a large independent canvas, same WebGL renderer. */
+.geo-v2-top-reference--expanded {
+  position:fixed; z-index:1700; inset:2vh 2vw; width:96vw; height:96dvh;
+  max-width:none; box-sizing:border-box; background:#07111e; border:1px solid #466583;
+  border-radius:14px; padding:14px; display:flex; flex-direction:column;
+  box-shadow:0 18px 85px rgba(0,0,0,.7);
+}
+.geo-v2-top-reference--expanded .geo-v2-top-reference-canvas { flex:1; min-height:0; }
+.geo-v2-top-reference--expanded .geo-v2-top-reference-canvas canvas { min-height:0; height:100%; }
+.geo-v2-top-zoom label { display:flex; align-items:center; gap:5px; color:#e5ecf6; font-size:11px; }
