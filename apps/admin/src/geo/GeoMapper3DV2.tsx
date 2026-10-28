@@ -254,6 +254,9 @@ export default function GeoMapper3DV2() {
   const [guidedSourceId, setGuidedSourceId] = useState<string | null>(null);
   const [guidedTargetId, setGuidedTargetId] = useState<string | null>(null);
   const [guidedAllowScale, setGuidedAllowScale] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [dockOpen, setDockOpen] = useState(true);
+  const [previewVariant, setPreviewVariant] = useState<"canonical" | "geo">("canonical");
   const [mapsApiKey, setMapsApiKey] = useState("");
   const [configuredMapsApiKey, setConfiguredMapsApiKey] = useState("");
   const [previewState, setPreviewState] = useState<GeoIntegratedPreviewState>("loading-map");
@@ -340,6 +343,7 @@ export default function GeoMapper3DV2() {
     setGuidedSourceId(null);
     setGuidedTargetId(null);
     setGuidedAllowScale(false);
+    setPreviewVariant("canonical");
   }, [selectedSlug, sourceReleaseId]);
 
   const selectedRelease = useMemo(
@@ -353,14 +357,16 @@ export default function GeoMapper3DV2() {
   const sourcePreviewAvailable = Boolean(
     engine?.release?.id && sourceReleaseId === engine.release.id,
   );
+  const geoDerivativeAvailable = Boolean(sourcePreviewAvailable && engine?.geoModel?.url &&
+    engine?.model && engine.geoModel.sourceModelId === engine.model.id &&
+    engine.geoModel.mimeType === "model/gltf-binary");
   const renderModel = useMemo(() => {
     if (!sourcePreviewAvailable) return null;
     const source = engine?.model;
     const geo = engine?.geoModel;
-    if (geo?.url && geo.mimeType === "model/gltf-binary" &&
-      source && geo.sourceModelId === source.id) return geo;
+    if (previewVariant === "geo" && geoDerivativeAvailable && geo) return geo;
     return source?.url && source.mimeType === "model/gltf-binary" ? source : null;
-  }, [engine, sourcePreviewAvailable]);
+  }, [engine, sourcePreviewAvailable, previewVariant, geoDerivativeAvailable]);
   const selectedAnchor = useMemo(
     () => state?.anchors.find((anchor) =>
       anchor.id === form.modelAnchorId &&
@@ -409,6 +415,7 @@ export default function GeoMapper3DV2() {
     if (!previewPlacement) return "Rigid alignment values valid range me karein.";
     if (!selectedAnchor) return "Exact Building-local model anchor select karein.";
     if (!renderModel) return "Active immutable Building GLB preview available hona chahiye.";
+    if (previewVariant !== "canonical") return "Use Canonical GLB before verification; derivative is diagnostic only.";
     if (!savedForm) return "Current map placement ko Save Geo V2 Draft karke revision lock karein.";
     if (previewState !== "ready") return previewStateLabel(previewState);
     return "";
@@ -420,6 +427,7 @@ export default function GeoMapper3DV2() {
     previewPlacement,
     selectedAnchor,
     renderModel,
+    previewVariant,
     savedForm,
     previewState,
   ]);
@@ -429,7 +437,8 @@ export default function GeoMapper3DV2() {
     geoReleaseState?.previewVerified &&
     savedForm &&
     sourceReleaseId === state.project.activeBuildingReleaseId &&
-    previewState === "ready",
+    previewState === "ready" &&
+    previewVariant === "canonical",
   );
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -638,7 +647,7 @@ export default function GeoMapper3DV2() {
   }
 
   return (
-    <main className="geo3d-shell geo3d-v2-shell">
+    <main className={`geo3d-shell geo3d-v2-shell${focusMode ? " geo3d-v2-shell--focus-active" : ""}`}>
       <header className="geo3d-topbar">
         <div>
           <p className="eyebrow">REKIXO AR3D ENGINE · GEO V2</p>
@@ -736,7 +745,7 @@ export default function GeoMapper3DV2() {
                 <label key={key}><span>{key.toUpperCase()}</span><input value={form[key]} onChange={(event) => patch(key, event.target.value)} /></label>
               ))}
               <label><span>HEIGHT MODE</span><select value={form.heightMode} onChange={(event) => patch("heightMode", event.target.value as GeoHeightMode)}><option value="ground-clamped">ground-clamped</option><option value="ground-relative">ground-relative</option><option value="absolute">absolute</option></select></label>
-              <label><span>MODEL ANCHOR</span><select value={form.modelAnchorId} onChange={(event) => patch("modelAnchorId", event.target.value)}><option value="">Select explicit anchor</option>{state.anchors.filter((anchor) => anchor.sourceBuildingReleaseId === sourceReleaseId).map((anchor) => <option key={anchor.id} value={anchor.id}>{anchor.name} · {anchor.kind}</option>)}</select></label>
+              <label><span>MODEL ANCHOR</span><select data-geo-model-anchor value={form.modelAnchorId} onChange={(event) => patch("modelAnchorId", event.target.value)}><option value="">Select explicit anchor</option>{state.anchors.filter((anchor) => anchor.sourceBuildingReleaseId === sourceReleaseId).map((anchor) => <option key={anchor.id} value={anchor.id}>{anchor.name} · {anchor.kind}</option>)}</select></label>
             </div>
             <div className="geo3d-save-row"><button className="geo3d-primary" disabled={busy || !previewCoordinate || !previewPlacement} onClick={() => void run(save)}>Save Geo V2 Draft</button><span>Every save advances the draft revision; verification applies only to that saved revision.</span></div>
           </section>
