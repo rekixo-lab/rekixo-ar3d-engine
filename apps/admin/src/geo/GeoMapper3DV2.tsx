@@ -282,6 +282,7 @@ export default function GeoMapper3DV2() {
   const [guidedAllowScale, setGuidedAllowScale] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [dockOpen, setDockOpen] = useState(true);
+  const [editorTab, setEditorTab] = useState<"corners" | "fine" | "position" | "release">("corners");
   const [previewVariant, setPreviewVariant] = useState<"canonical" | "geo">("canonical");
   const [mapsApiKey, setMapsApiKey] = useState("");
   const [configuredMapsApiKey, setConfiguredMapsApiKey] = useState("");
@@ -289,6 +290,22 @@ export default function GeoMapper3DV2() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  // A single keyboard-accessible editing surface; do not fullscreen only
+  // Google Maps, which removes the corner tools and save gate from view.
+  useEffect(() => {
+    if (!focusMode) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFocusMode(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [focusMode]);
 
   useEffect(() => {
     let live = true;
@@ -477,6 +494,16 @@ export default function GeoMapper3DV2() {
     previewState === "ready" &&
     previewVariant === "canonical",
   );
+
+  function toggleEditor() {
+    setFocusMode((open) => {
+      if (!open) {
+        setDockOpen(true);
+        setEditorTab("corners");
+      }
+      return !open;
+    });
+  }
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -741,12 +768,19 @@ export default function GeoMapper3DV2() {
                     </select>
                   </label>}
                   {focusMode && <button type="button" onClick={() => setDockOpen((open) => !open)}>{dockOpen ? "Hide Tools" : "Show Tools"}</button>}
-                  <button type="button" className="geo-v2-focus-button" aria-pressed={focusMode} onClick={() => setFocusMode((open) => !open)}>
-                    {focusMode ? "Exit Focus Mode" : "Full Screen Focus"}
+                  <button type="button" className="geo-v2-focus-button" aria-pressed={focusMode} onClick={toggleEditor}>
+                    {focusMode ? "Exit Full Editor" : "Open Full Editor"}
                   </button>
                 </div>
               </div>
               {previewVariant === "geo" && <p className="geo-v2-variant-note" role="status">Derivative diagnostic only: origin can differ. Return to Canonical GLB before verifying.</p>}
+              {focusMode && <div className="geo-v2-editor-statusline">
+                <strong>{selectedSlug.toUpperCase()} · {selectedRelease ? `3D v${selectedRelease.version}` : "No 3D release"}</strong>
+                <span>Geo {state?.draft ? `r${state.draft.revision}` : "not enabled"}</span>
+                <span>{savedForm ? "Saved revision" : "Unsaved changes"}</span>
+                <span>{previewState === "ready" ? "Preview ready" : previewStateLabel(previewState)}</span>
+                <span>{guidedPairs.filter((pair) => pair.source && pair.target).length}/4 corner pairs</span>
+              </div>}
               <div className="geo-v2-exact-placement-grid">
                 <div className="geo-v2-map-column">
                   <GeoIntegratedAuthoringMap
@@ -762,6 +796,8 @@ export default function GeoMapper3DV2() {
                     onCoordinateChange={setCoordinate}
                     onAlignmentTargetCapture={captureGuidedTarget}
                     onPreviewStateChange={setPreviewState}
+                    editorFocused={focusMode}
+                    onToggleEditor={toggleEditor}
                   />
                 </div>
                 <div className="geo-v2-guided-dock"><GeoGuidedRigidAlignment
