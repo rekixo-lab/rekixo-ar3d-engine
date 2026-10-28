@@ -214,11 +214,16 @@ export default function GeoGuidedRigidAlignment({
       <button
         type="button"
         className="geo-v2-guided-apply"
-        disabled={!solveState.solution}
-        onClick={() => solveState.solution && onApply(solveState.solution)}
+        disabled={!solveState.solution || (completePairs.length >= 3 && solveState.solution.maxErrorM > 2)}
+        onClick={() => {
+          if (solveState.solution && (completePairs.length < 3 || solveState.solution.maxErrorM <= 2))
+            onApply(solveState.solution);
+        }}
       >
         Apply rigid solution to current form
       </button>
+      {solveState.solution && completePairs.length >= 3 && solveState.solution.maxErrorM > 2 &&
+        <p role="alert" className="geo-v2-variant-note">Fit has more than 2 metres of residual error. Recheck site corners and source scale before applying.</p>}
       <p className="geo-v2-guided-help">
         Apply only updates the unsaved Geo form. Nothing is written or published until the normal Save → Verify → Publish gates are completed.
       </p>
