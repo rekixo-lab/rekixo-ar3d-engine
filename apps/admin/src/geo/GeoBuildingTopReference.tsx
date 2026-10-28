@@ -112,6 +112,7 @@ export default function GeoBuildingTopReference({
   const [viewRevision, setViewRevision] = useState(0);
   const [modelDiagnostics, setModelDiagnostics] = useState("");
   const [groundPlanePick, setGroundPlanePick] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const zoomRef = useRef(1);
   const renderRef = useRef<(() => void) | null>(null);
 
@@ -262,7 +263,7 @@ export default function GeoBuildingTopReference({
   };
 
   return (
-    <div className="geo-v2-top-reference">
+    <div className={`geo-v2-top-reference${expanded ? " geo-v2-top-reference--expanded" : ""}`}>
       <div className="geo-v2-top-reference-head">
         <div>
           <span>CANONICAL TOP REFERENCE</span>
@@ -274,6 +275,7 @@ export default function GeoBuildingTopReference({
         <button type="button" onClick={() => { zoomRef.current = Math.min(12, zoomRef.current * 1.5); renderRef.current?.(); }}>Zoom +</button>
         <button type="button" onClick={() => { zoomRef.current = Math.max(0.5, zoomRef.current / 1.5); renderRef.current?.(); }}>Zoom −</button>
         <button type="button" onClick={() => { zoomRef.current = 1; renderRef.current?.(); }}>Fit Model</button>
+        <button type="button" onClick={() => setExpanded((open) => !open)}>{expanded ? "Close Model Focus" : "Expand Model"}</button>
         <label><input type="checkbox" checked={groundPlanePick} onChange={(event) => setGroundPlanePick(event.target.checked)} /> Ground-plane point</label>
       </div>
       {modelDiagnostics && <small className="geo-v2-top-diagnostics">{modelDiagnostics}</small>}
