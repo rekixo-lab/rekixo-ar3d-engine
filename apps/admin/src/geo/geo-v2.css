@@ -723,3 +723,45 @@
     grid-column: 1 / -1;
   }
 }
+
+/* In-place full viewport alignment workspace, preserving Google Maps DOM and model instances. */
+.geo-v2-focus-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:flex-end; }
+.geo-v2-focus-actions button,.geo-v2-variant-control select { padding:8px 11px; min-height:36px; color:#e7f4ff; background:#14263d; border:1px solid #385b7d; border-radius:8px; font-size:11px; cursor:pointer; }
+.geo-v2-variant-control { display:grid; gap:3px; color:#9fb6ce; font-size:10px; }
+.geo-v2-variant-note { margin:5px 0; color:#ffd685; font-size:11px; }
+.geo-v2-guided-dock { min-width:0; }
+.geo-v2-integrated-card--focus {
+  position:fixed; inset:0; z-index:1500; box-sizing:border-box;
+  height:100dvh; width:100vw; max-width:none !important; margin:0 !important;
+  padding:12px !important; display:flex; flex-direction:column; border-radius:0;
+  overflow:hidden; background:#06111e;
+}
+.geo-v2-integrated-card--focus > .geo-v2-focus-header { flex:0 0 auto; min-height:58px; }
+.geo-v2-integrated-card--focus > .geo-v2-exact-placement-grid {
+  flex:1 1 auto; min-height:0; grid-template-columns:minmax(0,1fr) minmax(300px,350px);
+  align-items:stretch; overflow:hidden;
+}
+.geo-v2-integrated-card--focus .geo-v2-map-column { min-height:0; display:flex; }
+.geo-v2-integrated-card--focus .geo-v2-integrated-authoring { min-height:0; flex:1; grid-template-rows:minmax(0,1fr); }
+.geo-v2-integrated-card--focus .geo-v2-integrated-map-shell,
+.geo-v2-integrated-card--focus .geo-v2-integrated-map { min-height:0; height:100%; }
+.geo-v2-integrated-card--focus .geo-v2-map-id-config,
+.geo-v2-integrated-card--focus > .geo3d-help { display:none; }
+.geo-v2-integrated-card--focus .geo-v2-guided-dock { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+.geo-v2-integrated-card--focus.geo-v2-integrated-card--dock-closed > .geo-v2-exact-placement-grid { grid-template-columns:minmax(0,1fr); }
+.geo-v2-integrated-card--focus.geo-v2-integrated-card--dock-closed .geo-v2-guided-dock { display:none; }
+.geo-v2-top-zoom { display:flex; gap:6px; flex-wrap:wrap; }
+.geo-v2-top-zoom button { border:1px solid #334a63; background:#0b2038; color:#e3eefc; border-radius:7px; padding:6px 9px; font-size:11px; cursor:pointer; }
+.geo-v2-top-diagnostics { display:block; color:#9ec4d1; font-size:10px; line-height:1.4; }
+.geo-v2-model-diagnostics {
+  position:absolute; z-index:5; top:60px; left:12px;
+  max-width:min(380px,calc(100% - 24px)); padding:11px;
+  border:1px solid #4f7594; border-radius:9px; background:rgba(5,17,30,.95);
+  color:#e6f5fd; display:grid; gap:5px; font-size:11px;
+}
+.geo-v2-model-diagnostics small { color:#a3b6c8; line-height:1.45; }
+@media (max-width:720px) {
+  .geo-v2-integrated-card--focus > .geo-v2-exact-placement-grid { grid-template-columns:minmax(0,1fr); }
+  .geo-v2-integrated-card--focus .geo-v2-guided-dock { display:none; }
+  .geo-v2-integrated-card--focus .geo-v2-focus-header h3 { font-size:13px; }
+}
