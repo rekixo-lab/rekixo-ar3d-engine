@@ -22,7 +22,7 @@ function classifyGeoSections(root: HTMLElement) {
   }
 
   const anchorCard = root.querySelector<HTMLElement>('[data-geo-section="anchor"]');
-  const modelAnchorSelect = root.querySelector<HTMLSelectElement>('[data-geo-section="fine"] select:last-of-type');
+  const modelAnchorSelect = root.querySelector<HTMLSelectElement>('[data-geo-model-anchor]');
   if (anchorCard) {
     const realAnchorCount = modelAnchorSelect
       ? Array.from(modelAnchorSelect.options).filter((option) => option.value).length
