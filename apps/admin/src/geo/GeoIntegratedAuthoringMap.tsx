@@ -337,6 +337,7 @@ export default function GeoIntegratedAuthoringMap({
     let cancelled = false;
     let mapClick: MapsListener | null = null;
     let mapIdle: MapsListener | null = null;
+    let mapResizeObserver: ResizeObserver | null = null;
     let markerDrag: MapsListener | null = null;
     let overlay: GoogleWebGLOverlay | null = null;
     let marker: GoogleMarker | null = null;
@@ -493,6 +494,10 @@ export default function GeoIntegratedAuthoringMap({
           setWebglReady(false);
         };
         overlay.setMap(map);
+        // Focus/dock resizes must redraw the existing WebGL map without
+        // unmounting it or losing selected WGS84 alignment control points.
+        mapResizeObserver = new ResizeObserver(() => overlay?.requestRedraw());
+        mapResizeObserver.observe(hostRef.current!);
         armContextTimer();
         setMapReady(true);
       })
@@ -508,6 +513,7 @@ export default function GeoIntegratedAuthoringMap({
       clearContextTimer();
       mapClick?.remove();
       mapIdle?.remove();
+      mapResizeObserver?.disconnect();
       markerDrag?.remove();
       marker?.setMap(null);
       for (const controlMarker of alignmentMarkersRef.current.values()) controlMarker.setMap(null);
