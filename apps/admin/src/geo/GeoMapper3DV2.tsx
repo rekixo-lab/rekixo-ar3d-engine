@@ -829,6 +829,16 @@ export default function GeoMapper3DV2() {
                     <h4>WGS84 · Site Position</h4>
                     <p>Use the same verified project coordinates, heading and uniform scale as the main editor.</p>
                     <div className="geo-v2-editor-position-grid">
+                      <label className="geo-v2-editor-span-2"><span>BUILDING SOURCE RELEASE</span>
+                        <select disabled={busy} value={sourceReleaseId} onChange={(event) => {
+                          setSourceReleaseId(event.target.value);
+                          patch("modelAnchorId", "");
+                        }}>
+                          {releaseItems.map((release) => <option key={release.id} value={release.id}>
+                            v{release.version}{release.active ? " · ACTIVE" : " · HISTORICAL"}
+                          </option>)}
+                        </select>
+                      </label>
                       {(["latitude", "longitude", "eastOffsetM", "northOffsetM", "headingDeg", "scale", "altitudeM", "verticalOffsetM", "pitchDeg", "rollDeg"] as const).map((key) => (
                         <label key={key}><span>{key.replace(/([A-Z])/g, " $1").toUpperCase()}</span>
                           <input inputMode="decimal" value={form[key]} onChange={(event) => patch(key, event.target.value)} />
@@ -842,6 +852,21 @@ export default function GeoMapper3DV2() {
                         {state.anchors.filter((anchor) => anchor.sourceBuildingReleaseId === sourceReleaseId).map((anchor) =>
                           <option key={anchor.id} value={anchor.id}>{anchor.name} · {anchor.kind}</option>)}
                       </select></label>
+                    </div>
+                    <div className="geo-v2-editor-anchor-creator">
+                      <h4>Create / select new model anchor</h4>
+                      <div className="geo-v2-editor-position-grid">
+                        <label><span>ANCHOR NAME</span><input value={anchorForm.name} onChange={(event) => setAnchorForm((current) => ({ ...current, name: event.target.value }))} /></label>
+                        <label><span>ANCHOR TYPE</span><select value={anchorForm.kind} onChange={(event) => setAnchorForm((current) => ({ ...current, kind: event.target.value as GeoAnchorKind }))}>
+                          <option value="custom">custom</option><option value="main-gate">main-gate</option>
+                          <option value="site-center">site-center</option><option value="south-west-corner">south-west-corner</option><option value="entrance">entrance</option>
+                        </select></label>
+                        {(["xM", "yM", "zM"] as const).map((key) => <label key={key}><span>{key.toUpperCase()} · MODEL METRES</span>
+                          <input inputMode="decimal" value={anchorForm[key]}
+                            onChange={(event) => setAnchorForm((current) => ({ ...current, [key]: event.target.value }))} /></label>)}
+                      </div>
+                      <button type="button" disabled={busy || !selectedRelease} onClick={() => void run(createAnchor)}>Create & Select Anchor</button>
+                      <p>Only use measured canonical 3D coordinates. Model origin 0,0,0 is not automatically the site gate.</p>
                     </div>
                     <p>To pick the four site corners, switch to Corners. A normal map click outside point-capture mode moves the main WGS84 anchor.</p>
                   </section>}
