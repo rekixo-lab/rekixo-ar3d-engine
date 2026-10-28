@@ -303,7 +303,7 @@ export default function GeoBuildingTopReference({
         {failure && <div className="geo-v2-top-reference-message geo-v2-top-reference-message--error">{failure}</div>}
       </div>
       <p className="geo-v2-guided-help">
-        Top view: right = +X, up = -Z. Normal pick raycasts model geometry. Ground-plane point allows an otherwise empty layout corner at model base height; confirm the chosen corner physically corresponds to the satellite image. Neither mode edits GLB.
+        Top view: screen right = +X, screen up = -Z. Normal pick raycasts model geometry. Ground-plane point allows an otherwise empty layout corner at model base height; confirm the chosen corner physically corresponds to the satellite image. Neither mode edits GLB.
       </p>
     </div>
   );
