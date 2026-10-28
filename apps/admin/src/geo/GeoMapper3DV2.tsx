@@ -92,6 +92,31 @@ function blankGuidedPairs(): GeoGuidedPairDraft[] {
   return GUIDED_POINT_IDS.map((id) => ({ id, label: id, source: null, target: null }));
 }
 
+// Browser-tab scratch state only. Published Geo still uses the immutable saved
+// WGS84 transform, never these unverified clicked pairs.
+function restoreGuidePairs(key: string): GeoGuidedPairDraft[] {
+  try {
+    const value: unknown = JSON.parse(window.sessionStorage.getItem(key) || "null");
+    if (!Array.isArray(value)) return blankGuidedPairs();
+    return blankGuidedPairs().map((base) => {
+      const item = value.find((candidate) => candidate && typeof candidate === "object" && candidate.id === base.id);
+      const source = item?.source;
+      const target = item?.target;
+      const safeSource = source && [source.x, source.y, source.z].every(
+        (n: unknown) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= 100000,
+      ) ? { x: source.x as number, y: source.y as number, z: source.z as number } : null;
+      const safeTarget = target && typeof target.latitude === "number" &&
+        typeof target.longitude === "number" && Number.isFinite(target.latitude) &&
+        Number.isFinite(target.longitude) && Math.abs(target.latitude) <= 90 &&
+        Math.abs(target.longitude) <= 180
+        ? { latitude: target.latitude as number, longitude: target.longitude as number } : null;
+      return { ...base, source: safeSource, target: safeTarget };
+    });
+  } catch {
+    return blankGuidedPairs();
+  }
+}
+
 function requestedProjectSlug() {
   return new URLSearchParams(window.location.search)
     .get("project")
@@ -251,9 +276,13 @@ export default function GeoMapper3DV2() {
     zM: "0",
   });
   const [guidedPairs, setGuidedPairs] = useState<GeoGuidedPairDraft[]>(blankGuidedPairs);
+  const [loadedGuideKey, setLoadedGuideKey] = useState("");
   const [guidedSourceId, setGuidedSourceId] = useState<string | null>(null);
   const [guidedTargetId, setGuidedTargetId] = useState<string | null>(null);
   const [guidedAllowScale, setGuidedAllowScale] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [dockOpen, setDockOpen] = useState(true);
+  const [previewVariant, setPreviewVariant] = useState<"canonical" | "geo">("canonical");
   const [mapsApiKey, setMapsApiKey] = useState("");
   const [configuredMapsApiKey, setConfiguredMapsApiKey] = useState("");
   const [previewState, setPreviewState] = useState<GeoIntegratedPreviewState>("loading-map");
@@ -335,12 +364,24 @@ export default function GeoMapper3DV2() {
     return () => { live = false; };
   }, [selectedSlug]);
 
+  const guideScratchKey = selectedSlug && sourceReleaseId
+    ? `rekixo-geo-guided-draft-v1:${selectedSlug}:${sourceReleaseId}` : "";
+
   useEffect(() => {
-    setGuidedPairs(blankGuidedPairs());
+    setLoadedGuideKey("");
+    setGuidedPairs(guideScratchKey ? restoreGuidePairs(guideScratchKey) : blankGuidedPairs());
     setGuidedSourceId(null);
     setGuidedTargetId(null);
     setGuidedAllowScale(false);
-  }, [selectedSlug, sourceReleaseId]);
+    setPreviewVariant("canonical");
+    setLoadedGuideKey(guideScratchKey);
+  }, [guideScratchKey]);
+
+  useEffect(() => {
+    if (!guideScratchKey || loadedGuideKey !== guideScratchKey) return;
+    try { window.sessionStorage.setItem(guideScratchKey, JSON.stringify(guidedPairs)); }
+    catch { /* Storage can be disabled; do not mutate the original Geo draft. */ }
+  }, [guideScratchKey, loadedGuideKey, guidedPairs]);
 
   const selectedRelease = useMemo(
     () => releaseItems.find((item) => item.id === sourceReleaseId),
@@ -353,14 +394,16 @@ export default function GeoMapper3DV2() {
   const sourcePreviewAvailable = Boolean(
     engine?.release?.id && sourceReleaseId === engine.release.id,
   );
+  const geoDerivativeAvailable = Boolean(sourcePreviewAvailable && engine?.geoModel?.url &&
+    engine?.model && engine.geoModel.sourceModelId === engine.model.id &&
+    engine.geoModel.mimeType === "model/gltf-binary");
   const renderModel = useMemo(() => {
     if (!sourcePreviewAvailable) return null;
     const source = engine?.model;
     const geo = engine?.geoModel;
-    if (geo?.url && geo.mimeType === "model/gltf-binary" &&
-      source && geo.sourceModelId === source.id) return geo;
+    if (previewVariant === "geo" && geoDerivativeAvailable && geo) return geo;
     return source?.url && source.mimeType === "model/gltf-binary" ? source : null;
-  }, [engine, sourcePreviewAvailable]);
+  }, [engine, sourcePreviewAvailable, previewVariant, geoDerivativeAvailable]);
   const selectedAnchor = useMemo(
     () => state?.anchors.find((anchor) =>
       anchor.id === form.modelAnchorId &&
@@ -409,6 +452,7 @@ export default function GeoMapper3DV2() {
     if (!previewPlacement) return "Rigid alignment values valid range me karein.";
     if (!selectedAnchor) return "Exact Building-local model anchor select karein.";
     if (!renderModel) return "Active immutable Building GLB preview available hona chahiye.";
+    if (previewVariant !== "canonical") return "Use Canonical GLB before verification; derivative is diagnostic only.";
     if (!savedForm) return "Current map placement ko Save Geo V2 Draft karke revision lock karein.";
     if (previewState !== "ready") return previewStateLabel(previewState);
     return "";
@@ -420,6 +464,7 @@ export default function GeoMapper3DV2() {
     previewPlacement,
     selectedAnchor,
     renderModel,
+    previewVariant,
     savedForm,
     previewState,
   ]);
@@ -429,7 +474,8 @@ export default function GeoMapper3DV2() {
     geoReleaseState?.previewVerified &&
     savedForm &&
     sourceReleaseId === state.project.activeBuildingReleaseId &&
-    previewState === "ready",
+    previewState === "ready" &&
+    previewVariant === "canonical",
   );
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -608,6 +654,7 @@ export default function GeoMapper3DV2() {
   async function verify() {
     if (verificationBlocker) throw new Error(verificationBlocker);
     if (!state?.draft) throw new Error("Geo draft missing.");
+    if (previewVariant !== "canonical") throw new Error("Verify in Canonical GLB mode only.");
     await verifyGeoPreview(selectedSlug, state.draft.revision);
     await reload(selectedSlug);
     setMessage("Current saved revision verified from the integrated same-map Building preview.");
@@ -638,7 +685,7 @@ export default function GeoMapper3DV2() {
   }
 
   return (
-    <main className="geo3d-shell geo3d-v2-shell">
+    <main className={`geo3d-shell geo3d-v2-shell${focusMode ? " geo3d-v2-shell--focus-active" : ""}`}>
       <header className="geo3d-topbar">
         <div>
           <p className="eyebrow">REKIXO AR3D ENGINE · GEO V2</p>
@@ -683,11 +730,23 @@ export default function GeoMapper3DV2() {
           </section>
 
           <section className="geo3d-workspace geo-v2-workspace--integrated">
-            <article className="geo3d-map-card geo-v2-integrated-card">
-              <div className="geo3d-section-head">
-                <div><p className="eyebrow">WGS84 + RIGID BUILDING</p><h3>Integrated exact-placement preview</h3></div>
-                <div className="geo3d-preview-status"><strong>{renderModel?.variant || "building"}</strong><span>{renderModel?.name || "No active immutable preview"}</span></div>
+            <article className={`geo3d-map-card geo-v2-integrated-card${focusMode ? " geo-v2-integrated-card--focus" : ""}${!dockOpen ? " geo-v2-integrated-card--dock-closed" : ""}`}>
+              <div className="geo3d-section-head geo-v2-focus-header">
+                <div><p className="eyebrow">GEO SITE ALIGNMENT</p><h3>3D Plot Site · Satellite Alignment</h3></div>
+                <div className="geo-v2-focus-actions">
+                  {geoDerivativeAvailable && <label className="geo-v2-variant-control"><span>COMPARE GEOMETRY</span>
+                    <select aria-label="3D preview geometry variant" value={previewVariant} onChange={(event) => setPreviewVariant(event.target.value as "canonical" | "geo")}>
+                      <option value="canonical">Canonical GLB (alignment)</option>
+                      <option value="geo">Geo derivative (diagnostic)</option>
+                    </select>
+                  </label>}
+                  {focusMode && <button type="button" onClick={() => setDockOpen((open) => !open)}>{dockOpen ? "Hide Tools" : "Show Tools"}</button>}
+                  <button type="button" className="geo-v2-focus-button" aria-pressed={focusMode} onClick={() => setFocusMode((open) => !open)}>
+                    {focusMode ? "Exit Focus Mode" : "Full Screen Focus"}
+                  </button>
+                </div>
               </div>
+              {previewVariant === "geo" && <p className="geo-v2-variant-note" role="status">Derivative diagnostic only: origin can differ. Return to Canonical GLB before verifying.</p>}
               <div className="geo-v2-exact-placement-grid">
                 <div className="geo-v2-map-column">
                   <GeoIntegratedAuthoringMap
@@ -705,7 +764,7 @@ export default function GeoMapper3DV2() {
                     onPreviewStateChange={setPreviewState}
                   />
                 </div>
-                <GeoGuidedRigidAlignment
+                <div className="geo-v2-guided-dock"><GeoGuidedRigidAlignment
                   modelUrl={renderModel?.url || null}
                   modelName={renderModel?.name || "Building"}
                   coordinate={previewCoordinate}
@@ -721,9 +780,10 @@ export default function GeoMapper3DV2() {
                   onAllowScaleChange={setGuidedAllowScale}
                   onApply={applyGuidedSolution}
                   onFineAdjust={fineAdjustGuided}
-                />
+                /></div>
               </div>
               <p className="geo3d-help">Normal map click/drag moves the WGS84 anchor. While a P1–P4 Map capture is active, the WGS84 anchor is locked and the next map click records only that real-site control point.</p>
+              <p className="geo3d-help">P1–P4 picks are browser-tab scratch data (restored on refresh for this release), not saved to Cloud or the immutable Geo release. Apply the solution and Save Geo V2 Draft to store the approved transform.</p>
               <p className="geo3d-help">Guided alignment solves a rigid least-squares Building fit only. P1/P2 provide heading + East/North; P3/P4 expose residual error without homography, shear, or Building deformation.</p>
               <p className="geo3d-help">Verify is fail-closed: the current values must be saved, the selected source must be ACTIVE, the exact model anchor must be selected, and the same-map Building frame must render successfully.</p>
             </article>
@@ -736,7 +796,7 @@ export default function GeoMapper3DV2() {
                 <label key={key}><span>{key.toUpperCase()}</span><input value={form[key]} onChange={(event) => patch(key, event.target.value)} /></label>
               ))}
               <label><span>HEIGHT MODE</span><select value={form.heightMode} onChange={(event) => patch("heightMode", event.target.value as GeoHeightMode)}><option value="ground-clamped">ground-clamped</option><option value="ground-relative">ground-relative</option><option value="absolute">absolute</option></select></label>
-              <label><span>MODEL ANCHOR</span><select value={form.modelAnchorId} onChange={(event) => patch("modelAnchorId", event.target.value)}><option value="">Select explicit anchor</option>{state.anchors.filter((anchor) => anchor.sourceBuildingReleaseId === sourceReleaseId).map((anchor) => <option key={anchor.id} value={anchor.id}>{anchor.name} · {anchor.kind}</option>)}</select></label>
+              <label><span>MODEL ANCHOR</span><select data-geo-model-anchor value={form.modelAnchorId} onChange={(event) => patch("modelAnchorId", event.target.value)}><option value="">Select explicit anchor</option>{state.anchors.filter((anchor) => anchor.sourceBuildingReleaseId === sourceReleaseId).map((anchor) => <option key={anchor.id} value={anchor.id}>{anchor.name} · {anchor.kind}</option>)}</select></label>
             </div>
             <div className="geo3d-save-row"><button className="geo3d-primary" disabled={busy || !previewCoordinate || !previewPlacement} onClick={() => void run(save)}>Save Geo V2 Draft</button><span>Every save advances the draft revision; verification applies only to that saved revision.</span></div>
           </section>

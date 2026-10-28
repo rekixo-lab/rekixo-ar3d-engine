@@ -294,6 +294,8 @@ export default function GeoIntegratedAuthoringMap({
   const [frameReady, setFrameReady] = useState(false);
   const [mapFailure, setMapFailure] = useState("");
   const [modelFailure, setModelFailure] = useState("");
+  const [modelDiagnostics, setModelDiagnostics] = useState("");
+  const [showGeometryCheck, setShowGeometryCheck] = useState(false);
   const [mapIdInput, setMapIdInput] = useState("");
   const [configuredMapId, setConfiguredMapId] = useState("");
   const [mapIdBusy, setMapIdBusy] = useState(false);
@@ -335,6 +337,7 @@ export default function GeoIntegratedAuthoringMap({
     let cancelled = false;
     let mapClick: MapsListener | null = null;
     let mapIdle: MapsListener | null = null;
+    let mapResizeObserver: ResizeObserver | null = null;
     let markerDrag: MapsListener | null = null;
     let overlay: GoogleWebGLOverlay | null = null;
     let marker: GoogleMarker | null = null;
@@ -491,6 +494,10 @@ export default function GeoIntegratedAuthoringMap({
           setWebglReady(false);
         };
         overlay.setMap(map);
+        // Focus/dock resizes must redraw the existing WebGL map without
+        // unmounting it or losing selected WGS84 alignment control points.
+        mapResizeObserver = new ResizeObserver(() => overlay?.requestRedraw());
+        mapResizeObserver.observe(hostRef.current!);
         armContextTimer();
         setMapReady(true);
       })
@@ -506,6 +513,7 @@ export default function GeoIntegratedAuthoringMap({
       clearContextTimer();
       mapClick?.remove();
       mapIdle?.remove();
+      mapResizeObserver?.disconnect();
       markerDrag?.remove();
       marker?.setMap(null);
       for (const controlMarker of alignmentMarkersRef.current.values()) controlMarker.setMap(null);
@@ -571,6 +579,7 @@ export default function GeoIntegratedAuthoringMap({
     setModelReady(false);
     setFrameReady(false);
     setModelFailure("");
+    setModelDiagnostics("");
 
     void loadModel(modelUrl, controller.signal)
       .then((model) => {
@@ -579,9 +588,24 @@ export default function GeoIntegratedAuthoringMap({
           return;
         }
         loadedModel = model;
+        model.updateMatrixWorld(true);
+        const bounds = new THREE.Box3().setFromObject(model);
+        if (bounds.isEmpty()) throw new Error("GLB model has empty rendered geometry bounds.");
+        const size = bounds.getSize(new THREE.Vector3());
+        let meshCount = 0;
+        let triangleCount = 0;
+        model.traverse((node) => {
+          if (node instanceof THREE.Mesh) {
+            meshCount++;
+            triangleCount += Math.floor((node.geometry.index?.count || node.geometry.getAttribute("position")?.count || 0) / 3);
+          }
+        });
+        setModelDiagnostics(`Meshes ${meshCount} · Triangles ${triangleCount} · Bounds ${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} model units`);
         model.traverse((node) => {
           if (!(node instanceof THREE.Mesh)) return;
-          node.frustumCulled = true;
+          // Map's external camera projection may invalidate Three.js frustum tests.
+          // Keep original geometry; do not let culling silently hide plot groups.
+          node.frustumCulled = false;
           node.castShadow = false;
           node.receiveShadow = false;
         });
@@ -720,7 +744,13 @@ export default function GeoIntegratedAuthoringMap({
           <button type="button" disabled={!mapReady} onClick={recenter}>Recenter</button>
           <button type="button" disabled={!mapReady} onClick={setTopView}>Top</button>
           <button type="button" disabled={!mapReady} onClick={setThreeDView}>3D</button>
+          <button type="button" aria-pressed={showGeometryCheck} onClick={() => setShowGeometryCheck((value) => !value)}>{showGeometryCheck ? "Hide Check" : "Geometry Check"}</button>
         </div>
+        {showGeometryCheck && <div className="geo-v2-model-diagnostics" role="status">
+          <b>Loaded 3D geometry · {modelName}</b>
+          <span>{modelDiagnostics || "Loading geometry statistics…"}</span>
+          <small>This does not prove real-world scale or completeness. Compare original FBX and canonical GLB before publish.</small>
+        </div>}
         {alignmentCaptureId && (
           <div className="geo-v2-map-capture-banner" role="status">
             Click exact <strong>{alignmentCaptureId}</strong> ground corner · WGS84 anchor is locked while capture is active

@@ -110,6 +110,11 @@ export default function GeoBuildingTopReference({
   const [ready, setReady] = useState(false);
   const [failure, setFailure] = useState("");
   const [viewRevision, setViewRevision] = useState(0);
+  const [modelDiagnostics, setModelDiagnostics] = useState("");
+  const [groundPlanePick, setGroundPlanePick] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const zoomRef = useRef(1);
+  const renderRef = useRef<(() => void) | null>(null);
 
   activePointRef.current = activePointId;
   captureRef.current = onCapture;
@@ -153,10 +158,13 @@ export default function GeoBuildingTopReference({
       const height = Math.max(1, Math.round(rect.height));
       renderer.setSize(width, height, false);
       if (boxRef.current) fitTopCamera(camera, boxRef.current, width, height);
+      camera.zoom = zoomRef.current;
+      camera.updateProjectionMatrix();
       renderer.render(scene, camera);
       setViewRevision((value) => value + 1);
     };
 
+    renderRef.current = render;
     const resizeObserver = new ResizeObserver(render);
     resizeObserver.observe(host);
 
@@ -177,6 +185,10 @@ export default function GeoBuildingTopReference({
         model.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(model);
         if (box.isEmpty()) throw new Error("Building top reference geometry empty hai.");
+        const size = box.getSize(new THREE.Vector3());
+        let meshes = 0;
+        model.traverse((node) => { if (node instanceof THREE.Mesh) meshes++; });
+        setModelDiagnostics(`${meshes} meshes · X ${size.x.toFixed(2)} · Y ${size.y.toFixed(2)} · Z ${size.z.toFixed(2)} model units`);
         modelRef.current = model;
         boxRef.current = box;
         render();
@@ -191,6 +203,7 @@ export default function GeoBuildingTopReference({
     return () => {
       controller.abort();
       resizeObserver.disconnect();
+      renderRef.current = null;
       if (model) {
         scene.remove(model);
         disposeObject(model);
@@ -236,20 +249,36 @@ export default function GeoBuildingTopReference({
     );
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, camera);
+    if (groundPlanePick) {
+      const groundY = boxRef.current?.min.y;
+      if (groundY === undefined) return;
+      const hit = new THREE.Vector3();
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -groundY);
+      if (raycaster.ray.intersectPlane(plane, hit)) captureRef.current(pointId, roundedPoint(hit));
+      return;
+    }
     const hit = raycaster.intersectObject(model, true)[0];
     if (!hit) return;
     captureRef.current(pointId, roundedPoint(hit.point));
   };
 
   return (
-    <div className="geo-v2-top-reference">
+    <div className={`geo-v2-top-reference${expanded ? " geo-v2-top-reference--expanded" : ""}`}>
       <div className="geo-v2-top-reference-head">
         <div>
-          <span>BUILDING TOP REFERENCE</span>
+          <span>CANONICAL TOP REFERENCE</span>
           <strong>{modelName}</strong>
         </div>
         <small>{activePointId ? `Click exact ${activePointId} corner` : "Select P1–P4 source point"}</small>
       </div>
+      <div className="geo-v2-top-zoom">
+        <button type="button" onClick={() => { zoomRef.current = Math.min(12, zoomRef.current * 1.5); renderRef.current?.(); }}>Zoom +</button>
+        <button type="button" onClick={() => { zoomRef.current = Math.max(0.5, zoomRef.current / 1.5); renderRef.current?.(); }}>Zoom −</button>
+        <button type="button" onClick={() => { zoomRef.current = 1; renderRef.current?.(); }}>Fit Model</button>
+        <button type="button" onClick={() => setExpanded((open) => !open)}>{expanded ? "Close Model Focus" : "Expand Model"}</button>
+        <label><input type="checkbox" checked={groundPlanePick} onChange={(event) => setGroundPlanePick(event.target.checked)} /> Ground-plane point</label>
+      </div>
+      {modelDiagnostics && <small className="geo-v2-top-diagnostics">{modelDiagnostics}</small>}
       <div ref={hostRef} className={`geo-v2-top-reference-canvas${activePointId ? " geo-v2-top-reference-canvas--capture" : ""}`}>
         <canvas
           ref={canvasRef}
@@ -274,7 +303,7 @@ export default function GeoBuildingTopReference({
         {failure && <div className="geo-v2-top-reference-message geo-v2-top-reference-message--error">{failure}</div>}
       </div>
       <p className="geo-v2-guided-help">
-        Top view is locked to the canonical Building frame: screen right = +X / East-at-heading-0, screen up = -Z / North-at-heading-0. Picking never edits Building geometry.
+        Top view: screen right = +X, screen up = -Z. Normal pick raycasts model geometry. Ground-plane point allows an otherwise empty layout corner at model base height; confirm the chosen corner physically corresponds to the satellite image. Neither mode edits GLB.
       </p>
     </div>
   );
