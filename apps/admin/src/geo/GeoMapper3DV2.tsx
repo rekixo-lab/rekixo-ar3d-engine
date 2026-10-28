@@ -92,6 +92,31 @@ function blankGuidedPairs(): GeoGuidedPairDraft[] {
   return GUIDED_POINT_IDS.map((id) => ({ id, label: id, source: null, target: null }));
 }
 
+// Browser-tab scratch state only. Published Geo still uses the immutable saved
+// WGS84 transform, never these unverified clicked pairs.
+function restoreGuidePairs(key: string): GeoGuidedPairDraft[] {
+  try {
+    const value: unknown = JSON.parse(window.sessionStorage.getItem(key) || "null");
+    if (!Array.isArray(value)) return blankGuidedPairs();
+    return blankGuidedPairs().map((base) => {
+      const item = value.find((candidate) => candidate && typeof candidate === "object" && candidate.id === base.id);
+      const source = item?.source;
+      const target = item?.target;
+      const safeSource = source && [source.x, source.y, source.z].every(
+        (n: unknown) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= 100000,
+      ) ? { x: source.x as number, y: source.y as number, z: source.z as number } : null;
+      const safeTarget = target && typeof target.latitude === "number" &&
+        typeof target.longitude === "number" && Number.isFinite(target.latitude) &&
+        Number.isFinite(target.longitude) && Math.abs(target.latitude) <= 90 &&
+        Math.abs(target.longitude) <= 180
+        ? { latitude: target.latitude as number, longitude: target.longitude as number } : null;
+      return { ...base, source: safeSource, target: safeTarget };
+    });
+  } catch {
+    return blankGuidedPairs();
+  }
+}
+
 function requestedProjectSlug() {
   return new URLSearchParams(window.location.search)
     .get("project")
@@ -251,6 +276,7 @@ export default function GeoMapper3DV2() {
     zM: "0",
   });
   const [guidedPairs, setGuidedPairs] = useState<GeoGuidedPairDraft[]>(blankGuidedPairs);
+  const [loadedGuideKey, setLoadedGuideKey] = useState("");
   const [guidedSourceId, setGuidedSourceId] = useState<string | null>(null);
   const [guidedTargetId, setGuidedTargetId] = useState<string | null>(null);
   const [guidedAllowScale, setGuidedAllowScale] = useState(false);
@@ -338,13 +364,24 @@ export default function GeoMapper3DV2() {
     return () => { live = false; };
   }, [selectedSlug]);
 
+  const guideScratchKey = selectedSlug && sourceReleaseId
+    ? `rekixo-geo-guided-draft-v1:${selectedSlug}:${sourceReleaseId}` : "";
+
   useEffect(() => {
-    setGuidedPairs(blankGuidedPairs());
+    setLoadedGuideKey("");
+    setGuidedPairs(guideScratchKey ? restoreGuidePairs(guideScratchKey) : blankGuidedPairs());
     setGuidedSourceId(null);
     setGuidedTargetId(null);
     setGuidedAllowScale(false);
     setPreviewVariant("canonical");
-  }, [selectedSlug, sourceReleaseId]);
+    setLoadedGuideKey(guideScratchKey);
+  }, [guideScratchKey]);
+
+  useEffect(() => {
+    if (!guideScratchKey || loadedGuideKey !== guideScratchKey) return;
+    try { window.sessionStorage.setItem(guideScratchKey, JSON.stringify(guidedPairs)); }
+    catch { /* Storage can be disabled; do not mutate the original Geo draft. */ }
+  }, [guideScratchKey, loadedGuideKey, guidedPairs]);
 
   const selectedRelease = useMemo(
     () => releaseItems.find((item) => item.id === sourceReleaseId),
@@ -746,6 +783,7 @@ export default function GeoMapper3DV2() {
                 /></div>
               </div>
               <p className="geo3d-help">Normal map click/drag moves the WGS84 anchor. While a P1–P4 Map capture is active, the WGS84 anchor is locked and the next map click records only that real-site control point.</p>
+              <p className="geo3d-help">P1–P4 picks are browser-tab scratch data (restored on refresh for this release), not saved to Cloud or the immutable Geo release. Apply the solution and Save Geo V2 Draft to store the approved transform.</p>
               <p className="geo3d-help">Guided alignment solves a rigid least-squares Building fit only. P1/P2 provide heading + East/North; P3/P4 expose residual error without homography, shear, or Building deformation.</p>
               <p className="geo3d-help">Verify is fail-closed: the current values must be saved, the selected source must be ACTIVE, the exact model anchor must be selected, and the same-map Building frame must render successfully.</p>
             </article>
