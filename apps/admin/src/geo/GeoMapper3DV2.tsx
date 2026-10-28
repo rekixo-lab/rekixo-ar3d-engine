@@ -800,7 +800,15 @@ export default function GeoMapper3DV2() {
                     onToggleEditor={toggleEditor}
                   />
                 </div>
-                <div className="geo-v2-guided-dock"><GeoGuidedRigidAlignment
+                <div className={`geo-v2-guided-dock${focusMode ? " geo-v2-guided-dock--editor" : ""}`}>
+                  {focusMode && <nav className="geo-v2-editor-tabs" role="tablist" aria-label="Geo editor tools">
+                    {([["corners", "Corners"], ["fine", "Fine Tune"], ["position", "Position"], ["release", "Release"]] as const).map(([tab, label]) => (
+                      <button type="button" key={tab} role="tab" aria-selected={editorTab === tab}
+                        onClick={() => setEditorTab(tab)}>{label}</button>
+                    ))}
+                  </nav>}
+                  <div className={`geo-v2-editor-guide${focusMode ? ` geo-v2-editor-guide--${editorTab}` : ""}`}>
+                  <GeoGuidedRigidAlignment
                   modelUrl={renderModel?.url || null}
                   modelName={renderModel?.name || "Building"}
                   coordinate={previewCoordinate}
@@ -817,7 +825,58 @@ export default function GeoMapper3DV2() {
                   onApply={applyGuidedSolution}
                   onFineAdjust={fineAdjustGuided}
                 /></div>
+                  {focusMode && editorTab === "position" && <section className="geo-v2-editor-position" aria-label="Geo placement and model anchor">
+                    <h4>WGS84 · Site Position</h4>
+                    <p>Use the same verified project coordinates, heading and uniform scale as the main editor.</p>
+                    <div className="geo-v2-editor-position-grid">
+                      {(["latitude", "longitude", "eastOffsetM", "northOffsetM", "headingDeg", "scale", "altitudeM", "verticalOffsetM", "pitchDeg", "rollDeg"] as const).map((key) => (
+                        <label key={key}><span>{key.replace(/([A-Z])/g, " $1").toUpperCase()}</span>
+                          <input inputMode="decimal" value={form[key]} onChange={(event) => patch(key, event.target.value)} />
+                        </label>
+                      ))}
+                      <label><span>HEIGHT MODE</span><select value={form.heightMode} onChange={(event) => patch("heightMode", event.target.value as GeoHeightMode)}>
+                        <option value="ground-clamped">ground-clamped</option><option value="ground-relative">ground-relative</option><option value="absolute">absolute</option>
+                      </select></label>
+                      <label><span>MODEL ANCHOR</span><select value={form.modelAnchorId} onChange={(event) => patch("modelAnchorId", event.target.value)}>
+                        <option value="">Select exact anchor</option>
+                        {state.anchors.filter((anchor) => anchor.sourceBuildingReleaseId === sourceReleaseId).map((anchor) =>
+                          <option key={anchor.id} value={anchor.id}>{anchor.name} · {anchor.kind}</option>)}
+                      </select></label>
+                    </div>
+                    <p>To pick the four site corners, switch to Corners. A normal map click outside point-capture mode moves the main WGS84 anchor.</p>
+                  </section>}
+                  {focusMode && editorTab === "release" && <section className="geo-v2-editor-release" aria-label="Review and publish Geo release">
+                    <h4>Release checklist</h4>
+                    <div><span>Immutable 3D source</span><strong>{sourceReleaseId === state.project.activeBuildingReleaseId ? "ACTIVE" : "Source not active"}</strong></div>
+                    <div><span>Saved Geo revision</span><strong>{savedForm ? `r${state.draft?.revision}` : "Save required"}</strong></div>
+                    <div><span>Integrated preview</span><strong>{previewState === "ready" ? "Ready" : "Pending"}</strong></div>
+                    <div><span>Verification</span><strong>{geoReleaseState?.previewVerified && savedForm ? "Verified" : "Not verified"}</strong></div>
+                    <div><span>Live Geo</span><strong>{geoReleaseState?.activeRelease ? `v${geoReleaseState.activeRelease.version}` : "Unpublished"}</strong></div>
+                    <p>{verificationBlocker || "Review the saved site position and all real-world corners before verifying."}</p>
+                    <p>Publish creates a separate immutable Geo release. It never warps the canonical GLB.</p>
+                  </section>}
+                </div>
               </div>
+              {focusMode && <footer className="geo-v2-editor-footer">
+                <div className="geo-v2-editor-footer-summary" role="status">
+                  <strong>{error ? "Error" : message ? "Updated" : savedForm ? "Draft saved" : "Unsaved placement"}</strong>
+                  <span>{error || message || (guidedTargetId ? `Pick ${guidedTargetId} on Satellite Map now` : guidedSourceId ? `Pick ${guidedSourceId} on the model preview now` : verificationBlocker || "Ready to verify current saved Geo revision")}</span>
+                </div>
+                <div className="geo-v2-editor-footer-actions">
+                  <button type="button" onClick={() => setEditorTab("corners")}>4-point Fit</button>
+                  <button type="button" className="geo-v2-editor-save" disabled={busy || !previewCoordinate || !previewPlacement}
+                    onClick={() => void run(save)}>{busy ? "Working…" : "Save Draft"}</button>
+                  <button type="button" disabled={busy || Boolean(verificationBlocker)}
+                    title={verificationBlocker || "Verify saved current revision"}
+                    onClick={() => void run(verify)}>Verify Preview</button>
+                  <button type="button" className="geo-v2-editor-publish" disabled={busy || !publishReady}
+                    title={!publishReady ? "Verify current saved preview first" : "Publish immutable Geo release"}
+                    onClick={() => {
+                      if (window.confirm("Publish this exact saved and verified Geo placement to the public website? Confirm the actual site corners, orientation and scale were checked."))
+                        void run(publish);
+                    }}>Publish Geo</button>
+                </div>
+              </footer>}
               <p className="geo3d-help">Normal map click/drag moves the WGS84 anchor. While a P1–P4 Map capture is active, the WGS84 anchor is locked and the next map click records only that real-site control point.</p>
               <p className="geo3d-help">P1–P4 picks are browser-tab scratch data (restored on refresh for this release), not saved to Cloud or the immutable Geo release. Apply the solution and Save Geo V2 Draft to store the approved transform.</p>
               <p className="geo3d-help">Guided alignment solves a rigid least-squares Building fit only. P1/P2 provide heading + East/North; P3/P4 expose residual error without homography, shear, or Building deformation.</p>
