@@ -22,10 +22,11 @@ function consolidateMaterialGroups(geometry: THREE.BufferGeometry) {
   if (geometry.groups.length < 2) return;
   const groups = new Map<number, number[]>();
   for (const group of geometry.groups) {
-    const target = groups.get(group.materialIndex) ?? [];
+    const materialIndex = group.materialIndex ?? 0;
+    const target = groups.get(materialIndex) ?? [];
     for (let index = group.start; index < group.start + group.count; index++)
       target.push(geometry.index ? geometry.index.getX(index) : index);
-    groups.set(group.materialIndex, target);
+    groups.set(materialIndex, target);
   }
   const indices: number[] = [];
   geometry.clearGroups();
@@ -70,8 +71,7 @@ export function reviewedDimensions(
   if (!Number.isFinite(metresPerSourceUnit) || metresPerSourceUnit < 0.000001 ||
       metresPerSourceUnit > 1000000)
     throw Error("A valid reviewed metres-per-source-unit scale is required.");
-  const dimensions = analysis.rawDimensions.map((value) => value * metresPerSourceUnit)
-    as [number, number, number];
+  const dimensions = analysis.rawDimensions.map((value) => value * metresPerSourceUnit) as [number, number, number];
   const maximum = Math.max(...dimensions);
   if (maximum < 2 || maximum > 2000)
     throw Error("Canonical site bounds fall outside the 2–2000 m sanity range. Review the scale.");
