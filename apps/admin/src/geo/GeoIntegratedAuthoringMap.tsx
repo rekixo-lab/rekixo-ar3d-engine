@@ -43,6 +43,8 @@ type Props = {
   onCoordinateChange(latitude: number, longitude: number): void;
   onAlignmentTargetCapture(pointId: string, latitude: number, longitude: number): void;
   onPreviewStateChange(state: GeoIntegratedPreviewState): void;
+  editorFocused: boolean;
+  onToggleEditor(): void;
 };
 
 type MapsListener = { remove(): void };
@@ -54,6 +56,7 @@ type GoogleMap = {
   addListener(name: string, listener: () => void): MapsListener;
   setCenter(position: { lat: number; lng: number }): void;
   setZoom(zoom: number): void;
+  getZoom?(): number | undefined;
   moveCamera?(options: Record<string, unknown>): void;
   getRenderingType?(): string;
   getMapCapabilities?(): MapCapabilities;
@@ -272,6 +275,8 @@ export default function GeoIntegratedAuthoringMap({
   onCoordinateChange,
   onAlignmentTargetCapture,
   onPreviewStateChange,
+  editorFocused,
+  onToggleEditor,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<GoogleMap | null>(null);
@@ -289,6 +294,7 @@ export default function GeoIntegratedAuthoringMap({
   const alignmentTargetCaptureRef = useRef(onAlignmentTargetCapture);
   const previewStateChangeRef = useRef(onPreviewStateChange);
   const [mapReady, setMapReady] = useState(false);
+  const [mapZoom, setMapZoom] = useState<number | null>(null);
   const [webglReady, setWebglReady] = useState(false);
   const [modelReady, setModelReady] = useState(false);
   const [frameReady, setFrameReady] = useState(false);
@@ -377,7 +383,10 @@ export default function GeoIntegratedAuthoringMap({
           headingInteractionEnabled: false,
           streetViewControl: false,
           mapTypeControl: true,
-          fullscreenControl: true,
+          // Native Google fullscreen isolates the Map DOM and hides every
+          // Rekixo editor action. Use the in-place full viewport editor instead.
+          fullscreenControl: false,
+          zoomControl: true,
           gestureHandling: "greedy",
           clickableIcons: false,
         });
@@ -410,8 +419,10 @@ export default function GeoIntegratedAuthoringMap({
           const next = marker?.getPosition();
           if (next) setCoordinate(next.lat(), next.lng());
         });
+        setMapZoom(map.getZoom?.() ?? (initial ? 19 : 5));
         mapIdle = map.addListener("idle", () => {
           overlay?.requestRedraw();
+          setMapZoom(map.getZoom?.() ?? null);
         });
 
         const scene = new THREE.Scene();
@@ -690,6 +701,13 @@ export default function GeoIntegratedAuthoringMap({
     }
   };
 
+  const stepZoom = (difference: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const current = map.getZoom?.() ?? mapZoom ?? 19;
+    map.setZoom(Math.max(1, Math.min(23, current + difference)));
+  };
+
   const setTopView = () => {
     mapRef.current?.moveCamera?.({ tilt: 0, heading: 0, zoom: 20 });
   };
@@ -743,9 +761,14 @@ export default function GeoIntegratedAuthoringMap({
         <div className="geo-v2-map-tools" aria-label="Geo map view controls">
           <button type="button" disabled={!mapReady} onClick={recenter}>Recenter</button>
           <button type="button" disabled={!mapReady} onClick={setTopView}>Top</button>
+          <button type="button" disabled={!mapReady} onClick={() => stepZoom(0.5)} aria-label="Zoom in satellite map">Map +</button>
+          <button type="button" disabled={!mapReady} onClick={() => stepZoom(-0.5)} aria-label="Zoom out satellite map">Map −</button>
+          {mapZoom !== null && <span className="geo-v2-map-zoom-label" aria-live="off">Z {mapZoom.toFixed(1)}</span>}
           <button type="button" disabled={!mapReady} onClick={setThreeDView}>3D</button>
           <button type="button" aria-pressed={showGeometryCheck} onClick={() => setShowGeometryCheck((value) => !value)}>{showGeometryCheck ? "Hide Check" : "Geometry Check"}</button>
         </div>
+        <button type="button" className="geo-v2-launch-editor" aria-pressed={editorFocused}
+          onClick={onToggleEditor}>{editorFocused ? "Exit Full Editor" : "Open Full Editor"}</button>
         {showGeometryCheck && <div className="geo-v2-model-diagnostics" role="status">
           <b>Loaded 3D geometry · {modelName}</b>
           <span>{modelDiagnostics || "Loading geometry statistics…"}</span>

@@ -7,8 +7,8 @@ const file = (path) => fs.readFileSync(path, "utf8");
 test("Geo Focus Mode remains an in-place viewport overlay with collapsible tools", () => {
   const mapper = file("apps/admin/src/geo/GeoMapper3DV2.tsx");
   const styles = file("apps/admin/src/geo/geo-v2.css");
-  assert.match(mapper, /Full Screen Focus/);
-  assert.match(mapper, /Exit Focus Mode/);
+  assert.match(mapper, /Open Full Editor/);
+  assert.match(mapper, /Exit Full Editor/);
   assert.match(mapper, /Hide Tools/);
   assert.match(mapper, /Show Tools/);
   assert.match(mapper, /geo-v2-integrated-card--focus/);
