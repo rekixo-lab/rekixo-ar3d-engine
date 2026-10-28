@@ -4,7 +4,7 @@ import {
   type GeoGuidedRigidSolution,
   type GeoGuidedSourcePoint,
 } from "@rekixo/3d-engine-core";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import GeoBuildingTopReference from "./GeoBuildingTopReference";
 import type { GeoV2Anchor } from "./geoV2Api";
 
@@ -86,6 +86,9 @@ export default function GeoGuidedRigidAlignment({
   onFineAdjust,
 }: Props) {
   const [coarse, setCoarse] = useState(false);
+  const [allowExtendedScale, setAllowExtendedScale] = useState(false);
+  // Any newly selected corner/source invalidates previous measurement review.
+  useEffect(() => setAllowExtendedScale(false), [pairs, modelUrl, anchor?.id]);
   const completePairs = useMemo(
     () => pairs.flatMap((pair) => pair.source && pair.target
       ? [{ id: pair.id, source: pair.source, target: pair.target }]
@@ -104,7 +107,7 @@ export default function GeoGuidedRigidAlignment({
           coordinate,
           { x: anchor.xM, y: anchor.yM, z: anchor.zM },
           completePairs,
-          { allowScale },
+          { allowScale, allowExtendedScale },
         ),
         error: "",
       };
@@ -114,8 +117,30 @@ export default function GeoGuidedRigidAlignment({
         error: reason instanceof Error ? reason.message : "Guided rigid solve failed.",
       };
     }
-  }, [coordinate, anchor, completePairs, allowScale]);
-  const quality = solutionQuality(solveState.solution);
+  }, [coordinate, anchor, completePairs, allowScale, allowExtendedScale]);
+
+  // Show the best-fit measured scale even if the legacy safe envelope blocks
+  // applying it. This is a diagnostic, not an automatic source conversion.
+  const extendedEstimate = useMemo(() => {
+    if (!coordinate || !anchor || !allowScale || allowExtendedScale ||
+        completePairs.length < 3 || solveState.solution) return null;
+    try {
+      const estimate = solveGeoGuidedRigidAlignment(
+        coordinate, { x: anchor.xM, y: anchor.yM, z: anchor.zM },
+        completePairs, { allowScale: true, allowExtendedScale: true },
+      );
+      return estimate.scale > 1.5 || estimate.scale < 0.5 ? estimate : null;
+    } catch {
+      return null;
+    }
+  }, [coordinate, anchor, completePairs, allowScale, allowExtendedScale, solveState.solution]);
+
+  const quality = solveState.solution
+    ? solutionQuality(solveState.solution)
+    : {
+        label: completePairs.length >= 2 ? "Alignment needs review" : "Waiting for paired points",
+        className: completePairs.length >= 2 ? " geo-v2-guided-quality--review" : "",
+      };
   const moveStep = coarse ? 1 : 0.25;
   const rotateStep = coarse ? 0.1 : 0.02;
 
@@ -189,13 +214,30 @@ export default function GeoGuidedRigidAlignment({
         <input
           type="checkbox"
           checked={allowScale}
-          onChange={(event) => onAllowScaleChange(event.target.checked)}
+          onChange={(event) => {
+            onAllowScaleChange(event.target.checked);
+            if (!event.target.checked) setAllowExtendedScale(false);
+          }}
         />
         <span>
           <strong>Allow uniform scale solve</strong>
           <small>OFF recommended. When enabled, scale is constrained to 0.5–1.5; shear/non-uniform scaling stays impossible.</small>
         </span>
       </label>
+
+      {allowScale && completePairs.length >= 3 && (
+        <label className="geo-v2-guided-scale-toggle geo-v2-guided-extended-review">
+          <input
+            type="checkbox"
+            checked={allowExtendedScale}
+            onChange={(event) => setAllowExtendedScale(event.target.checked)}
+          />
+          <span>
+            <strong>Reviewed site measurements · permit 0.1–5× scale</strong>
+            <small>Only check after comparing real plot dimensions and the canonical FBX/GLB units. This never changes model geometry. Requires 3+ pairs, residual review and manual Save → Verify → Publish.</small>
+          </span>
+        </label>
+      )}
 
       <div className={`geo-v2-guided-quality${quality.className}`}>
         <strong>{quality.label}</strong>
@@ -208,7 +250,18 @@ export default function GeoGuidedRigidAlignment({
             <span>Heading <b>{solveState.solution.headingDeg.toFixed(4)}°</b></span>
             <span>Scale <b>{solveState.solution.scale.toFixed(6)}</b></span>
           </div>
-        ) : <small>{solveState.error}</small>}
+        ) : (
+          <div className="geo-v2-guided-scale-diagnostics" role="alert">
+            <small>{solveState.error}</small>
+            {extendedEstimate && (
+              <div>
+                <strong>Measured best fit: {extendedEstimate.scale.toFixed(3)}×</strong>
+                <span>RMS {formatMeters(extendedEstimate.rmsErrorM)} · Max {formatMeters(extendedEstimate.maxErrorM)}</span>
+                <span>This exceeds the default 0.5–1.5× limit. Compare measured site size and source units, then explicitly check reviewed scale above.</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <button
@@ -222,6 +275,8 @@ export default function GeoGuidedRigidAlignment({
       >
         Apply rigid solution to current form
       </button>
+      {solveState.solution && allowExtendedScale && solveState.solution.maxErrorM <= 2 &&
+        <p role="status" className="geo-v2-variant-note">Extended uniform scale is provisional until real site measurements and source-model units have been independently checked. Applying changes only the unsaved form.</p>}
       {solveState.solution && completePairs.length >= 3 && solveState.solution.maxErrorM > 2 &&
         <p role="alert" className="geo-v2-variant-note">Fit has more than 2 metres of residual error. Recheck site corners and source scale before applying.</p>}
       <p className="geo-v2-guided-help">
