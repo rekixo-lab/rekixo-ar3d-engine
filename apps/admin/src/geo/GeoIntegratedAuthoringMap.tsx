@@ -421,8 +421,8 @@ export default function GeoIntegratedAuthoringMap({
         });
         setMapZoom(map.getZoom?.() ?? (initial ? 19 : 5));
         mapIdle = map.addListener("idle", () => {
-          setMapZoom(map.getZoom?.() ?? null);
           overlay?.requestRedraw();
+          setMapZoom(map.getZoom?.() ?? null);
         });
 
         const scene = new THREE.Scene();
