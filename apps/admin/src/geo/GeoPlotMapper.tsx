@@ -243,40 +243,74 @@ export default function GeoPlotMapper(){
     finally{setBusy(false);}
   };
   const importCsv=async(file:File)=>{
+    if(file.size>2_000_000)throw Error("Measurement CSV exceeds the 2 MB safety limit.");
     const rows=parseRows(await file.text());
     if(activeProjectRef.current!==slug)throw Error("Project changed during CSV import; no data staged.");
-    if(rows.length<2)throw Error("CSV contains no data.");
+    if(rows.length<2||rows.length>2501)throw Error("CSV requires 1–2500 measurement rows.");
     const keys=rows[0].map(s=>s.trim().toLowerCase().replace(/[^a-z0-9]/g,""));
-    const required=["id","area","areaunit","front","back","deptha","unit","source"];
+    if(new Set(keys).size!==keys.length)throw Error("Duplicate CSV column headings.");
+    const modern=keys.includes("frontlength");
+    const required=modern
+      ? ["id","area","areaunit","areasource","facing","facingsource","frontlength","frontunit","frontsource"]
+      : ["id","area","areaunit","front","back","deptha","unit","source"];
     if(required.some(k=>!keys.includes(k)))throw Error("CSV header required: "+required.join(", "));
-    const ix=(key:string)=>keys.indexOf(key);
     const updates=new Map<string,Record<string,string>>();
-    for(const row of rows.slice(1)){const id=String(row[ix("id")]||"").trim();
-      if(!id||updates.has(id))throw Error("Missing or duplicate Plot ID in CSV: "+id);
-      updates.set(id,Object.fromEntries(keys.map((k,i)=>[k,row[i]||""])));}
-    const unknown=[...updates.keys()].filter(id=>!plots.some(p=>p.id===id));
+    for(const row of rows.slice(1)){
+      if(row.length>keys.length)throw Error("CSV row has more fields than its header.");
+      const v=Object.fromEntries(keys.map((k,i)=>[k,(row[i]||"").trim()]));
+      const id=v.id;
+      if(!id||updates.has(id.toLowerCase()))throw Error("Missing or duplicate Plot ID in CSV: "+id);
+      updates.set(id.toLowerCase(),v);
+    }
+    const unknown=[...updates.keys()].filter(id=>!plots.some(p=>p.id.toLowerCase()===id));
     if(unknown.length)throw Error("Map polygon corners before importing measurements: "+unknown.slice(0,12).join(", "));
     const proposed=plots.map(p=>{
-      const v=updates.get(p.id);if(!v)return p;
+      const v=updates.get(p.id.toLowerCase());if(!v)return p;
+      if(modern && v.cornersjson){
+        let uploaded:unknown;
+        try{uploaded=JSON.parse(v.cornersjson);}catch{throw Error("Invalid corner snapshot for "+p.id);}
+        if(JSON.stringify(uploaded)!==JSON.stringify(p.corners))
+          throw Error("Plot "+p.id+": geometry changed since CSV export. Export current mapping before importing.");
+      }
       const side={...p.sides};
       for(const role of ROLES){
         const item=side[role];if(!item)continue;
-        const n=Number(v[role.toLowerCase()]||"");
-        if(!(n>0))throw Error("CSV "+p.id+": "+role+" must be positive.");
-        side[role]={...item,length:n,unit:v.unit==="m"?"m":"ft",source:v.source,verified:false};
+        const prefix=role.toLowerCase();
+        const length=Number(v[modern?prefix+"length":prefix]);
+        const unit=modern?v[prefix+"unit"]:v.unit;
+        const source=modern?v[prefix+"source"]:v.source;
+        if(!Number.isFinite(length)||length<=0||!["m","ft"].includes(unit)||!source)
+          throw Error("Plot "+p.id+": invalid "+role+" measurement/unit/source.");
+        const facingFlag=v[prefix+"roadfacing"];
+        if(modern && facingFlag && !["true","false"].includes(facingFlag.toLowerCase()))
+          throw Error("Plot "+p.id+": invalid road-facing flag.");
+        side[role]={...item,length,unit:unit as Side["unit"],source,verified:false,
+          roadFacing:modern && facingFlag ? facingFlag.toLowerCase()==="true":item.roadFacing};
       }
-      return {...p,sides:side,area:{value:Number(v.area),unit:v.areaunit as Plot["area"]["unit"],source:v.source,verified:false},
-        facing:v.facing||p.facing,facingVerified:false,road:v.road||p.road};
+      const area=Number(v.area),areaunit=v.areaunit;
+      if(!Number.isFinite(area)||area<=0||!["sqft","sqm","sqyd"].includes(areaunit))
+        throw Error("Plot "+p.id+": invalid approved area or unit.");
+      return {...p,sides:side,
+        area:{value:area,unit:areaunit as Plot["area"]["unit"],source:modern?v.areasource:v.source,verified:false},
+        facing:v.facing||p.facing,facingSource:modern?v.facingsource:p.facingSource,
+        facingVerified:false,road:v.road??p.road,notes:modern?v.notes??p.notes:p.notes,
+        planeVerified:false};
     });
+    if(activeProjectRef.current!==slug)throw Error("Project switched during CSV validation.");
     setPlots(proposed);setDirty(true);setWorking(null);
-    setMessage(updates.size+" plot measurement rows staged for review; verify sources before publish.");
+    setMessage(updates.size+" plot measurement rows staged (all imported approvals reset). Verify geometry, sources and plane before publish.");
   };
   const exportCsv=()=>{
-    const headers=["id","area","areaunit","front","back","deptha","depthb","unit","source","facing","road"];
-    const lines=[headers.join(","),...plots.map(p=>[p.id,p.area.value,p.area.unit,
-      p.sides.front?.length,p.sides.back?.length,p.sides.depthA?.length,p.sides.depthB?.length,
-      p.sides.front?.unit,p.area.source,p.facing,p.road].map(csvCell).join(","))];
-    const url=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"}));
+    const headers=["id","cornersJson","area","areaUnit","areaSource","areaVerified",
+      "facing","facingSource","facingVerified","road","notes","planeY","planeSource","planeVerified",
+      ...ROLES.flatMap(role=>[role+"Length",role+"Unit",role+"Source",role+"Verified",role+"RoadFacing"])];
+    const lines=[headers.map(csvCell).join(","),...plots.map(p=>[
+      p.id,JSON.stringify(p.corners),p.area.value,p.area.unit,p.area.source,p.area.verified,
+      p.facing,p.facingSource,p.facingVerified,p.road,p.notes,p.planeY,p.planeSource,p.planeVerified,
+      ...ROLES.flatMap(role=>{const side=p.sides[role];
+        return [side?.length,side?.unit,side?.source,side?.verified,side?.roadFacing];})
+    ].map(csvCell).join(","))];
+    const url=URL.createObjectURL(new Blob([lines.join("\\n")],{type:"text/csv;charset=utf-8"}));
     const a=document.createElement("a");a.href=url;a.download=slug+"-geo-plots.csv";a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
