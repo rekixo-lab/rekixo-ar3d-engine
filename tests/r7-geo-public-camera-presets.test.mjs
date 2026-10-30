@@ -14,19 +14,21 @@ test("public Geo exposes the five customer camera presets", () => {
   assert.match(css, /button\.is-active/);
 });
 
-test("satellite close-up honors Google's location-specific imagery ceiling", () => {
-  assert.match(source, /MaxZoomService/);
-  assert.match(source, /getMaxZoomAtLatLng\(center\)/);
-  assert.match(source, /isSatelliteMapType/);
-  assert.match(source, /Math\.min\(preset\.zoom, satelliteLimit\)/);
-  assert.match(source, /maptypeid_changed/);
-  assert.match(source, /isFractionalZoomEnabled: true/);
-  assert.doesNotMatch(source, /\bmaxZoom\s*:/);
+test("satellite imagery metadata is informative and never clamps the customer camera", () => {
+  assert.ok(source.includes("MaxZoomService"));
+  assert.ok(source.includes("getMaxZoomAtLatLng(center)"));
+  assert.ok(source.includes("setSatelliteMaxZoom(candidate)"));
+  assert.ok(source.includes("maptypeid_changed"));
+  assert.ok(source.includes("isFractionalZoomEnabled: true"));
+  assert.ok(!source.includes("Math.min(preset.zoom, satelliteLimit)"));
+  assert.ok(!source.includes("Math.min(requested, satelliteLimit)"));
+  assert.ok(!source.includes("if (userZoom !== undefined && userZoom > candidate)"));
+  assert.ok(!source.includes("maxZoom:"));
 });
 
 test("camera presets control the real Google map camera rather than the Building transform", () => {
   assert.match(source, /cameraPreset\(view, data\.placement\.headingDeg\)/);
-  assert.match(source, /map\.moveCamera\?\.\(\{ center, \.\.\.preset, zoom \}\)/);
+  assert.ok(source.includes("map.moveCamera?.({ center, ...preset })"));
   assert.match(source, /cameraActionRef\.current\?\.\(view\.id\)/);
 });
 
@@ -34,7 +36,7 @@ test("manual zoom preserves one-finger Google pan and avoids resetting the user'
   assert.ok(source.includes('gestureHandling: "greedy"'));
   assert.ok(source.includes("draggable: true"));
   assert.ok(source.includes("zoomActionRef.current = (step) =>"));
-  assert.ok(source.includes("map.setZoom(zoom)"));
+  assert.ok(source.includes("map.setZoom(requested)"));
   assert.ok(source.includes("map.getZoom?.()"));
   assert.ok(source.includes('map.addListener("zoom_changed"'));
   const satelliteHandler = source.slice(source.indexOf("setSatelliteMaxZoom(candidate);"), source.indexOf('mapIdle = map.addListener("idle"'));
@@ -49,4 +51,16 @@ test("verified close-up 3D inspection can go past the satellite imagery ceiling"
   assert.ok(source.includes("controls.touches.TWO = THREE.TOUCH.DOLLY_PAN"));
   assert.ok(source.includes("<GeoModelInspector model={data.model} />"));
   assert.ok(css.includes(".geo-model-inspector"));
+});
+
+test("one zoom-in tap requests precisely 2x map scale and reports a native Google limit", () => {
+  assert.ok(source.includes('aria-label="Zoom in 2×"'));
+  assert.ok(source.includes('aria-label="Zoom out 2×"'));
+  assert.ok(source.includes("zoomActionRef.current?.(1)"));
+  assert.ok(source.includes("zoomActionRef.current?.(-1)"));
+  assert.ok(source.includes("const requested = Math.max(0, current + step)"));
+  assert.ok(source.includes('actual < requested - 0.1'));
+  assert.ok(source.includes("Google Maps has reached its native zoom limit here"));
+  assert.ok(source.includes('className="geo-zoom-notice"'));
+  assert.ok(css.includes(".geo-zoom-notice"));
 });
