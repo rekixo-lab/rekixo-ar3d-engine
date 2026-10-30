@@ -9,6 +9,7 @@ const SourcePackReview = lazy(() => import("./source-pack/SourcePackReview"));
 const ComponentMapper = lazy(() => import("./source-pack/ComponentMapper"));
 const BuildingWorkspace = lazy(() => import("./building/BuildingWorkspace"));
 const GeoWorkspace = lazy(() => import("./geo/GeoWorkspace"));
+const GeoPlotMapper = lazy(() => import("./geo/GeoPlotMapper"));
 const EngineReleases = lazy(() => import("./releases/EngineReleases"));
 const ProjectShareBuilder = lazy(() => import("./branding/ProjectShareBuilder"));
 const EngineAdvanced = lazy(() => import("./advanced/EngineAdvanced"));
@@ -96,6 +97,10 @@ function AdminRouter() {
         <GeoWorkspace />
       </AdminShellRoute>
     );
+  }
+
+  if (path === "/3Dprojects/geo-plots") {
+    return <AdminShellRoute label="Opening 3D Geo Plot Mapper…"><GeoPlotMapper /></AdminShellRoute>;
   }
 
   if (path === "/3Dprojects/releases") {
