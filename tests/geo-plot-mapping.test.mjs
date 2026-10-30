@@ -135,3 +135,21 @@ test("new plot publications use verified plane and geo source checks",()=>{
   assert.match(api,/gr\.source_building_release_id=geo_plot_mapping_drafts_3d\.building_release_id/);
   assert.match(api,/d\.verified_revision=d\.revision/);
 });
+
+test("hundreds of adjacent plots share corners without false positive intersections",()=>{
+  const plots=[];
+  for(let y=0;y<12;y++)for(let x=0;x<12;x++)
+    plots.push({...square,id:"g-"+x+"-"+y,
+      corners:square.corners.map(([px,py])=>[px+x*10,py+y*20])});
+  assert.equal(validateGeoPlotCollection(plots).length,144);
+  plots.push({...square,id:"intrusion",corners:square.corners.map(([x,y])=>[x+5,y+10])});
+  assert.throws(()=>validateGeoPlotCollection(plots),/overlap/);
+});
+test("CSV import preserves measurement provenance but never trusts uploaded approvals",()=>{
+  const editor=read("apps/admin/src/geo/GeoPlotMapper.tsx");
+  for(const token of ["cornersJson","areaSource","facingSource","planeSource","role+\"Source\"","source,verified:false","planeVerified:false"])
+    assert.ok(editor.includes(token), "CSV provenance contract missing "+token);
+  assert.match(editor,/geometry changed since CSV export/);
+  assert.match(editor,/Measurement CSV exceeds the 2 MB safety limit/);
+  assert.match(editor,/Source/);
+});
