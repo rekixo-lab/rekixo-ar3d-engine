@@ -54,3 +54,12 @@ test("fullscreen bridge is lazy-loaded only for public Geo routes", () => {
   assert.match(html, /\/src\/geo\/fullscreen-controls-loader\.ts/);
   assert.doesNotMatch(html, /src="\/src\/geo\/fullscreen-controls\.ts"/);
 });
+
+test("fullscreen uses the Geo scene and places the cloned camera dock at the bottom", () => {
+  assert.ok(publicSource.includes("fullscreenControl: false"));
+  assert.ok(publicSource.includes("scene.requestFullscreen?.()"));
+  assert.ok(publicSource.includes("document.exitFullscreen()"));
+  const fullscreenDock = css.slice(css.lastIndexOf("/* The scene's own fullscreen"));
+  assert.ok(fullscreenDock.includes(".geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone"));
+  assert.ok(fullscreenDock.includes("bottom: calc(10px + env(safe-area-inset-bottom"));
+});

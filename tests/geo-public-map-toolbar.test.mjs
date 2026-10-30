@@ -43,29 +43,16 @@ test("Geo map toolbar orders all camera views before the Building website link",
   assert.doesNotMatch(toolbar, /Open location|Google Maps/);
 });
 
-test("Geo controls stay visible in a normal viewport, compact and anchored top-right", () => {
-  const toolbarRule = geoStyles.match(/^\.geo-camera-toolbar\s*\{([\s\S]*?)\n\}/m)?.[1] ?? "";
-  assert.match(toolbarRule, /top: 12px/);
-  assert.match(toolbarRule, /right: 12px/);
-  assert.match(toolbarRule, /z-index: 10000 !important/);
-  assert.match(toolbarRule, /display: flex !important/);
-  assert.match(toolbarRule, /visibility: visible !important/);
-  assert.match(geoStyles, /\.geo-integrated-scene > \.geo-camera-toolbar\s*\{[\s\S]*z-index:\s*2147483000 !important/);
-  assert.match(toolbarRule, /left: auto/);
-  assert.match(toolbarRule, /flex-wrap: nowrap/);
-  assert.match(toolbarRule, /backdrop-filter: blur\(14px\)/);
-  assert.match(toolbarRule, /background: rgba\(8, 22, 32, \.82\)/);
-  assert.match(geoStyles, /\.geo-integrated-scene > \.geo-camera-toolbar\s*\{[\s\S]*z-index:\s*2147483000 !important/);
-  assert.match(geoStyles, /\.geo-integrated-map\s*\{\s*z-index:\s*0;[\s\S]*isolation:\s*isolate;/);
-  assert.match(geoStyles, /\.jio-public-header\s*\{[\s\S]*border:\s*0 !important;[\s\S]*background:\s*transparent !important;/);
-  assert.match(geoStyles, /\.jio-public-header::before,\s*\.jio-public-header::after\s*\{\s*display:\s*none !important;/);
-  assert.match(geoStyles, /\.geo-integrated-scene\s*\{[\s\S]*isolation:\s*isolate;/);
-  assert.match(geoStyles, /@media \(max-width:\s*1100px\)[\s\S]*?\.geo-camera-toolbar\s*\{\s*top:\s*12px;/);
-  assert.match(geoStyles, /@media \(max-width:\s*640px\)[\s\S]*?\.geo-camera-toolbar\s*\{[\s\S]*?top:\s*12px;[\s\S]*?left:\s*auto;/);
-  assert.match(geoStyles, /\.geo-camera-toolbar button,\s*\.geo-building-link/);
-  assert.match(geoStyles, /min-height: 30px/);
+test("Geo camera controls are fixed to the viewport bottom with mobile safe-area padding", () => {
+  const dock = geoStyles.slice(geoStyles.lastIndexOf("/* Public Geo: a viewport-bottom navigation dock"));
+  assert.ok(dock.includes(".geo-public-toolbar-slot {"));
+  assert.ok(dock.includes("position: fixed;"));
+  assert.ok(dock.includes("bottom: 0;"));
+  assert.ok(dock.includes("safe-area-inset-bottom"));
+  assert.ok(dock.includes("touch-action: none;"));
+  assert.ok(dock.includes(".geo-map-quick-actions"));
+  assert.ok(geoStyles.includes("grid-template-columns: repeat(6, minmax(0, 1fr))"));
 });
-
 
 test("normal camera row spans available width without a panel or button pills", () => {
   const transparentRow = geoStyles.slice(geoStyles.indexOf("/* Transparent, full-width camera controls:"));

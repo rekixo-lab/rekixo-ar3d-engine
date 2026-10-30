@@ -375,3 +375,26 @@
     font-size: 10px !important;
   }
 }
+
+/* The scene's own fullscreen keeps the 3D-detail layer and map quick-actions alive.
+   The mirrored camera row belongs at the viewport bottom, never over the map. */
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone {
+  top: auto !important;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+  left: 50% !important;
+  right: auto !important;
+  width: max-content !important;
+  max-width: calc(100% - 24px) !important;
+  transform: translateX(-50%) !important;
+}
+@media (max-width: 640px) {
+  .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone {
+    top: auto !important;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: calc(100% - 16px) !important;
+    max-width: none !important;
+    transform: none !important;
+  }
+}
