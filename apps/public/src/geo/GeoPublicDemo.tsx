@@ -76,7 +76,7 @@ type GeoPayload = {
   error?: string;
 };
 
-type GeoMappedPlot = { id:string; corners:Array<[number,number]>; facing:string; road:string; notes:string;
+type GeoMappedPlot = { id:string; corners:Array<[number,number]>; planeY?:number; facing:string; road:string; notes:string;
   area:{value:number;unit:string}; sides:Record<string,{length:number;unit:string;roadFacing:boolean}> };
 
 type GeoCameraView = "overview" | "front" | "corner" | "entry" | "aerial";
@@ -600,7 +600,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
             );
             if (data.plotMapping?.geoReleaseId===data.geoRelease.id && google.maps.Polygon) {
               for(const plot of data.plotMapping.plots){
-                const poly=new google.maps.Polygon({map,paths:geoPlotWorldPath(plot,data,modelGroundY),
+                const poly=new google.maps.Polygon({map,paths:geoPlotWorldPath(plot,data,Number.isFinite(plot.planeY)?plot.planeY!:modelGroundY),
                   strokeColor:"#20d8a5",strokeWeight:2,strokeOpacity:.96,
                   fillColor:"#1dd5a2",fillOpacity:.13,clickable:true,zIndex:70});
                 poly.addListener("click",()=>setSelectedPlot(plot));
