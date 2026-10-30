@@ -12,6 +12,6 @@ export async function publicGeoPlotMapping(env,slug,expectedGeoReleaseId) {
       AND r.building_release_id=gr.source_building_release_id`).bind(slug,expectedGeoReleaseId).first();
   if (!row) return null;
   if (await digest(row.plots_json)!==row.sha256) throw Error("Published plot mapping checksum mismatch.");
-  const plots=validateGeoPlotCollection(JSON.parse(row.plots_json),{forPublish:true});
+  const plots=validateGeoPlotCollection(JSON.parse(row.plots_json));
   return {version:row.version,geoReleaseId:row.geo_release_id,plots};
 }

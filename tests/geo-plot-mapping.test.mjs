@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { polygonAreaSqm,polygonHasCrossings,validateGeoPlot,validateGeoPlotCollection } from "../workers/geo-plot-geometry.mjs";
+import { polygonAreaSqm,polygonHasCrossings,polygonsOverlapInArea,validateGeoPlot,validateGeoPlotCollection } from "../workers/geo-plot-geometry.mjs";
 const read=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
 const square={
   id:"25",corners:[[0,0],[10,0],[10,20],[0,20]],layout:"four",
@@ -12,7 +12,7 @@ const square={
     depthB:{edges:[3],length:65.6,unit:"ft",roadFacing:false,source:"Survey-2026",verified:true}
   },
   area:{value:2152.78,unit:"sqft",source:"approved-plan",verified:true},
-  facing:"north-east",facingSource:"Geo north survey",facingVerified:true,road:"23 ft road",notes:"corner site"
+  facing:"north-east",facingSource:"Geo north survey",facingVerified:true,planeY:0,planeSource:"approved masterplan",planeVerified:true,road:"23 ft road",notes:"corner site"
 };
 test("plot square has metre area and no invalid crossings",()=>{
   assert.equal(polygonAreaSqm(square.corners),200);
@@ -93,4 +93,63 @@ test("Geo release changes require explicit audited reset and cannot silently reb
   assert.match(api,/geo\.plots_reset_for_new_source/);
   assert.match(ui,/window\.prompt/);
   assert.match(ui,/rebind-reset/);
+});
+
+test("project topology blocks overlapping plot footprints without rejecting shared edges",()=>{
+  const shift=(dx,dy,id)=>({...square,id,corners:square.corners.map(([x,y])=>[x+dx,y+dy])});
+  assert.equal(polygonsOverlapInArea(square.corners,shift(10,0,"26").corners),false);
+  assert.equal(validateGeoPlotCollection([square,shift(10,0,"26")]).length,2);
+  assert.equal(validateGeoPlotCollection([square,shift(10,20,"26")]).length,2);
+  assert.throws(()=>validateGeoPlotCollection([square,shift(5,0,"26")]),/25 and 26 overlap/);
+  assert.throws(()=>validateGeoPlotCollection([square,shift(0,0,"26")]),/overlap/);
+  const nested=shift(1,1,"27");nested.corners=[[1,1],[2,1],[2,2],[1,2]];
+  assert.throws(()=>validateGeoPlotCollection([square,nested]),/overlap/);
+  assert.equal(polygonsOverlapInArea(square.corners,
+    [...shift(10,0,"28").corners].reverse()),false);
+  assert.equal(polygonsOverlapInArea(square.corners,
+    [...shift(5,0,"28").corners].reverse()),true);
+});
+test("production browser QA runner and public module deployment changes are covered",()=>{
+  const qa=read(".github/workflows/verify-production-building-demo.yml");
+  const deploy=read(".github/workflows/deploy-cloudflare.yml");
+  assert.match(qa,/runs-on: ubuntu-24\.04/);
+  assert.match(deploy,/geo-plot-public\|geo-plot-geometry/);
+});
+
+test("publishing requires a surveyed model-local elevation, not only bounding-box default",()=>{
+  assert.equal(validateGeoPlotCollection([square],{forPublish:true})[0].planeY,0);
+  assert.throws(()=>validateGeoPlotCollection([{...square,planeVerified:false}],{forPublish:true}),/model-local site plane/);
+  assert.throws(()=>validateGeoPlotCollection([{...square,planeSource:""}],{forPublish:true}),/model-local site plane/);
+  assert.throws(()=>validateGeoPlot({...square,planeY:Number.NaN}),/finite model-local/);
+  const old=structuredClone(square);delete old.planeY;delete old.planeSource;delete old.planeVerified;
+  assert.equal(validateGeoPlotCollection([old])[0].id,"25"); // old sealed V1 release remains readable
+});
+test("new plot publications use verified plane and geo source checks",()=>{
+  const geo=read("apps/public/src/geo/GeoPublicDemo.tsx");
+  const pub=read("workers/geo-plot-public.mjs");
+  const api=read("workers/geo-plot-mapping.mjs");
+  const editor=read("apps/admin/src/geo/GeoPlotMapper.tsx");
+  assert.match(geo,/Number\.isFinite\(plot\.planeY\)/);
+  assert.match(pub,/validateGeoPlotCollection\(JSON\.parse\(row\.plots_json\)\)/);
+  assert.match(editor,/Verified model-local plot mapping plane/);
+  assert.match(api,/gr\.source_building_release_id=geo_plot_mapping_drafts_3d\.building_release_id/);
+  assert.match(api,/d\.verified_revision=d\.revision/);
+});
+
+test("hundreds of adjacent plots share corners without false positive intersections",()=>{
+  const plots=[];
+  for(let y=0;y<12;y++)for(let x=0;x<12;x++)
+    plots.push({...square,id:"g-"+x+"-"+y,
+      corners:square.corners.map(([px,py])=>[px+x*10,py+y*20])});
+  assert.equal(validateGeoPlotCollection(plots).length,144);
+  plots.push({...square,id:"intrusion",corners:square.corners.map(([x,y])=>[x+5,y+10])});
+  assert.throws(()=>validateGeoPlotCollection(plots),/overlap/);
+});
+test("CSV import preserves measurement provenance but never trusts uploaded approvals",()=>{
+  const editor=read("apps/admin/src/geo/GeoPlotMapper.tsx");
+  for(const token of ["cornersJson","areaSource","facingSource","planeSource","role+\"Source\"","source,verified:false","planeVerified:false"])
+    assert.ok(editor.includes(token), "CSV provenance contract missing "+token);
+  assert.match(editor,/geometry changed since CSV export/);
+  assert.match(editor,/Measurement CSV exceeds the 2 MB safety limit/);
+  assert.match(editor,/Source/);
 });

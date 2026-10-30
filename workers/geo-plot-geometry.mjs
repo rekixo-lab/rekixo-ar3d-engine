@@ -32,6 +32,82 @@ export function polygonHasCrossings(points) {
   }
   return false;
 }
+// Geometric intersection is independent of plot metadata and permits shared
+// boundaries, but never a positive-area overlap of independently numbered plots.
+const TOPOLOGY_EPS = 1e-8;
+function orientation(a, b, c) {
+  return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+}
+function pointOnSegment(point, a, b) {
+  if (Math.abs(orientation(a,b,point)) > TOPOLOGY_EPS) return false;
+  return point[0] >= Math.min(a[0],b[0]) - TOPOLOGY_EPS &&
+    point[0] <= Math.max(a[0],b[0]) + TOPOLOGY_EPS &&
+    point[1] >= Math.min(a[1],b[1]) - TOPOLOGY_EPS &&
+    point[1] <= Math.max(a[1],b[1]) + TOPOLOGY_EPS;
+}
+function pointStrictlyInside(point, ring) {
+  let inside = false;
+  for (let i=0,j=ring.length-1;i<ring.length;j=i++) {
+    const a=ring[i],c=ring[j];
+    if (pointOnSegment(point,a,c)) return false;
+    if ((a[1]>point[1]) !== (c[1]>point[1]) &&
+        point[0] < a[0]+(c[0]-a[0])*(point[1]-a[1])/(c[1]-a[1]))
+      inside=!inside;
+  }
+  return inside;
+}
+function strictSegmentCross(a,b,c,d) {
+  const o1=orientation(a,b,c),o2=orientation(a,b,d),
+    o3=orientation(c,d,a),o4=orientation(c,d,b);
+  return ((o1>TOPOLOGY_EPS && o2 < -TOPOLOGY_EPS) ||
+    (o2>TOPOLOGY_EPS && o1 < -TOPOLOGY_EPS)) &&
+    ((o3>TOPOLOGY_EPS && o4 < -TOPOLOGY_EPS) ||
+    (o4>TOPOLOGY_EPS && o3 < -TOPOLOGY_EPS));
+}
+function polygonInsideProbes(ring) {
+  const signed = ring.reduce((n,a,i) => {
+    const b=ring[(i+1)%ring.length];
+    return n+a[0]*b[1]-a[1]*b[0];
+  },0);
+  const winding = signed>=0 ? 1 : -1;
+  return ring.map((a,i)=>{
+    const b=ring[(i+1)%ring.length],dx=b[0]-a[0],dy=b[1]-a[1],
+      len=Math.hypot(dx,dy), inset=Math.min(1e-5,len*0.01);
+    return [(a[0]+b[0])/2-winding*dy/len*inset,
+      (a[1]+b[1])/2+winding*dx/len*inset];
+  });
+}
+export function polygonsOverlapInArea(left,right) {
+  for (let i=0;i<left.length;i++) for (let j=0;j<right.length;j++)
+    if (strictSegmentCross(left[i],left[(i+1)%left.length],
+      right[j],right[(j+1)%right.length])) return true;
+  // Covers containment, identical footprints and collinear partial overlaps.
+  // Boundary-only adjacency is accepted (including shared corner/edge).
+  return polygonInsideProbes(left).some(p=>pointStrictlyInside(p,right)) ||
+    polygonInsideProbes(right).some(p=>pointStrictlyInside(p,left));
+}
+function boundingBox(ring) {
+  return ring.reduce((b,p)=>({
+    minX:Math.min(b.minX,p[0]),maxX:Math.max(b.maxX,p[0]),
+    minY:Math.min(b.minY,p[1]),maxY:Math.max(b.maxY,p[1]),
+  }),{minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity});
+}
+export function assertDisjointPlotInteriors(plots) {
+  // Sweep by X instead of checking every pair across up to 2,500 plots.
+  const ordered=plots.map(plot=>({plot,bounds:boundingBox(plot.corners)}))
+    .sort((a,b)=>a.bounds.minX-b.bounds.minX);
+  for (let i=0;i<ordered.length;i++) {
+    const a=ordered[i];
+    for (let j=i+1;j<ordered.length;j++) {
+      const b=ordered[j];
+      if (b.bounds.minX >= a.bounds.maxX - TOPOLOGY_EPS) break;
+      if (b.bounds.minY >= a.bounds.maxY - TOPOLOGY_EPS ||
+          a.bounds.minY >= b.bounds.maxY - TOPOLOGY_EPS) continue;
+      if (polygonsOverlapInArea(a.plot.corners,b.plot.corners))
+        throw Error("Plots "+a.plot.id+" and "+b.plot.id+" overlap in mapped ground area.");
+    }
+  }
+}
 function cleanText(value, max = 180) {
   if (typeof value !== "string") return "";
   return value.trim().replace(/[\x00-\x1f\x7f]/g, "").slice(0, max);
@@ -79,11 +155,17 @@ export function validateGeoPlot(input) {
   const area = input.area;
   if (!positive(area?.value) || !["sqft","sqm","sqyd"].includes(area?.unit))
     throw Error("Plot " + id + ": authoritative area value and unit required.");
+  const hasExplicitPlane = Object.hasOwn(input, "planeY");
+  if (hasExplicitPlane && (!finite(input.planeY) || Math.abs(input.planeY)>100000))
+    throw Error("Plot " + id + ": site mapping plane Y must be a finite model-local metre value.");
+  const planeSource=cleanText(input.planeSource,160);
+  const planeVerified=input.planeVerified===true;
   const facing = cleanText(input.facing, 24).toLowerCase();
   if (!DIRECTIONS.includes(facing)) throw Error("Plot " + id + ": valid compass-facing direction required.");
   return { id, corners: corners.map(p => [p[0],p[1]]), layout, sides: normalizedSides,
     area: { value: area.value, unit: area.unit, source: cleanText(area.source, 160), verified: area.verified === true },
     facing, facingSource:cleanText(input.facingSource,160), facingVerified:input.facingVerified===true,
+    ...(hasExplicitPlane ? {planeY:input.planeY,planeSource,planeVerified} : {}),
     road: cleanText(input.road, 160), notes: cleanText(input.notes, 1000) };
 }
 export function validateGeoPlotCollection(value, { forPublish = false } = {}) {
@@ -94,10 +176,15 @@ export function validateGeoPlotCollection(value, { forPublish = false } = {}) {
     const p = validateGeoPlot(item);
     if (ids.has(p.id.toLowerCase())) throw Error("Duplicate plot number: " + p.id);
     ids.add(p.id.toLowerCase());
+    // Existing sealed V1 releases without a plane remain readable; every new
+    // publication needs an operator-approved model-local site elevation.
+    if (forPublish && (!finite(p.planeY) || !p.planeVerified || !p.planeSource))
+      throw Error("Plot "+p.id+": verify an explicit model-local site plane and source before publishing.");
     if (forPublish && (!p.area.verified || !p.area.source || !p.facingVerified || !p.facingSource ||
       Object.values(p.sides).some(s => !s.verified || !s.source)))
       throw Error("Plot "+p.id+": verify authoritative measurements and source before publish.");
     return p;
   });
+  assertDisjointPlotInteriors(plots);
   return plots;
 }

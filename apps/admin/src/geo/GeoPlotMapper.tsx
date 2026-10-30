@@ -11,13 +11,13 @@ type Role = "front" | "back" | "depthA" | "depthB";
 type Side = { edges: number[]; length: number; unit: "ft" | "m"; roadFacing: boolean; source: string; verified: boolean };
 type Plot = { id: string; corners: Point[]; layout: "three" | "four";
   sides: Partial<Record<Role, Side>>; area: { value: number; unit: "sqft" | "sqm" | "sqyd"; source: string; verified: boolean };
-  facing: string; facingSource:string; facingVerified:boolean; road: string; notes: string };
+  facing: string; facingSource:string; facingVerified:boolean; planeY?:number;planeSource?:string;planeVerified?:boolean;road: string; notes: string };
 type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | null;
   draft: {revision:number;verifiedRevision:number|null;stale:boolean;plots:Plot[]};
   activeMapping:{id:string;version:number;current:boolean}|null;
   releases:Array<{id:string;version:number;geoReleaseId:string}> };
 type GeoPublic = { geoRelease:{id:string}; buildingRelease:{id:string};
-  model:{url:string;sha256?:string;byteSize?:number}; canonicalModel?:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number} };
+  model:{url:string;sha256?:string;byteSize?:number}; canonicalModel?:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number;scale:number} };
 type ToolMode = "pan" | "draw" | "edit";
 const ROLES: Role[] = ["front", "back", "depthA", "depthB"];
 const directions=["north","north-east","east","south-east","south","south-west","west","north-west"];
@@ -43,6 +43,18 @@ function initialSides(corners:Point[]): Plot["sides"] {
 function areaSqm(points:Point[]) {
   return Math.abs(points.reduce((v,p,i)=>v+p[0]*points[(i+1)%points.length][1] -
     p[1]*points[(i+1)%points.length][0],0))/2;
+}
+function measurementVariance(geometrySqm:number,approvedValue:number,unit:Plot["area"]["unit"],geoScale:number) {
+  if(!(geometrySqm>0) || !(approvedValue>0) || !(geoScale>0))return null;
+  const sqm=approvedValue*(unit==="sqft"?0.09290304:unit==="sqyd"?0.83612736:1);
+  return (geometrySqm*geoScale*geoScale-sqm)/sqm;
+}
+function geometrySideLengthMetres(points:Point[],edges:number[],geoScale:number) {
+  return edges.reduce((length,i)=>{
+    if(!Number.isInteger(i)||i<0||i>=points.length)return length;
+    const a=points[i],b=points[(i+1)%points.length];
+    return length+Math.hypot(a[0]-b[0],a[1]-b[1])*geoScale;
+  },0);
 }
 function facingFromGeo(points:Point[],edges:number[],heading:number) {
   if (points.length<3 || !edges.length) return "north";
@@ -207,7 +219,7 @@ export default function GeoPlotMapper(){
     }
     return point;
   };
-  const choose=(plot:Plot)=>{setWorking(structuredClone(plot));setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");setMode("edit");};
+  const choose=(plot:Plot)=>{setWorking(structuredClone(plot));if(Number.isFinite(plot.planeY))setGroundY(plot.planeY!);setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");setMode("edit");};
   const onDraw=(event:React.PointerEvent<SVGSVGElement>)=>{
     if(mode!=="draw"||dragRef.current!==null)return;
     const p=unproject(event.clientX,event.clientY);if(!p)return;
@@ -243,39 +255,73 @@ export default function GeoPlotMapper(){
     finally{setBusy(false);}
   };
   const importCsv=async(file:File)=>{
+    if(file.size>2_000_000)throw Error("Measurement CSV exceeds the 2 MB safety limit.");
     const rows=parseRows(await file.text());
     if(activeProjectRef.current!==slug)throw Error("Project changed during CSV import; no data staged.");
-    if(rows.length<2)throw Error("CSV contains no data.");
+    if(rows.length<2||rows.length>2501)throw Error("CSV requires 1–2500 measurement rows.");
     const keys=rows[0].map(s=>s.trim().toLowerCase().replace(/[^a-z0-9]/g,""));
-    const required=["id","area","areaunit","front","back","deptha","unit","source"];
+    if(new Set(keys).size!==keys.length)throw Error("Duplicate CSV column headings.");
+    const modern=keys.includes("frontlength");
+    const required=modern
+      ? ["id","area","areaunit","areasource","facing","facingsource","frontlength","frontunit","frontsource"]
+      : ["id","area","areaunit","front","back","deptha","unit","source"];
     if(required.some(k=>!keys.includes(k)))throw Error("CSV header required: "+required.join(", "));
-    const ix=(key:string)=>keys.indexOf(key);
     const updates=new Map<string,Record<string,string>>();
-    for(const row of rows.slice(1)){const id=String(row[ix("id")]||"").trim();
-      if(!id||updates.has(id))throw Error("Missing or duplicate Plot ID in CSV: "+id);
-      updates.set(id,Object.fromEntries(keys.map((k,i)=>[k,row[i]||""])));}
-    const unknown=[...updates.keys()].filter(id=>!plots.some(p=>p.id===id));
+    for(const row of rows.slice(1)){
+      if(row.length>keys.length)throw Error("CSV row has more fields than its header.");
+      const v=Object.fromEntries(keys.map((k,i)=>[k,(row[i]||"").trim()]));
+      const id=v.id;
+      if(!id||updates.has(id.toLowerCase()))throw Error("Missing or duplicate Plot ID in CSV: "+id);
+      updates.set(id.toLowerCase(),v);
+    }
+    const unknown=[...updates.keys()].filter(id=>!plots.some(p=>p.id.toLowerCase()===id));
     if(unknown.length)throw Error("Map polygon corners before importing measurements: "+unknown.slice(0,12).join(", "));
     const proposed=plots.map(p=>{
-      const v=updates.get(p.id);if(!v)return p;
+      const v=updates.get(p.id.toLowerCase());if(!v)return p;
+      if(modern && v.cornersjson){
+        let uploaded:unknown;
+        try{uploaded=JSON.parse(v.cornersjson);}catch{throw Error("Invalid corner snapshot for "+p.id);}
+        if(JSON.stringify(uploaded)!==JSON.stringify(p.corners))
+          throw Error("Plot "+p.id+": geometry changed since CSV export. Export current mapping before importing.");
+      }
       const side={...p.sides};
       for(const role of ROLES){
         const item=side[role];if(!item)continue;
-        const n=Number(v[role.toLowerCase()]||"");
-        if(!(n>0))throw Error("CSV "+p.id+": "+role+" must be positive.");
-        side[role]={...item,length:n,unit:v.unit==="m"?"m":"ft",source:v.source,verified:false};
+        const prefix=role.toLowerCase();
+        const length=Number(v[modern?prefix+"length":prefix]);
+        const unit=modern?v[prefix+"unit"]:v.unit;
+        const source=modern?v[prefix+"source"]:v.source;
+        if(!Number.isFinite(length)||length<=0||!["m","ft"].includes(unit)||!source)
+          throw Error("Plot "+p.id+": invalid "+role+" measurement/unit/source.");
+        const facingFlag=v[prefix+"roadfacing"];
+        if(modern && facingFlag && !["true","false"].includes(facingFlag.toLowerCase()))
+          throw Error("Plot "+p.id+": invalid road-facing flag.");
+        side[role]={...item,length,unit:unit as Side["unit"],source,verified:false,
+          roadFacing:modern && facingFlag ? facingFlag.toLowerCase()==="true":item.roadFacing};
       }
-      return {...p,sides:side,area:{value:Number(v.area),unit:v.areaunit as Plot["area"]["unit"],source:v.source,verified:false},
-        facing:v.facing||p.facing,facingVerified:false,road:v.road||p.road};
+      const area=Number(v.area),areaunit=v.areaunit;
+      if(!Number.isFinite(area)||area<=0||!["sqft","sqm","sqyd"].includes(areaunit))
+        throw Error("Plot "+p.id+": invalid approved area or unit.");
+      return {...p,sides:side,
+        area:{value:area,unit:areaunit as Plot["area"]["unit"],source:modern?v.areasource:v.source,verified:false},
+        facing:v.facing||p.facing,facingSource:modern?v.facingsource:p.facingSource,
+        facingVerified:false,road:v.road??p.road,notes:modern?v.notes??p.notes:p.notes,
+        planeVerified:false};
     });
+    if(activeProjectRef.current!==slug)throw Error("Project switched during CSV validation.");
     setPlots(proposed);setDirty(true);setWorking(null);
-    setMessage(updates.size+" plot measurement rows staged for review; verify sources before publish.");
+    setMessage(updates.size+" plot measurement rows staged (all imported approvals reset). Verify geometry, sources and plane before publish.");
   };
   const exportCsv=()=>{
-    const headers=["id","area","areaunit","front","back","deptha","depthb","unit","source","facing","road"];
-    const lines=[headers.join(","),...plots.map(p=>[p.id,p.area.value,p.area.unit,
-      p.sides.front?.length,p.sides.back?.length,p.sides.depthA?.length,p.sides.depthB?.length,
-      p.sides.front?.unit,p.area.source,p.facing,p.road].map(csvCell).join(","))];
+    const headers=["id","cornersJson","area","areaUnit","areaSource","areaVerified",
+      "facing","facingSource","facingVerified","road","notes","planeY","planeSource","planeVerified",
+      ...ROLES.flatMap(role=>[role+"Length",role+"Unit",role+"Source",role+"Verified",role+"RoadFacing"])];
+    const lines=[headers.map(csvCell).join(","),...plots.map(p=>[
+      p.id,JSON.stringify(p.corners),p.area.value,p.area.unit,p.area.source,p.area.verified,
+      p.facing,p.facingSource,p.facingVerified,p.road,p.notes,p.planeY,p.planeSource,p.planeVerified,
+      ...ROLES.flatMap(role=>{const side=p.sides[role];
+        return [side?.length,side?.unit,side?.source,side?.verified,side?.roadFacing];})
+    ].map(csvCell).join(","))];
     const url=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"}));
     const a=document.createElement("a");a.href=url;a.download=slug+"-geo-plots.csv";a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -283,7 +329,7 @@ export default function GeoPlotMapper(){
   const begin=(kind:"four"|"irregular")=>{
     setShape(kind);setMode("draw");setOriginalId(null);
     const ids=new Set(plots.map(p=>p.id));let id=1;while(ids.has(String(id)))id++;
-    setWorking(blank(String(id)));setMessage("Tap each plot corner on the top-down verified model.");
+    setWorking({...blank(String(id)),planeY:groundY,planeSource:"",planeVerified:false});setMessage("Tap each plot corner on the top-down verified model.");
   };
   const editable=Boolean(state&&!state.draft.stale&&geo);
   const path=(points:Point[])=>points.map(p=>project(p).join(",")).join(" ");
@@ -350,7 +396,23 @@ export default function GeoPlotMapper(){
         {working&&<>
           <h3>{plots.some(p=>p.id===working.id)?"Update":"New"} Plot {working.id}</h3>
           <label>Plot Number<input readOnly={Boolean(originalId)} value={working.id} onChange={e=>setWorking({...working,id:e.target.value})}/></label>
-          <p className="geo-plot-hint">Corners: {working.corners.length} · Geometry area (unverified): {areaSqm(working.corners).toFixed(2)} m²</p>
+          <p className="geo-plot-hint">Corners: {working.corners.length} · Model area (unverified): {areaSqm(working.corners).toFixed(2)} m²
+          · Geo-scale area estimate: {(areaSqm(working.corners)*(geo?.placement.scale||1)**2).toFixed(2)} m²</p>
+          <label>Mapping plane height (model-local Y, metres)<input type="number" step="any"
+            value={working.planeY??""} onChange={e=>{const y=Number(e.target.value);if(Number.isFinite(y)){setGroundY(y);setWorking({...working,planeY:y,planeVerified:false});}}}/></label>
+          <label>Site plane source<input value={working.planeSource||""} placeholder="Verified GLB floor/approved survey elevation"
+            onChange={e=>setWorking({...working,planeSource:e.target.value,planeVerified:false})}/></label>
+          <label className="geo-plot-check"><input type="checkbox" checked={working.planeVerified===true}
+            onChange={e=>setWorking({...working,planeVerified:e.target.checked})}/> Verified model-local plot mapping plane</label>
+          <p className="geo-plot-hint">Changing this plane affects the projected public map footprint. A model bounding-box minimum is a starting suggestion, not a surveyed measurement.</p>
+          {(()=>{
+            const variance=measurementVariance(areaSqm(working.corners),working.area.value,
+              working.area.unit,geo?.placement.scale||1);
+            return variance!==null && Math.abs(variance)>0.1
+              ? <p className="geo-plot-warning">Area / model geometry mismatch: {(Math.abs(variance)*100).toFixed(1)}%.
+                Recheck approved plan dimensions, GLB metric scale and Geo alignment before verifying.</p>
+              : null;
+          })()}
           <label>Approved Area<input inputMode="decimal" type="number" min="0.001" value={working.area.value||""}
             onChange={e=>setWorking({...working,area:{...working.area,value:Number(e.target.value),verified:false}})}/></label>
           <label>Area Unit<select value={working.area.unit} onChange={e=>setWorking({...working,area:{...working.area,unit:e.target.value as Plot["area"]["unit"]}})}>
@@ -369,7 +431,14 @@ export default function GeoPlotMapper(){
             onChange={e=>setWorking({...working,facingVerified:e.target.checked})}/> Facing verified against reference</label>
           <p className="geo-plot-hint">Side edge numbers are zero-based; a logical side may contain multiple consecutive edges.</p>
           {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{const side=working.sides[role]||emptySide();
+            const referenceM=geometrySideLengthMetres(working.corners,side.edges,geo?.placement.scale||1);
+            const reference=side.unit==="ft"?referenceM*3.280839895:referenceM;
+            const mismatch=side.length>0 && reference>0 && Math.abs(reference-side.length)/side.length>0.1;
             return <fieldset key={role}><legend>{role}</legend>
+              <p className={mismatch?"geo-plot-warning":"geo-plot-hint"}>
+                Model geometry estimate: {reference.toFixed(2)} {side.unit}
+                {mismatch?" — differs by more than 10% from the approved side length; verify scale and source.":" (not authoritative)"}
+              </p>
               <label>Edges (0…{Math.max(working.corners.length-1,0)})<input value={side.edges.join(",")} placeholder="0,1"
                 onChange={e=>changeSide(role,{edges:e.target.value.split(",").map(x=>Number(x.trim())).filter(Number.isInteger),verified:false})}/></label>
               <label>Length<input type="number" min="0.001" step="any" value={side.length||""}

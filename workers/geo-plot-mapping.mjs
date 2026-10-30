@@ -89,12 +89,21 @@ async function resetForNewGeo(env,ctx,actor,body) {
 }
 async function verify(env,ctx,actor,body) {
   const draft=await env.DB.prepare("SELECT * FROM geo_plot_mapping_drafts_3d WHERE project_id=?").bind(ctx.project.id).first();
-  if (!draft || draft.revision!==body.expectedRevision || draft.geo_release_id!==ctx.active.geo_release_id)
-    throw Error("Save the latest mapping against the current Geo release before verification.");
+  if (!draft || draft.revision!==body.expectedRevision || draft.geo_release_id!==ctx.active.geo_release_id ||
+      draft.building_release_id!==ctx.active.source_building_release_id)
+    throw Error("Save the latest mapping against the current Geo/Building release before verification.");
   validateGeoPlotCollection(JSON.parse(draft.plots_json),{forPublish:true});
   const res=await env.DB.prepare(
-    "UPDATE geo_plot_mapping_drafts_3d SET verified_revision=revision,updated_by=?,updated_at=? WHERE project_id=? AND revision=? AND geo_release_id=?"
-  ).bind(actor.email,currentIso(),ctx.project.id,draft.revision,ctx.active.geo_release_id).run();
+    `UPDATE geo_plot_mapping_drafts_3d SET verified_revision=revision,updated_by=?,updated_at=?
+      WHERE project_id=? AND revision=? AND geo_release_id=? AND building_release_id=?
+        AND EXISTS(SELECT 1 FROM geo_experience_active_releases_3d ar
+          JOIN geo_releases_3d gr ON gr.id=ar.geo_release_id AND gr.project_id=ar.project_id
+          WHERE ar.experience_id=geo_plot_mapping_drafts_3d.experience_id
+            AND ar.project_id=geo_plot_mapping_drafts_3d.project_id
+            AND ar.geo_release_id=geo_plot_mapping_drafts_3d.geo_release_id
+            AND gr.source_building_release_id=geo_plot_mapping_drafts_3d.building_release_id)`
+  ).bind(actor.email,currentIso(),ctx.project.id,draft.revision,ctx.active.geo_release_id,
+    ctx.active.source_building_release_id).run();
   if (res.meta?.changes!==1) throw Error("Mapping changed during verification.");
   return state(env,ctx);
 }
@@ -109,12 +118,26 @@ async function publish(env,ctx,actor,body) {
     .bind(ctx.active.experience_id).first();
   // Guard the source again; publishing an old Geo alignment must not activate mapping.
   const activeCheck=await context(env,ctx.project.slug);
-  if (activeCheck?.active?.geo_release_id!==ctx.active.geo_release_id) throw Error("Geo release changed during publish.");
+  if (activeCheck?.active?.geo_release_id!==ctx.active.geo_release_id ||
+      activeCheck?.active?.source_building_release_id!==ctx.active.source_building_release_id)
+    throw Error("Geo or Building release changed during publish.");
   await env.DB.batch([
+    // Source and draft revision are rechecked *inside* the atomic D1 batch.
+    // A concurrent Geo activation cannot activate old mapped coordinates.
     env.DB.prepare(`INSERT INTO geo_plot_mapping_releases_3d
       (id,project_id,experience_id,geo_release_id,building_release_id,version,draft_revision,plots_json,sha256,created_by,created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(id,ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
-      ctx.active.source_building_release_id,versionRow.version,draft.revision,text,sha,actor.email,now),
+      SELECT ?,?,?,?,?,?,?,?,?,?,?
+      WHERE EXISTS(SELECT 1 FROM geo_experience_active_releases_3d ar
+        JOIN geo_releases_3d gr ON gr.id=ar.geo_release_id AND gr.project_id=ar.project_id
+        WHERE ar.project_id=? AND ar.experience_id=? AND ar.geo_release_id=?
+          AND gr.source_building_release_id=?)
+        AND EXISTS(SELECT 1 FROM geo_plot_mapping_drafts_3d d WHERE d.project_id=?
+          AND d.experience_id=? AND d.geo_release_id=? AND d.building_release_id=?
+          AND d.revision=? AND d.verified_revision=d.revision)`).bind(id,ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
+      ctx.active.source_building_release_id,versionRow.version,draft.revision,text,sha,actor.email,now,
+      ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,ctx.active.source_building_release_id,
+      ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
+      ctx.active.source_building_release_id,draft.revision),
     env.DB.prepare(`INSERT INTO geo_plot_mapping_active_3d(experience_id,project_id,mapping_release_id,updated_by,updated_at)
       VALUES (?,?,?,?,?) ON CONFLICT(experience_id) DO UPDATE SET
       mapping_release_id=excluded.mapping_release_id,updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
