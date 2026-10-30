@@ -540,3 +540,27 @@
   .geo-map-quick-actions { top: 8px; right: 8px; gap: 3px; }
   .geo-map-quick-actions button { min-width: 35px; min-height: 40px; padding: 6px 8px; }
 }
+
+/* Inform customers only when Google Maps itself refuses an extra 2x zoom step.
+   Keep the notice above map attribution and the fullscreen bottom camera dock. */
+.geo-zoom-notice {
+  position: absolute;
+  z-index: 9;
+  bottom: 66px;
+  right: 12px;
+  width: max-content;
+  max-width: min(350px, calc(100% - 24px));
+  padding: 10px 12px;
+  border: 1px solid rgba(120, 171, 183, .55);
+  border-radius: 10px;
+  background: rgba(7, 25, 38, .94);
+  color: #e1f2fa;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .28);
+  pointer-events: none;
+}
+@media (max-width: 640px) {
+  .geo-zoom-notice { right: 8px; bottom: 70px; font-size: 11px; }
+}
