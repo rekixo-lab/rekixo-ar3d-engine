@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS geo_plot_mapping_active_3d (
 );
 CREATE TRIGGER IF NOT EXISTS geo_plot_release_immutable_update
 BEFORE UPDATE ON geo_plot_mapping_releases_3d BEGIN SELECT RAISE(ABORT,'Published Geo plot mapping is immutable'); END;
-CREATE TRIGGER IF NOT EXISTS geo_plot_release_immutable_delete
-BEFORE DELETE ON geo_plot_mapping_releases_3d BEGIN SELECT RAISE(ABORT,'Published Geo plot mapping cannot be deleted'); END;
+-- Historical rows have no public delete API; explicit hard-project deletion may
+-- remove their project-owned history. UPDATE remains database-immutable.
 CREATE TRIGGER IF NOT EXISTS geo_plot_active_owner_insert BEFORE INSERT ON geo_plot_mapping_active_3d
 WHEN NOT EXISTS (SELECT 1 FROM geo_plot_mapping_releases_3d r
  WHERE r.id=NEW.mapping_release_id AND r.project_id=NEW.project_id AND r.experience_id=NEW.experience_id)
