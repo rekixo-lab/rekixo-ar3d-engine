@@ -123,7 +123,7 @@ type GoogleWebGLOverlay = {
   requestRedraw(): void;
 };
 
-type GooglePlotPolygon = {setMap(map:GoogleMap|null):void;addListener(event:string,fn:()=>void):MapsListener};
+type GooglePlotPolygon = {setMap(map:GoogleMap|null):void;setVisible(value:boolean):void;addListener(event:string,fn:()=>void):MapsListener};
 type GoogleRoot = {
   maps: {
     Polygon?: new (options:Record<string,unknown>)=>GooglePlotPolygon;
@@ -421,6 +421,11 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
   const [inspectMode, setInspectMode] = useState(false);
   const [selectedPlot, setSelectedPlot] = useState<GeoMappedPlot|null>(null);
   const [showPlotBoundaries, setShowPlotBoundaries] = useState(true);
+  const plotPolygonsRef = useRef<GooglePlotPolygon[]>([]);
+  useEffect(() => {
+    for(const polygon of plotPolygonsRef.current)polygon.setVisible(showPlotBoundaries);
+    if(!showPlotBoundaries)setSelectedPlot(null);
+  },[showPlotBoundaries]);
   const [cameraView, setCameraView] = useState<GeoCameraView>("overview");
   const [satelliteMaxZoom, setSatelliteMaxZoom] = useState<number | null>(null);
   const [zoomNotice, setZoomNotice] = useState("");
@@ -599,7 +604,9 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
                   strokeColor:"#20d8a5",strokeWeight:2,strokeOpacity:.96,
                   fillColor:"#1dd5a2",fillOpacity:.13,clickable:true,zIndex:70});
                 poly.addListener("click",()=>setSelectedPlot(plot));
+                poly.setVisible(showPlotBoundaries);
                 polygons.push(poly);
+                plotPolygonsRef.current=polygons;
               }
             }
             model.traverse((node) => {
@@ -703,6 +710,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
       zoomActionRef.current = null;
       mapZoomChanged?.remove();
       for(const polygon of polygons)polygon.setMap(null);
+      if(plotPolygonsRef.current===polygons)plotPolygonsRef.current=[];
       mapIdle?.remove();
       mapTypeChanged?.remove();
       overlay?.setMap(null);
@@ -731,9 +739,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         }}>⛶</button>
       </nav>
       {data.plotMapping?.plots.length ? <div className="geo-plot-public-controls">
-        <button type="button" onClick={() => { setShowPlotBoundaries(v=>!v);
-          // Map polygons are controlled by visibility through the overlay wrapper.
-        }} aria-pressed={showPlotBoundaries}>Plots {showPlotBoundaries?"ON":"OFF"}</button>
+        <button type="button" onClick={() => setShowPlotBoundaries(v=>!v)}
+          aria-pressed={showPlotBoundaries}>Plots {showPlotBoundaries?"ON":"OFF"}</button>
         <span>{data.plotMapping.plots.length} mapped</span>
       </div> : null}
       {selectedPlot && <aside className="geo-plot-public-details" aria-label="Selected verified plot details">
