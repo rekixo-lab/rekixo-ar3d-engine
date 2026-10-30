@@ -317,7 +317,7 @@ export default function GeoPlotMapper(){
       <button disabled={!editable||busy||!working} onClick={()=>setMode("edit")}>Edit Corners</button>
       <button disabled={!working||!working.corners.length} onClick={()=>{setWorking(p=>p?{...p,corners:p.corners.slice(0,-1),sides:initialSides(p.corners.slice(0,-1))}:p);}}>Undo Corner</button>
       <label><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/> Snap Corners</label>
-      <button disabled={!editable||busy||dirty||!state||state.draft.verifiedRevision!==state.draft.revision} onClick={()=>void execute("publish")}>Publish Mapping</button>
+      <button disabled={!editable||busy||dirty||Boolean(working)||!state||state.draft.verifiedRevision!==state.draft.revision} onClick={()=>void execute("publish")}>Publish Mapping</button>
     </section>
     <div className="geo-plot-workspace">
       <div className="geo-plot-scene">
@@ -386,7 +386,7 @@ export default function GeoPlotMapper(){
         </>}
         <h3>Project Mapping Actions</h3>
         <button disabled={!editable||busy||!dirty} onClick={()=>void execute("save")}>{busy?"Saving…":"Save Mapping Draft"}</button>
-        <button disabled={!editable||busy||dirty||!state?.draft.revision} onClick={()=>void execute("verify")}>Verify All Plots</button>
+        <button disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision} onClick={()=>void execute("verify")}>Verify All Plots</button>
         <label className="geo-plot-import">Import Measurements CSV<input type="file" accept=".csv,text/csv" onChange={e=>{
           const file=e.target.files?.[0];e.target.value="";if(file)void importCsv(file).catch(x=>setMessage("ERROR: "+String(x)));
         }}/></label>
