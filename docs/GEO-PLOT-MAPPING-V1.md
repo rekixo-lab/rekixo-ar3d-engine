@@ -38,6 +38,7 @@ Scope: **rekixo-ar3d-engine only**. AR3D Platform code, APIs, inventory and cust
 - Required: unique plot IDs, finite 3–80 vertices, positive area, no self-intersection, no repeated vertices, non-overlapping semantic edge assignments, continuous irregular side chains and all polygon edges mapped.
 - Required for publication: positive authoritative area and side measurements, units, source refs, and explicit confirmation of source-backed area, each side and compass direction.
 - Source Geo/Building identity is checked on every write and again on publish/activation. Optimistic concurrency prevents old tabs overwriting recent changes.
+- If the active Geo/Building source changes, the old draft is locked. An operator may explicitly type the project-specific RESET confirmation to create a new empty draft for the new source; this action is audited and preserves historical immutable mapping releases.
 - Browser tests and visual/manual operator review remain necessary before accepting production plot placement as surveyed truth.
 - Hard-project deletion removes project-owned mapping rows first; existing project deletion is not blocked by new Foreign Keys.
 
