@@ -374,6 +374,7 @@ function GeoModelInspector({ model }: { model: GeoPayload["model"] }) {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
       controls.dispose();
+      renderer.forceContextLoss();
       renderer.dispose();
       renderer.domElement.remove();
       if (loadedModel) disposeObject(loadedModel);
@@ -694,7 +695,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
                   ? `Closest available satellite detail at this site is zoom ${satelliteMaxZoom}`
                   : `${view.label} camera view`
               }
-              onClick={() => cameraActionRef.current?.(view.id)}
+              onClick={() => { setInspectMode(false); cameraActionRef.current?.(view.id); }}
             >
               {view.label}
             </button>
