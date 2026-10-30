@@ -11,7 +11,7 @@ type Role = "front" | "back" | "depthA" | "depthB";
 type Side = { edges: number[]; length: number; unit: "ft" | "m"; roadFacing: boolean; source: string; verified: boolean };
 type Plot = { id: string; corners: Point[]; layout: "three" | "four";
   sides: Partial<Record<Role, Side>>; area: { value: number; unit: "sqft" | "sqm" | "sqyd"; source: string; verified: boolean };
-  facing: string; road: string; notes: string };
+  facing: string; facingSource:string; facingVerified:boolean; road: string; notes: string };
 type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | null;
   draft: {revision:number;verifiedRevision:number|null;stale:boolean;plots:Plot[]};
   activeMapping:{id:string;version:number;current:boolean}|null;
@@ -23,7 +23,7 @@ const ROLES: Role[] = ["front", "back", "depthA", "depthB"];
 const directions=["north","north-east","east","south-east","south","south-west","west","north-west"];
 const emptySide = (edges:number[]=[]):Side => ({edges,length:0,unit:"ft",roadFacing:false,source:"",verified:false});
 const blank = (id:string):Plot => ({id,corners:[],layout:"four",sides:{},
-  area:{value:0,unit:"sqft",source:"",verified:false},facing:"north",road:"",notes:""});
+  area:{value:0,unit:"sqft",source:"",verified:false},facing:"north",facingSource:"",facingVerified:false,road:"",notes:""});
 function initialSides(corners:Point[]): Plot["sides"] {
   if(corners.length<3)return {};
   const result:Plot["sides"]={};
@@ -253,7 +253,7 @@ export default function GeoPlotMapper(){
         side[role]={...item,length:n,unit:v.unit==="m"?"m":"ft",source:v.source,verified:false};
       }
       return {...p,sides:side,area:{value:Number(v.area),unit:v.areaunit as Plot["area"]["unit"],source:v.source,verified:false},
-        facing:v.facing||p.facing,road:v.road||p.road};
+        facing:v.facing||p.facing,facingVerified:false,road:v.road||p.road};
     });
     setPlots(proposed);setDirty(true);setWorking(null);
     setMessage(updates.size+" plot measurement rows staged for review; verify sources before publish.");
@@ -339,9 +339,13 @@ export default function GeoPlotMapper(){
           <label className="geo-plot-check"><input type="checkbox" checked={working.area.verified}
             onChange={e=>setWorking({...working,area:{...working.area,verified:e.target.checked}})}/> Area verified against source</label>
           <label>Road / Access<input value={working.road} onChange={e=>setWorking({...working,road:e.target.value})}/></label>
-          <label>Facing <select value={working.facing} onChange={e=>setWorking({...working,facing:e.target.value})}>
+          <label>Facing <select value={working.facing} onChange={e=>setWorking({...working,facing:e.target.value,facingVerified:false})}>
             {directions.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
-          <button type="button" disabled={working.corners.length<3} onClick={()=>setWorking(p=>p?{...p,facing:facingFromGeo(p.corners,p.sides.front?.edges||[],geo?.placement.headingDeg||0)}:p)}>Suggest Facing From Geo North</button>
+          <button type="button" disabled={working.corners.length<3} onClick={()=>setWorking(p=>p?{...p,facing:facingFromGeo(p.corners,p.sides.front?.edges||[],geo?.placement.headingDeg||0),facingVerified:false}:p)}>Suggest Facing From Geo North</button>
+          <label>Facing Source<input value={working.facingSource} placeholder="Geo north / approved master plan reference"
+            onChange={e=>setWorking({...working,facingSource:e.target.value,facingVerified:false})}/></label>
+          <label className="geo-plot-check"><input type="checkbox" checked={working.facingVerified}
+            onChange={e=>setWorking({...working,facingVerified:e.target.checked})}/> Facing verified against reference</label>
           <p className="geo-plot-hint">Side edge numbers are zero-based; a logical side may contain multiple consecutive edges.</p>
           {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{const side=working.sides[role]||emptySide();
             return <fieldset key={role}><legend>{role}</legend>
