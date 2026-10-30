@@ -83,3 +83,14 @@ test("cannot publish unverified facing or non-consecutive irregular side segment
       back:{...square.sides.back,edges:[3]},depthB:{...square.sides.depthB,edges:[4]}}};
   assert.throws(()=>validateGeoPlot(broken),/contiguous/);
 });
+
+test("Geo release changes require explicit audited reset and cannot silently rebind polygons",()=>{
+  const api=read("workers/geo-plot-mapping.mjs");
+  const ui=read("apps/admin/src/geo/GeoPlotMapper.tsx");
+  assert.match(api,/resetForNewGeo/);
+  assert.match(api,/body\.confirmation !== "RESET MAPPING " \+ ctx\.project\.slug/);
+  assert.match(api,/plots_json='\[\]'/);
+  assert.match(api,/geo\.plots_reset_for_new_source/);
+  assert.match(ui,/window\.prompt/);
+  assert.match(ui,/rebind-reset/);
+});
