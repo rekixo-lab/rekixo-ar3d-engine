@@ -65,6 +65,8 @@ export function validateGeoPlot(input) {
       throw Error("Plot " + id + ": measured " + role + " length and unit required.");
     const edges = [...new Set(side.edges)];
     if (edges.length !== side.edges.length) throw Error("Plot " + id + ": duplicate side edge.");
+    if (edges.some((e,i) => i > 0 && e !== (edges[i-1]+1)%corners.length))
+      throw Error("Plot " + id + ": logical side edges must form a forward contiguous corner chain.");
     for (const index of edges) {
       if (assigned.has(index)) throw Error("Plot " + id + ": one edge cannot belong to two side roles.");
       assigned.add(index);
@@ -81,7 +83,8 @@ export function validateGeoPlot(input) {
   if (!DIRECTIONS.includes(facing)) throw Error("Plot " + id + ": valid compass-facing direction required.");
   return { id, corners: corners.map(p => [p[0],p[1]]), layout, sides: normalizedSides,
     area: { value: area.value, unit: area.unit, source: cleanText(area.source, 160), verified: area.verified === true },
-    facing, road: cleanText(input.road, 160), notes: cleanText(input.notes, 1000) };
+    facing, facingSource:cleanText(input.facingSource,160), facingVerified:input.facingVerified===true,
+    road: cleanText(input.road, 160), notes: cleanText(input.notes, 1000) };
 }
 export function validateGeoPlotCollection(value, { forPublish = false } = {}) {
   if (!Array.isArray(value) || value.length > 2500 || (forPublish && value.length === 0))
@@ -91,7 +94,7 @@ export function validateGeoPlotCollection(value, { forPublish = false } = {}) {
     const p = validateGeoPlot(item);
     if (ids.has(p.id.toLowerCase())) throw Error("Duplicate plot number: " + p.id);
     ids.add(p.id.toLowerCase());
-    if (forPublish && (!p.area.verified || !p.area.source ||
+    if (forPublish && (!p.area.verified || !p.area.source || !p.facingVerified || !p.facingSource ||
       Object.values(p.sides).some(s => !s.verified || !s.source)))
       throw Error("Plot "+p.id+": verify authoritative measurements and source before publish.");
     return p;
