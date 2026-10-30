@@ -44,6 +44,18 @@ function areaSqm(points:Point[]) {
   return Math.abs(points.reduce((v,p,i)=>v+p[0]*points[(i+1)%points.length][1] -
     p[1]*points[(i+1)%points.length][0],0))/2;
 }
+function measurementVariance(geometrySqm:number,approvedValue:number,unit:Plot["area"]["unit"],geoScale:number) {
+  if(!(geometrySqm>0) || !(approvedValue>0) || !(geoScale>0))return null;
+  const sqm=approvedValue*(unit==="sqft"?0.09290304:unit==="sqyd"?0.83612736:1);
+  return (geometrySqm*geoScale*geoScale-sqm)/sqm;
+}
+function geometrySideLengthMetres(points:Point[],edges:number[],geoScale:number) {
+  return edges.reduce((length,i)=>{
+    if(!Number.isInteger(i)||i<0||i>=points.length)return length;
+    const a=points[i],b=points[(i+1)%points.length];
+    return length+Math.hypot(a[0]-b[0],a[1]-b[1])*geoScale;
+  },0);
+}
 function facingFromGeo(points:Point[],edges:number[],heading:number) {
   if (points.length<3 || !edges.length) return "north";
   const cx=points.reduce((v,p)=>v+p[0],0)/points.length;
@@ -393,6 +405,14 @@ export default function GeoPlotMapper(){
           <label className="geo-plot-check"><input type="checkbox" checked={working.planeVerified===true}
             onChange={e=>setWorking({...working,planeVerified:e.target.checked})}/> Verified model-local plot mapping plane</label>
           <p className="geo-plot-hint">Changing this plane affects the projected public map footprint. A model bounding-box minimum is a starting suggestion, not a surveyed measurement.</p>
+          {(()=>{
+            const variance=measurementVariance(areaSqm(working.corners),working.area.value,
+              working.area.unit,geo?.placement.scale||1);
+            return variance!==null && Math.abs(variance)>0.1
+              ? <p className="geo-plot-warning">Area / model geometry mismatch: {(Math.abs(variance)*100).toFixed(1)}%.
+                Recheck approved plan dimensions, GLB metric scale and Geo alignment before verifying.</p>
+              : null;
+          })()}
           <label>Approved Area<input inputMode="decimal" type="number" min="0.001" value={working.area.value||""}
             onChange={e=>setWorking({...working,area:{...working.area,value:Number(e.target.value),verified:false}})}/></label>
           <label>Area Unit<select value={working.area.unit} onChange={e=>setWorking({...working,area:{...working.area,unit:e.target.value as Plot["area"]["unit"]}})}>
@@ -411,7 +431,14 @@ export default function GeoPlotMapper(){
             onChange={e=>setWorking({...working,facingVerified:e.target.checked})}/> Facing verified against reference</label>
           <p className="geo-plot-hint">Side edge numbers are zero-based; a logical side may contain multiple consecutive edges.</p>
           {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{const side=working.sides[role]||emptySide();
+            const referenceM=geometrySideLengthMetres(working.corners,side.edges,geo?.placement.scale||1);
+            const reference=side.unit==="ft"?referenceM*3.280839895:referenceM;
+            const mismatch=side.length>0 && reference>0 && Math.abs(reference-side.length)/side.length>0.1;
             return <fieldset key={role}><legend>{role}</legend>
+              <p className={mismatch?"geo-plot-warning":"geo-plot-hint"}>
+                Model geometry estimate: {reference.toFixed(2)} {side.unit}
+                {mismatch?" — differs by more than 10% from the approved side length; verify scale and source.":" (not authoritative)"}
+              </p>
               <label>Edges (0…{Math.max(working.corners.length-1,0)})<input value={side.edges.join(",")} placeholder="0,1"
                 onChange={e=>changeSide(role,{edges:e.target.value.split(",").map(x=>Number(x.trim())).filter(Number.isInteger),verified:false})}/></label>
               <label>Length<input type="number" min="0.001" step="any" value={side.length||""}
