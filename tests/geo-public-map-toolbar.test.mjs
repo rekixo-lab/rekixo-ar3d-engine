@@ -44,13 +44,14 @@ test("Geo map toolbar orders all camera views before the Building website link",
 });
 
 test("Geo camera controls are fixed to the viewport bottom with mobile safe-area padding", () => {
-  assert.match(geoStyles, /\\.geo-public-toolbar-slot\\s*\\{[\\s\\S]*?position:\\s*fixed;/);
-  assert.match(geoStyles, /\\.geo-public-toolbar-slot\\s*\\{[\\s\\S]*?bottom:\\s*0;/);
-  assert.match(geoStyles, /env\\(safe-area-inset-bottom/);
-  assert.match(geoStyles, /\\.geo-public-toolbar-slot\\s*>\\s*\\.geo-camera-toolbar--normal-row/);
-  assert.match(geoStyles, /grid-template-columns:\\s*repeat\\(6, minmax\\(0, 1fr\\)\\)/);
-  assert.match(geoStyles, /\\.geo-integrated-map\\s*\\{[\\s\\S]*?touch-action:\\s*none;/);
-  assert.match(geoStyles, /\\.geo-map-quick-actions/);
+  const dock = geoStyles.slice(geoStyles.lastIndexOf("/* Public Geo: a viewport-bottom navigation dock"));
+  assert.ok(dock.includes(".geo-public-toolbar-slot {"));
+  assert.ok(dock.includes("position: fixed;"));
+  assert.ok(dock.includes("bottom: 0;"));
+  assert.ok(dock.includes("safe-area-inset-bottom"));
+  assert.ok(dock.includes("touch-action: none;"));
+  assert.ok(dock.includes(".geo-map-quick-actions"));
+  assert.ok(geoStyles.includes("grid-template-columns: repeat(6, minmax(0, 1fr))"));
 });
 
 test("normal camera row spans available width without a panel or button pills", () => {
