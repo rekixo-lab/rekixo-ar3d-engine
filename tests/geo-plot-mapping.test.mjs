@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { polygonAreaSqm,polygonHasCrossings,validateGeoPlot,validateGeoPlotCollection } from "../workers/geo-plot-geometry.mjs";
+import { polygonAreaSqm,polygonHasCrossings,polygonsOverlapInArea,validateGeoPlot,validateGeoPlotCollection } from "../workers/geo-plot-geometry.mjs";
 const read=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
 const square={
   id:"25",corners:[[0,0],[10,0],[10,20],[0,20]],layout:"four",
@@ -93,4 +93,25 @@ test("Geo release changes require explicit audited reset and cannot silently reb
   assert.match(api,/geo\.plots_reset_for_new_source/);
   assert.match(ui,/window\.prompt/);
   assert.match(ui,/rebind-reset/);
+});
+
+test("project topology blocks overlapping plot footprints without rejecting shared edges",()=>{
+  const shift=(dx,dy,id)=>({...square,id,corners:square.corners.map(([x,y])=>[x+dx,y+dy])});
+  assert.equal(polygonsOverlapInArea(square.corners,shift(10,0,"26").corners),false);
+  assert.equal(validateGeoPlotCollection([square,shift(10,0,"26")]).length,2);
+  assert.equal(validateGeoPlotCollection([square,shift(10,20,"26")]).length,2);
+  assert.throws(()=>validateGeoPlotCollection([square,shift(5,0,"26")]),/25 and 26 overlap/);
+  assert.throws(()=>validateGeoPlotCollection([square,shift(0,0,"26")]),/overlap/);
+  const nested=shift(1,1,"27");nested.corners=[[1,1],[2,1],[2,2],[1,2]];
+  assert.throws(()=>validateGeoPlotCollection([square,nested]),/overlap/);
+  assert.equal(polygonsOverlapInArea(square.corners,
+    [...shift(10,0,"28").corners].reverse()),false);
+  assert.equal(polygonsOverlapInArea(square.corners,
+    [...shift(5,0,"28").corners].reverse()),true);
+});
+test("production browser QA runner and public module deployment changes are covered",()=>{
+  const qa=read(".github/workflows/verify-production-building-demo.yml");
+  const deploy=read(".github/workflows/deploy-cloudflare.yml");
+  assert.match(qa,/runs-on: ubuntu-24\.04/);
+  assert.match(deploy,/geo-plot-public\|geo-plot-geometry/);
 });
