@@ -29,3 +29,23 @@ test("camera presets control the real Google map camera rather than the Building
   assert.match(source, /map\.moveCamera\?\.\(\{ center, \.\.\.preset, zoom \}\)/);
   assert.match(source, /cameraActionRef\.current\?\.\(view\.id\)/);
 });
+
+test("manual zoom preserves one-finger Google pan and avoids resetting the user's camera", () => {
+  assert.match(source, /gestureHandling: "greedy"/);
+  assert.match(source, /draggable: true/);
+  assert.match(source, /zoomActionRef\\.current = \\(step\\) =>/);
+  assert.match(source, /map\\.setZoom\\(zoom\\)/);
+  assert.match(source, /map\\.getZoom\\?\\.\\(\\)/);
+  assert.match(source, /map\\.addListener\\("zoom_changed"/);
+  assert.doesNotMatch(source, /setSatelliteMaxZoom\\(candidate\\);\\s*if \\(isSatelliteMapType[^]*?applyCamera\\(activeCameraView\\)/);
+});
+
+test("verified close-up 3D inspection can go past the satellite imagery ceiling", () => {
+  assert.match(source, /function GeoModelInspector/);
+  assert.match(source, /loadVerifiedModel\\(model\\)/);
+  assert.match(source, /controls\\.minDistance = Math\\.max\\(radius \\* 0\\.01, 0\\.001\\)/);
+  assert.match(source, /controls\\.touches\\.ONE = THREE\\.TOUCH\\.ROTATE/);
+  assert.match(source, /controls\\.touches\\.TWO = THREE\\.TOUCH\\.DOLLY_PAN/);
+  assert.match(source, /inspectMode \\? <GeoModelInspector model=\\{data\\.model\\} \\/>/);
+  assert.match(css, /\\.geo-model-inspector/);
+});
