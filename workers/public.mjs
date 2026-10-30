@@ -6,7 +6,7 @@ import {
   serveReleaseAsset,
 } from "./release-runtime.mjs";
 import { assertProjectAssetKey } from "./storage-boundary.mjs";
-import { publicGeoPlotMapping } from "./geo-plot-mapping.mjs";
+import { publicGeoPlotMapping } from "./geo-plot-public.mjs";
 import { serveR2Object } from "./http-range.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
 import {
