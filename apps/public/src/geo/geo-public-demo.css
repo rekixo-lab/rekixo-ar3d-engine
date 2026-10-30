@@ -564,3 +564,10 @@
 @media (max-width: 640px) {
   .geo-zoom-notice { right: 8px; bottom: 70px; font-size: 11px; }
 }
+/* Independent read-only plot mapping presentation; legacy Geo sites remain unchanged. */
+.geo-plot-public-controls{position:absolute;z-index:9;top:68px;left:10px;display:flex;align-items:center;gap:7px;padding:6px 9px;background:rgba(5,20,31,.94);border:1px solid #3b786c;border-radius:9px;color:#d5f8ed;font-size:11px}
+.geo-plot-public-controls button{min-height:34px;border-radius:6px;border:1px solid #5ccba9;background:#103d35;color:#d9fff4;font-weight:700;cursor:pointer}
+.geo-plot-public-details{position:absolute;z-index:12;bottom:64px;left:12px;display:grid;gap:5px;min-width:215px;max-width:min(340px,calc(100% - 24px));max-height:50%;overflow:auto;padding:15px 18px;border:1px solid #5ad3ad;border-radius:12px;background:rgba(5,23,32,.97);color:#e5f7ff;box-shadow:0 12px 35px #0007;font-size:12px}
+.geo-plot-public-details strong{font-size:17px;color:#85f8d1}.geo-plot-public-details small{line-height:1.4;color:#adccd5}
+.geo-plot-public-close{position:absolute;top:5px;right:6px;font-size:19px;border:0;background:transparent;color:#f7ffff;cursor:pointer}
+@media(max-width:640px){.geo-plot-public-details{bottom:62px;left:8px;padding:11px 15px}.geo-plot-public-controls{top:52px}}
