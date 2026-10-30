@@ -364,6 +364,15 @@ export async function publicGeoExperienceFromState(env, state) {
       scale: placement.scale,
     },
     modelAnchor,
+    // Canonical source geometry is the only coordinate authority for plot
+    // polygons. A Geo-optimized derivative may have a different origin.
+    canonicalModel: {
+      ...buildingExperience.model,
+      url: buildingExperience.model.url,
+      sha256: sourceAsset?.sha256,
+      byteSize: sourceAsset?.byteSize ?? buildingExperience.model.byteSize,
+      variant: "building",
+    },
     ...(state.manifestKind === "v2" && state.manifest.siteBoundary
       ? { siteBoundary: structuredClone(state.manifest.siteBoundary) }
       : {}),
