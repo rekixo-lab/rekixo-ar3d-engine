@@ -121,19 +121,25 @@ export default function GeoPlotMapper(){
   const workingRef=useRef(working);
   workingRef.current=working;
   const api=slug?`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/geo-plots`:"";
-  const refresh=useCallback(async()=>{
+  const refresh=useCallback(async(isCurrent:()=>boolean)=>{
     if(!slug){setState(null);setGeo(null);setPlots([]);return;}
     setMessage("");
     const [mapped,experience]=await Promise.all([
       callApi<MappingState>(`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/geo-plots`),
       callApi<GeoPublic>(`/3Dprojects/api/projects/${encodeURIComponent(slug)}/geo-placement`)
     ]);
+    if(!isCurrent())return; // Never load a previous project after rapid project switching.
     if(mapped.geoReleaseId!==experience.geoRelease.id || mapped.buildingReleaseId!==experience.buildingRelease.id)
       throw Error("Geo source mismatch. Reload verified Geo releases.");
     setState(mapped);setGeo(experience);setPlots(mapped.draft.plots);setDirty(false);setWorking(null);
   },[slug]);
   useEffect(()=>{void listProjects().then(r=>setOptions(r.projects)).catch(()=>undefined);},[]);
-  useEffect(()=>{let live=true;void refresh().catch(e=>{if(live){setState(null);setGeo(null);setMessage(String(e));}});return()=>{live=false;};},[refresh]);
+  useEffect(()=>{
+    let live=true;
+    setState(null);setGeo(null);setPlots([]);setWorking(null);setDirty(false);
+    void refresh(()=>live).catch(e=>{if(live){setState(null);setGeo(null);setMessage(String(e));}});
+    return()=>{live=false;};
+  },[refresh]);
   useEffect(()=>{
     const host=hostRef.current;if(!host||!geo)return;
     let alive=true,frame=0,object:THREE.Object3D|undefined;
