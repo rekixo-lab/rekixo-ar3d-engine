@@ -17,7 +17,7 @@ type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | n
   activeMapping:{id:string;version:number;current:boolean}|null;
   releases:Array<{id:string;version:number;geoReleaseId:string}> };
 type GeoPublic = { geoRelease:{id:string}; buildingRelease:{id:string};
-  model:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number} };
+  model:{url:string;sha256?:string;byteSize?:number}; canonicalModel?:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number} };
 type ToolMode = "pan" | "draw" | "edit";
 const ROLES: Role[] = ["front", "back", "depthA", "depthB"];
 const directions=["north","north-east","east","south-east","south","south-west","west","north-west"];
@@ -160,7 +160,7 @@ export default function GeoPlotMapper(){
     const obs=new ResizeObserver(resize);obs.observe(host);
     const changed=()=>setViewTick(v=>v+1);controls.addEventListener("change",changed);
     setModelStatus("Loading checksum-verified 3D master plan…");
-    void modelFromVerifiedSource(geo.model).then(m=>{
+    void modelFromVerifiedSource(geo.canonicalModel||geo.model).then(m=>{
       if(!alive){m.traverse(n=>{if(n instanceof THREE.Mesh){n.geometry.dispose();}});return;}
       object=m;scene.add(m);const box=new THREE.Box3().setFromObject(m);
       if(box.isEmpty())throw Error("3D source has no geometry.");
@@ -179,7 +179,7 @@ export default function GeoPlotMapper(){
       controls.dispose();renderer.forceContextLoss();renderer.dispose();renderer.domElement.remove();
       if(object)object.traverse(n=>{if(n instanceof THREE.Mesh){n.geometry.dispose();const mats=Array.isArray(n.material)?n.material:[n.material];mats.forEach(mat=>mat.dispose());}});
       cameraRef.current=null;rendererRef.current=null;controlsRef.current=null;};
-  },[geo?.model.url,geo?.model.sha256]);
+  },[geo?.canonicalModel?.url,geo?.canonicalModel?.sha256,geo?.model.url,geo?.model.sha256]);
   const project=(p:Point):Point=>{
     const camera=cameraRef.current;if(!camera)return [0,0];
     const vec=new THREE.Vector3(p[0],groundY+0.02,p[1]).project(camera);
