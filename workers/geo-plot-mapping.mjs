@@ -65,6 +65,28 @@ async function writeDraft(env, ctx, actor, body) {
   if (result.meta?.changes!==1) throw Error("Concurrent change or Geo release switch. Reload mapping; no data overwritten.");
   return state(env,ctx);
 }
+async function resetForNewGeo(env,ctx,actor,body) {
+  if (body.confirmation !== "RESET MAPPING " + ctx.project.slug)
+    throw Error("Explicit RESET MAPPING project confirmation required.");
+  const draft=await env.DB.prepare("SELECT * FROM geo_plot_mapping_drafts_3d WHERE project_id=?")
+    .bind(ctx.project.id).first();
+  if (!draft || (draft.geo_release_id===ctx.active.geo_release_id &&
+    draft.building_release_id===ctx.active.source_building_release_id))
+    throw Error("Mapping source is already current. Reset is only permitted after a Geo source switch.");
+  if (draft.revision!==body.expectedRevision) throw Error("Draft revision changed. Reload.");
+  const now=currentIso();
+  const res=await env.DB.prepare(`UPDATE geo_plot_mapping_drafts_3d
+    SET geo_release_id=?,building_release_id=?,revision=revision+1,verified_revision=NULL,
+        plots_json='[]',updated_by=?,updated_at=?
+    WHERE project_id=? AND revision=?`).bind(ctx.active.geo_release_id,
+    ctx.active.source_building_release_id,actor.email,now,ctx.project.id,draft.revision).run();
+  if(res.meta?.changes!==1)throw Error("Concurrent mapping change.");
+  await env.DB.prepare(`INSERT INTO engine_admin_audit(id,actor_email,action,project_id,target_id,details_json,created_at)
+    VALUES(?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),actor.email,
+    "geo.plots_reset_for_new_source",ctx.project.id,ctx.active.geo_release_id,
+    JSON.stringify({fromGeoReleaseId:draft.geo_release_id,fromRevision:draft.revision}),now).run();
+  return state(env,ctx);
+}
 async function verify(env,ctx,actor,body) {
   const draft=await env.DB.prepare("SELECT * FROM geo_plot_mapping_drafts_3d WHERE project_id=?").bind(ctx.project.id).first();
   if (!draft || draft.revision!==body.expectedRevision || draft.geo_release_id!==ctx.active.geo_release_id)
@@ -137,6 +159,7 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
     if (ctx.project.status==="archived") return fail("Archived project is read-only.",409);
     const body=await request.json();
     if (request.method==="PUT") return json(await writeDraft(env,ctx,access.actor,body));
+    if (body.action==="rebind-reset") return json(await resetForNewGeo(env,ctx,access.actor,body));
     if (body.action==="verify") return json(await verify(env,ctx,access.actor,body));
     if (body.action==="publish") return json(await publish(env,ctx,access.actor,body));
     if (body.action==="activate") return json(await activate(env,ctx,access.actor,String(body.releaseId||"")));
