@@ -221,14 +221,15 @@ export default function GeoPlotMapper(){
     setPlots(prev=>[...prev.filter(p=>p.id!==(originalId||id)),{...working,id}].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})));
     setDirty(true);setMessage("Plot staged locally. Save Draft to persist it.");
   };
-  const execute=async(action:"save"|"verify"|"publish"|"activate",id?:string)=>{
+  const execute=async(action:"save"|"verify"|"publish"|"activate"|"rebind-reset",id?:string)=>{
     if(!state||!geo) return;setBusy(true);setMessage("");
     try{
       const body=action==="save"?{expectedRevision:state.draft.revision,geoReleaseId:state.geoReleaseId,plots}
-        :{action,expectedRevision:state.draft.revision,...(id?{releaseId:id}:{})};
+        :{action,expectedRevision:state.draft.revision,...(id?{releaseId:id}:{}),
+          ...(action==="rebind-reset"?{confirmation:"RESET MAPPING "+slug}:{})};
       const result=await callApi<MappingState>(api,{method:action==="save"?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       setState(result);setPlots(result.draft.plots);setDirty(false);setWorking(null);
-      setMessage(action==="save"?"Mapping draft saved and server read-back confirmed.":action==="verify"?"All plot sources and geometry verified.":action==="publish"?"Immutable plot mapping published for this Geo release.":"Published mapping version activated.");
+      setMessage(action==="save"?"Mapping draft saved and server read-back confirmed.":action==="verify"?"All plot sources and geometry verified.":action==="publish"?"Immutable plot mapping published for this Geo release.":action==="rebind-reset"?"New empty draft created for active Geo. Historical published mapping releases remain preserved.":"Published mapping version activated.");
     }catch(e){setMessage("ERROR: "+(e instanceof Error?e.message:"Mapping operation failed."));}
     finally{setBusy(false);}
   };
@@ -288,7 +289,15 @@ export default function GeoPlotMapper(){
       <span>Verified <b>{state?.draft.verifiedRevision===state?.draft.revision&&state?.draft.revision?"Yes":"No"}</b></span>
       <span>Live mapping <b>{state?.activeMapping?.current?"v"+state.activeMapping.version:"None / stale"}</b></span>
     </section>
-    {state?.draft.stale&&<p className="geo-plot-warning">Geo source release has changed. Old mapping is locked to prevent misplaced plots. Restore the matching Geo release or perform a reviewed migration.</p>}
+    {state?.draft.stale&&<div className="geo-plot-warning">
+      <p>Geo source has changed. Old polygon coordinates are locked to avoid wrong placement.
+      Historical published releases remain available when the matching Geo release is restored.</p>
+      <button type="button" disabled={busy} onClick={()=>{
+        const exact="RESET MAPPING "+slug;
+        if(window.prompt("Create an EMPTY mapping for the new Geo release. Unsaved old draft polygons will be replaced. Type "+exact)===exact)
+          void execute("rebind-reset");
+      }}>Start new mapping for active Geo</button>
+    </div>}
     {message&&<p className={message.startsWith("ERROR")?"geo-plot-warning":"geo-plot-message"} role="status">{message}</p>}
     <section className="geo-plot-tools" aria-label="Plot mapper controls">
       <button disabled={!editable||busy} className={mode==="pan"?"active":""} onClick={()=>setMode("pan")}>Pan / Pinch</button>
