@@ -55,7 +55,11 @@ test("engine-only isolation, read-back, immutable publish and public release bin
   const viewer=read("apps/public/src/geo/GeoPublicDemo.tsx");
   const editor=read("apps/admin/src/geo/GeoPlotMapper.tsx");
   assert.match(migration,/geo_plot_release_immutable_update/);
-  assert.match(migration,/geo_plot_release_immutable_delete/);
+  assert.doesNotMatch(migration,/CREATE TRIGGER IF NOT EXISTS geo_plot_release_immutable_delete/);
+  const deletion = read("workers/project-deletion.mjs");
+  assert.match(deletion,/geo_plot_mapping_active_3d/);
+  assert.match(deletion,/geo_plot_mapping_releases_3d/);
+  assert.match(deletion,/geo_plot_mapping_drafts_3d/);
   assert.match(migration,/geo_plot_active_owner_insert/);
   assert.match(api,/engineAdminReadAccess/);
   assert.match(api,/sameOrigin\(request\)/);
