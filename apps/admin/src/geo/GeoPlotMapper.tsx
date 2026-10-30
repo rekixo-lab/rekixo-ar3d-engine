@@ -28,7 +28,8 @@ function initialSides(corners:Point[]): Plot["sides"] {
   if(corners.length<3)return {};
   const result:Plot["sides"]={};
   const layout=corners.length===3?"three":"four";
-  const edges=layout==="three" ? ["front","depthA","back"] as Role[] : ROLES;
+  // Geometric ring order: Front → right depth → Back → left depth.
+  const edges:Role[]=layout==="three" ? ["front","depthA","back"] : ["front","depthA","back","depthB"];
   edges.forEach((role,i)=>{
     const indices=i===edges.length-1
       ? Array.from({length:corners.length-i},(_,k)=>i+k) : [i];
