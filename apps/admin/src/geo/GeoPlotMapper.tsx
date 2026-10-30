@@ -310,7 +310,7 @@ export default function GeoPlotMapper(){
       ...ROLES.flatMap(role=>{const side=p.sides[role];
         return [side?.length,side?.unit,side?.source,side?.verified,side?.roadFacing];})
     ].map(csvCell).join(","))];
-    const url=URL.createObjectURL(new Blob([lines.join("\\n")],{type:"text/csv;charset=utf-8"}));
+    const url=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"}));
     const a=document.createElement("a");a.href=url;a.download=slug+"-geo-plots.csv";a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
