@@ -156,7 +156,18 @@ async function deleteProjectOwnedObjects(env, slug, onDeleted) {
 
 async function deleteProjectRecords(env, project) {
   assertProjectDeletionAllowed(project.slug);
+  // Engine-only plot mappings must be removed before their Geo and Building
+  // source releases during explicit permanent project cleanup. Older database
+  // instances may not have the additive mapping schema yet.
+  const mappingSchema = await env.DB.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='geo_plot_mapping_releases_3d' LIMIT 1"
+  ).first();
   await env.DB.batch([
+    ...(mappingSchema ? [
+      env.DB.prepare("DELETE FROM geo_plot_mapping_active_3d WHERE project_id=?").bind(project.id),
+      env.DB.prepare("DELETE FROM geo_plot_mapping_releases_3d WHERE project_id=?").bind(project.id),
+      env.DB.prepare("DELETE FROM geo_plot_mapping_drafts_3d WHERE project_id=?").bind(project.id),
+    ] : []),
     env.DB.prepare(
       "DELETE FROM engine_admin_audit WHERE project_id=?",
     ).bind(project.id),
