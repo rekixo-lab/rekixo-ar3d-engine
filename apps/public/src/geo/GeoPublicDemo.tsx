@@ -396,6 +396,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
   const [inspectMode, setInspectMode] = useState(false);
   const [cameraView, setCameraView] = useState<GeoCameraView>("overview");
   const [satelliteMaxZoom, setSatelliteMaxZoom] = useState<number | null>(null);
+  const [zoomNotice, setZoomNotice] = useState("");
   const [failure, setFailure] = useState("");
 
   useEffect(() => {
@@ -410,7 +411,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
     let root: THREE.Group | undefined;
     let contextTimer: number | undefined;
     let contextRestored = false;
-    let satelliteLimit: number | undefined;
+    let zoomCheckTimer: number | undefined;
     let activeCameraView: GeoCameraView = "overview";
 
     const clearContextTimer = () => {
@@ -582,24 +583,32 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
 
         const applyCamera = (view: GeoCameraView) => {
           const preset = cameraPreset(view, data.placement.headingDeg);
-          const satellite = isSatelliteMapType(map.getMapTypeId?.());
-          const zoom = satellite && satelliteLimit !== undefined
-            ? Math.min(preset.zoom, satelliteLimit)
-            : preset.zoom;
           activeCameraView = view;
           setCameraView(view);
-          map.moveCamera?.({ center, ...preset, zoom });
+          setZoomNotice("");
+          // The maximum satellite *imagery detail* is not an application camera cap.
+          // Let Google Maps apply its own native, location-specific zoom bounds.
+          map.moveCamera?.({ center, ...preset });
           overlay?.requestRedraw();
         };
         cameraActionRef.current = applyCamera;
-        // Never reset the user’s pan, heading or manually chosen zoom after imagery metadata arrives.
+        // A whole zoom level is 2x the map scale. Do not impose an additional
+        // satellite imagery ceiling on the real map camera or manual gestures.
         zoomActionRef.current = (step) => {
           const current = map.getZoom?.() ?? cameraPreset(activeCameraView, data.placement.headingDeg).zoom;
           const requested = Math.max(0, current + step);
-          const zoom = isSatelliteMapType(map.getMapTypeId?.()) && satelliteLimit !== undefined
-            ? Math.min(requested, satelliteLimit)
-            : requested;
-          map.setZoom(zoom);
+          if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
+          setZoomNotice("");
+          map.setZoom(requested);
+          if (step > 0) {
+            zoomCheckTimer = window.setTimeout(() => {
+              if (cancelled) return;
+              const actual = map.getZoom?.();
+              if (actual !== undefined && actual < requested - 0.1) {
+                setZoomNotice("Google Maps has reached its native zoom limit here. Use 3D Detail for a closer model view.");
+              }
+            }, 650);
+          }
         };
 
         const maxZoomService = google.maps.MaxZoomService
@@ -612,12 +621,9 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
             if (cancelled) return;
             const candidate = Number(result.zoom);
             if (!Number.isFinite(candidate)) return;
-            satelliteLimit = candidate;
+            // This reports the last level of *native image detail*, not the
+            // maximum selectable vector camera zoom. Never snap the map back.
             setSatelliteMaxZoom(candidate);
-            if (isSatelliteMapType(map.getMapTypeId?.())) {
-              const userZoom = map.getZoom?.();
-              if (userZoom !== undefined && userZoom > candidate) map.setZoom(candidate);
-            }
           } catch {
             // Google still enforces its own imagery ceiling if this optional lookup fails.
           }
@@ -653,6 +659,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
     return () => {
       cancelled = true;
       clearContextTimer();
+      if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
       cameraActionRef.current = null;
       zoomActionRef.current = null;
       mapZoomChanged?.remove();
@@ -672,8 +679,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
       <nav className="geo-map-quick-actions" aria-label="Geo zoom and 3D detail controls">
         <button type="button" aria-pressed={inspectMode} onClick={() => setInspectMode((value) => !value)} title="Switch between satellite map and close-up 3D model">{inspectMode ? "Map view" : "3D Detail"}</button>
         {!inspectMode ? <>
-          <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => zoomActionRef.current?.(-0.5)}>−</button>
-          <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => zoomActionRef.current?.(0.5)}>+</button>
+          <button type="button" aria-label="Zoom out 2×" title="Zoom out 2×" onClick={() => zoomActionRef.current?.(-1)}>−</button>
+          <button type="button" aria-label="Zoom in 2×" title="Zoom in 2× (one full map zoom level)" onClick={() => zoomActionRef.current?.(1)}>+</button>
         </> : null}
         <button type="button" aria-label="Reset Geo camera" title="Return to overview" onClick={() => { setInspectMode(false); cameraActionRef.current?.("overview"); }}>⌖</button>
         <button type="button" aria-label="Toggle Geo fullscreen" title="Fullscreen" onClick={() => {
@@ -683,6 +690,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           else void scene.requestFullscreen?.().catch(() => undefined);
         }}>⛶</button>
       </nav>
+      {zoomNotice && !inspectMode ? <div className="geo-zoom-notice" role="status">{zoomNotice}</div> : null}
       {toolbarContainer ? createPortal(<nav className="geo-camera-toolbar geo-camera-toolbar--normal-row" aria-label="Geo map navigation">
           {GEO_CAMERA_VIEWS.map((view) => (
             <button
