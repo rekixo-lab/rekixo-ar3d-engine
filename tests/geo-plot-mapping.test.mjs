@@ -12,7 +12,7 @@ const square={
     depthB:{edges:[3],length:65.6,unit:"ft",roadFacing:false,source:"Survey-2026",verified:true}
   },
   area:{value:2152.78,unit:"sqft",source:"approved-plan",verified:true},
-  facing:"north-east",road:"23 ft road",notes:"corner site"
+  facing:"north-east",facingSource:"Geo north survey",facingVerified:true,road:"23 ft road",notes:"corner site"
 };
 test("plot square has metre area and no invalid crossings",()=>{
   assert.equal(polygonAreaSqm(square.corners),200);
@@ -73,4 +73,13 @@ test("engine-only isolation, read-back, immutable publish and public release bin
   assert.match(viewer,/setSelectedPlot\(plot\)/);
   assert.match(editor,/modelFromVerifiedSource/);
   assert.doesNotMatch(api,/rekixo-ar3d-platform/);
+});
+
+test("cannot publish unverified facing or non-consecutive irregular side segments",()=>{
+  assert.throws(()=>validateGeoPlotCollection([{...square,facingVerified:false}],{forPublish:true}),/verify authoritative/);
+  assert.throws(()=>validateGeoPlotCollection([{...square,facingSource:""}],{forPublish:true}),/verify authoritative/);
+  const broken={...square,corners:[[0,0],[5,0],[10,0],[10,20],[0,20]],
+    sides:{front:{...square.sides.front,edges:[0,2]},depthA:{...square.sides.depthA,edges:[1]},
+      back:{...square.sides.back,edges:[3]},depthB:{...square.sides.depthB,edges:[4]}}};
+  assert.throws(()=>validateGeoPlot(broken),/contiguous/);
 });
