@@ -155,11 +155,17 @@ export function validateGeoPlot(input) {
   const area = input.area;
   if (!positive(area?.value) || !["sqft","sqm","sqyd"].includes(area?.unit))
     throw Error("Plot " + id + ": authoritative area value and unit required.");
+  const hasExplicitPlane = Object.hasOwn(input, "planeY");
+  if (hasExplicitPlane && (!finite(input.planeY) || Math.abs(input.planeY)>100000))
+    throw Error("Plot " + id + ": site mapping plane Y must be a finite model-local metre value.");
+  const planeSource=cleanText(input.planeSource,160);
+  const planeVerified=input.planeVerified===true;
   const facing = cleanText(input.facing, 24).toLowerCase();
   if (!DIRECTIONS.includes(facing)) throw Error("Plot " + id + ": valid compass-facing direction required.");
   return { id, corners: corners.map(p => [p[0],p[1]]), layout, sides: normalizedSides,
     area: { value: area.value, unit: area.unit, source: cleanText(area.source, 160), verified: area.verified === true },
     facing, facingSource:cleanText(input.facingSource,160), facingVerified:input.facingVerified===true,
+    ...(hasExplicitPlane ? {planeY:input.planeY,planeSource,planeVerified} : {}),
     road: cleanText(input.road, 160), notes: cleanText(input.notes, 1000) };
 }
 export function validateGeoPlotCollection(value, { forPublish = false } = {}) {
@@ -170,6 +176,10 @@ export function validateGeoPlotCollection(value, { forPublish = false } = {}) {
     const p = validateGeoPlot(item);
     if (ids.has(p.id.toLowerCase())) throw Error("Duplicate plot number: " + p.id);
     ids.add(p.id.toLowerCase());
+    // Existing sealed V1 releases without a plane remain readable; every new
+    // publication needs an operator-approved model-local site elevation.
+    if (forPublish && (!finite(p.planeY) || !p.planeVerified || !p.planeSource))
+      throw Error("Plot "+p.id+": verify an explicit model-local site plane and source before publishing.");
     if (forPublish && (!p.area.verified || !p.area.source || !p.facingVerified || !p.facingSource ||
       Object.values(p.sides).some(s => !s.verified || !s.source)))
       throw Error("Plot "+p.id+": verify authoritative measurements and source before publish.");
