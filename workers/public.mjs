@@ -6,6 +6,7 @@ import {
   serveReleaseAsset,
 } from "./release-runtime.mjs";
 import { assertProjectAssetKey } from "./storage-boundary.mjs";
+import { publicGeoPlotMapping } from "./geo-plot-mapping.mjs";
 import { serveR2Object } from "./http-range.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
 import {
@@ -376,10 +377,16 @@ async function publicGeo3DState(env, slug) {
     settingsByKey.get("google_maps_map_id") ||
     String(env.GOOGLE_MAPS_MAP_ID || "").trim();
 
+  // Plot mapping is independently published and integrity-checked; corrupt or stale
+  // plot data never takes down the canonical Geo viewer.
+  let plotMapping = null;
+  try { plotMapping = await publicGeoPlotMapping(env, slug, experience.geoRelease.id); }
+  catch (error) { console.error("Published Geo plot mapping unavailable", error); }
   return {
     state: "ok",
     payload: {
       ...experience,
+      ...(plotMapping ? { plotMapping } : {}),
       maps: {
         apiKey: mapsApiKey || null,
         mapId: mapsMapId || null,
