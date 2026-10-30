@@ -276,7 +276,7 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
             const active = item.id === section;
             const status = item.id === "building" || item.id === "releases"
               ? buildingLive
-              : (item.id === "geo" || item.id === "geo-plots")
+              : item.id === "geo"
                 ? geoLive
                 : false;
             return (
