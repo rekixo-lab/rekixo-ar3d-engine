@@ -582,6 +582,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
               return;
             }
             loadedModel = model;
+            // Measure canonical model-local ground BEFORE Geo placement converts its axes.
+            const modelGroundY = new THREE.Box3().setFromObject(model).min.y;
             applyRigidBuildingPlacement(
               modelRoot,
               model,
@@ -597,10 +599,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
               },
             );
             if (data.plotMapping?.geoReleaseId===data.geoRelease.id && google.maps.Polygon) {
-              const bounds=new THREE.Box3().setFromObject(model);
-              const groundY=bounds.min.y;
               for(const plot of data.plotMapping.plots){
-                const poly=new google.maps.Polygon({map,paths:geoPlotWorldPath(plot,data,groundY),
+                const poly=new google.maps.Polygon({map,paths:geoPlotWorldPath(plot,data,modelGroundY),
                   strokeColor:"#20d8a5",strokeWeight:2,strokeOpacity:.96,
                   fillColor:"#1dd5a2",fillOpacity:.13,clickable:true,zIndex:70});
                 poly.addListener("click",()=>setSelectedPlot(plot));
