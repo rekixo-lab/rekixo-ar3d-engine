@@ -25,6 +25,7 @@ const emptySide = (edges:number[]=[]):Side => ({edges,length:0,unit:"ft",roadFac
 const blank = (id:string):Plot => ({id,corners:[],layout:"four",sides:{},
   area:{value:0,unit:"sqft",source:"",verified:false},facing:"north",road:"",notes:""});
 function initialSides(corners:Point[]): Plot["sides"] {
+  if(corners.length<3)return {};
   const result:Plot["sides"]={};
   const layout=corners.length===3?"three":"four";
   const edges=layout==="three" ? ["front","depthA","back"] as Role[] : ROLES;
@@ -99,6 +100,7 @@ export default function GeoPlotMapper(){
   const [geo,setGeo]=useState<GeoPublic|null>(null);
   const [plots,setPlots]=useState<Plot[]>([]);
   const [working,setWorking]=useState<Plot|null>(null);
+  const [originalId,setOriginalId]=useState<string|null>(null);
   const [dirty,setDirty]=useState(false);
   const [message,setMessage]=useState("");
   const [busy,setBusy]=useState(false);
@@ -196,7 +198,7 @@ export default function GeoPlotMapper(){
     }
     return point;
   };
-  const choose=(plot:Plot)=>{setWorking(structuredClone(plot));setShape(plot.corners.length===4?"four":"irregular");setMode("edit");};
+  const choose=(plot:Plot)=>{setWorking(structuredClone(plot));setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");setMode("edit");};
   const onDraw=(event:React.PointerEvent<SVGSVGElement>)=>{
     if(mode!=="draw"||dragRef.current!==null)return;
     const p=unproject(event.clientX,event.clientY);if(!p)return;
@@ -214,8 +216,8 @@ export default function GeoPlotMapper(){
   const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>p?{...p,sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...patch}}}:p);
   const applyPlot=()=>{
     if(!working)return;const id=working.id.trim();if(!id||working.corners.length<3)throw Error("Plot number and at least 3 mapped corners required.");
-    if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==working.id))throw Error("Duplicate plot ID.");
-    setPlots(prev=>[...prev.filter(p=>p.id!==id),{...working,id}].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})));
+    if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId))throw Error("Duplicate plot ID.");
+    setPlots(prev=>[...prev.filter(p=>p.id!==(originalId||id)),{...working,id}].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})));
     setDirty(true);setMessage("Plot staged locally. Save Draft to persist it.");
   };
   const execute=async(action:"save"|"verify"|"publish"|"activate",id?:string)=>{
@@ -266,7 +268,9 @@ export default function GeoPlotMapper(){
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   const begin=(kind:"four"|"irregular")=>{
-    setShape(kind);setMode("draw");setWorking(blank(String(plots.length+1)));setMessage("Tap each plot corner on the top-down verified model.");
+    setShape(kind);setMode("draw");setOriginalId(null);
+    const ids=new Set(plots.map(p=>p.id));let id=1;while(ids.has(String(id)))id++;
+    setWorking(blank(String(id)));setMessage("Tap each plot corner on the top-down verified model.");
   };
   const editable=Boolean(state&&!state.draft.stale&&geo);
   const path=(points:Point[])=>points.map(p=>project(p).join(",")).join(" ");
@@ -324,7 +328,7 @@ export default function GeoPlotMapper(){
           className={working?.id===p.id?"active":""}>{p.id}<small>{p.corners.length} corners</small></button>)}</div>
         {working&&<>
           <h3>{plots.some(p=>p.id===working.id)?"Update":"New"} Plot {working.id}</h3>
-          <label>Plot Number<input value={working.id} onChange={e=>setWorking({...working,id:e.target.value})}/></label>
+          <label>Plot Number<input readOnly={Boolean(originalId)} value={working.id} onChange={e=>setWorking({...working,id:e.target.value})}/></label>
           <p className="geo-plot-hint">Corners: {working.corners.length} · Geometry area (unverified): {areaSqm(working.corners).toFixed(2)} m²</p>
           <label>Approved Area<input inputMode="decimal" type="number" min="0.001" value={working.area.value||""}
             onChange={e=>setWorking({...working,area:{...working.area,value:Number(e.target.value),verified:false}})}/></label>
