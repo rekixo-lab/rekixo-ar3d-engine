@@ -2,6 +2,7 @@ import adminWorker from "./admin.mjs";
 import { handleComponentMapperDataRequest } from "./component-mapper-data.mjs";
 import { handleGeoMapsConfigRequest } from "./geo-maps-config.mjs";
 import { handleGeoV2AdminRequest } from "./geo-v2-admin.mjs";
+import { handleGeoPlotMappingAdmin } from "./geo-plot-mapping.mjs";
 import { handleModelScaleReviewRequest } from "./model-scale-review.mjs";
 import { handleProcessingRequest } from "./processing-jobs.mjs";
 import { handleReviewedComponentBindingsRequest } from "./reviewed-component-bindings.mjs";
@@ -30,6 +31,9 @@ export default {
 
     const geoMapsResponse = await handleGeoMapsConfigRequest(request, env, url);
     if (geoMapsResponse) return geoMapsResponse;
+
+    const plotMappingResponse = await handleGeoPlotMappingAdmin(request, env, url);
+    if (plotMappingResponse) return plotMappingResponse;
 
     const geoV2Response = await handleGeoV2AdminRequest(request, env, url);
     if (geoV2Response) return geoV2Response;
