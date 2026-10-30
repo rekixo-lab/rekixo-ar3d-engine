@@ -12,7 +12,7 @@ const square={
     depthB:{edges:[3],length:65.6,unit:"ft",roadFacing:false,source:"Survey-2026",verified:true}
   },
   area:{value:2152.78,unit:"sqft",source:"approved-plan",verified:true},
-  facing:"north-east",facingSource:"Geo north survey",facingVerified:true,road:"23 ft road",notes:"corner site"
+  facing:"north-east",facingSource:"Geo north survey",facingVerified:true,planeY:0,planeSource:"approved masterplan",planeVerified:true,road:"23 ft road",notes:"corner site"
 };
 test("plot square has metre area and no invalid crossings",()=>{
   assert.equal(polygonAreaSqm(square.corners),200);
@@ -114,4 +114,24 @@ test("production browser QA runner and public module deployment changes are cove
   const deploy=read(".github/workflows/deploy-cloudflare.yml");
   assert.match(qa,/runs-on: ubuntu-24\.04/);
   assert.match(deploy,/geo-plot-public\|geo-plot-geometry/);
+});
+
+test("publishing requires a surveyed model-local elevation, not only bounding-box default",()=>{
+  assert.equal(validateGeoPlotCollection([square],{forPublish:true})[0].planeY,0);
+  assert.throws(()=>validateGeoPlotCollection([{...square,planeVerified:false}],{forPublish:true}),/model-local site plane/);
+  assert.throws(()=>validateGeoPlotCollection([{...square,planeSource:""}],{forPublish:true}),/model-local site plane/);
+  assert.throws(()=>validateGeoPlot({...square,planeY:Number.NaN}),/finite model-local/);
+  const old=structuredClone(square);delete old.planeY;delete old.planeSource;delete old.planeVerified;
+  assert.equal(validateGeoPlotCollection([old])[0].id,"25"); // old sealed V1 release remains readable
+});
+test("new plot publications use verified plane and geo source checks",()=>{
+  const geo=read("apps/public/src/geo/GeoPublicDemo.tsx");
+  const pub=read("workers/geo-plot-public.mjs");
+  const api=read("workers/geo-plot-mapping.mjs");
+  const editor=read("apps/admin/src/geo/GeoPlotMapper.tsx");
+  assert.match(geo,/Number\.isFinite\(plot\.planeY\)/);
+  assert.match(pub,/validateGeoPlotCollection\(JSON\.parse\(row\.plots_json\)\)/);
+  assert.match(editor,/Verified model-local plot mapping plane/);
+  assert.match(api,/gr\.source_building_release_id=geo_plot_mapping_drafts_3d\.building_release_id/);
+  assert.match(api,/d\.verified_revision=d\.revision/);
 });
