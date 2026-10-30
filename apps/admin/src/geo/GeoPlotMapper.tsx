@@ -113,6 +113,8 @@ export default function GeoPlotMapper(){
   const [groundY,setGroundY]=useState(0);
   const [snap,setSnap]=useState(true);
   const [selectedRole,setSelectedRole]=useState<Role>("front");
+  const activeProjectRef=useRef(slug);
+  activeProjectRef.current=slug;
   const hostRef=useRef<HTMLDivElement>(null);
   const rendererRef=useRef<THREE.WebGLRenderer|null>(null);
   const cameraRef=useRef<THREE.OrthographicCamera|null>(null);
@@ -234,13 +236,16 @@ export default function GeoPlotMapper(){
         :{action,expectedRevision:state.draft.revision,...(id?{releaseId:id}:{}),
           ...(action==="rebind-reset"?{confirmation:"RESET MAPPING "+slug}:{})};
       const result=await callApi<MappingState>(api,{method:action==="save"?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      if(activeProjectRef.current!==slug)return; // Never display another project’s save response.
       setState(result);setPlots(result.draft.plots);setDirty(false);setWorking(null);
       setMessage(action==="save"?"Mapping draft saved and server read-back confirmed.":action==="verify"?"All plot sources and geometry verified.":action==="publish"?"Immutable plot mapping published for this Geo release.":action==="rebind-reset"?"New empty draft created for active Geo. Historical published mapping releases remain preserved.":"Published mapping version activated.");
     }catch(e){setMessage("ERROR: "+(e instanceof Error?e.message:"Mapping operation failed."));}
     finally{setBusy(false);}
   };
   const importCsv=async(file:File)=>{
-    const rows=parseRows(await file.text());if(rows.length<2)throw Error("CSV contains no data.");
+    const rows=parseRows(await file.text());
+    if(activeProjectRef.current!==slug)throw Error("Project changed during CSV import; no data staged.");
+    if(rows.length<2)throw Error("CSV contains no data.");
     const keys=rows[0].map(s=>s.trim().toLowerCase().replace(/[^a-z0-9]/g,""));
     const required=["id","area","areaunit","front","back","deptha","unit","source"];
     if(required.some(k=>!keys.includes(k)))throw Error("CSV header required: "+required.join(", "));
@@ -285,7 +290,7 @@ export default function GeoPlotMapper(){
   return <main className="geo-plot-page">
     <header className="geo-plot-top"><div><p className="eyebrow">REKIXO ENGINE · INDEPENDENT GEO MAPPING</p><h1>3D Geo Plot Mapper</h1>
       <p>Draw plot boundaries on a checksum-verified Building-local master plan. AR3D Platform remains untouched.</p></div>
-      <label>Project <select value={slug} onChange={e=>{setSlug(e.target.value);setWorking(null);}}>
+      <label>Project <select value={slug} disabled={busy} onChange={e=>{setSlug(e.target.value);setWorking(null);}}>
         <option value="">Choose project</option>{options.map(o=><option key={o.id} value={o.slug}>{o.name}</option>)}</select></label>
     </header>
     <section className="geo-plot-stats">
