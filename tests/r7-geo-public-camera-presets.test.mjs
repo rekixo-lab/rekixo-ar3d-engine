@@ -23,7 +23,7 @@ test("satellite imagery metadata is informative and never clamps the customer ca
   assert.ok(!source.includes("Math.min(preset.zoom, satelliteLimit)"));
   assert.ok(!source.includes("Math.min(requested, satelliteLimit)"));
   assert.ok(!source.includes("if (userZoom !== undefined && userZoom > candidate)"));
-  assert.ok(!/\\bmaxZoom\\s*:/.test(source));
+  assert.ok(!source.includes("maxZoom:"));
 });
 
 test("camera presets control the real Google map camera rather than the Building transform", () => {
