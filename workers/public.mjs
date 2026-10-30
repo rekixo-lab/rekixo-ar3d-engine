@@ -386,7 +386,7 @@ async function publicGeo3DState(env, slug) {
     state: "ok",
     payload: {
       ...experience,
-      ...(plotMapping ? { plotMapping } : {}),
+      ...(plotMapping ? { plotMapping, model: experience.canonicalModel || experience.model } : {}),
       maps: {
         apiKey: mapsApiKey || null,
         mapId: mapsMapId || null,
