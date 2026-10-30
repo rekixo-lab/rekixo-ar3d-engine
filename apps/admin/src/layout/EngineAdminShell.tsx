@@ -10,7 +10,7 @@ import {
 } from "../studio/cloud";
 import "./engine-admin-shell.css";
 
-type ShellSection = "overview" | "source" | "building" | "geo" | "releases" | "branding" | "advanced";
+type ShellSection = "overview" | "source" | "building" | "geo" | "geo-plots" | "releases" | "branding" | "advanced";
 
 type NavItem = {
   id: ShellSection;
@@ -50,6 +50,13 @@ const navItems: NavItem[] = [
     description: "Real-world placement and Geo publish",
   },
   {
+    id: "geo-plots",
+    label: "Geo Plot Mapper",
+    short: "PL",
+    href: (slug) => `/3Dprojects/geo-plots${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
+    description: "3D polygon plots, measurements and facing",
+  },
+  {
     id: "releases",
     label: "Releases",
     short: "RL",
@@ -78,6 +85,7 @@ function requestedProjectSlug() {
 
 function currentSection(pathname: string): ShellSection {
   if (pathname.includes("/component-mapper") || pathname.includes("/source-pack")) return "source";
+  if (pathname.includes("/geo-plots")) return "geo-plots";
   if (pathname.includes("/geo-mapper")) return "geo";
   if (pathname.includes("/releases")) return "releases";
   if (pathname.includes("/share") || pathname.includes("/branding")) return "branding";
@@ -106,6 +114,11 @@ const sectionMeta: Record<ShellSection, { eyebrow: string; title: string; help: 
     eyebrow: "GEO WORKSPACE",
     title: "3D Geo Mapper",
     help: "Place the immutable Building in the real world, verify it and publish Geo.",
+  },
+  "geo-plots": {
+    eyebrow: "GEO PLOT MAPPING",
+    title: "3D Geo Plot Mapper",
+    help: "Polygon boundaries, directional sides, verified measurements and independent publication.",
   },
   releases: {
     eyebrow: "IMMUTABLE HISTORY",
@@ -263,7 +276,7 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
             const active = item.id === section;
             const status = item.id === "building" || item.id === "releases"
               ? buildingLive
-              : item.id === "geo"
+              : (item.id === "geo" || item.id === "geo-plots")
                 ? geoLive
                 : false;
             return (
