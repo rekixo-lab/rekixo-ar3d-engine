@@ -11,13 +11,13 @@ type Role = "front" | "back" | "depthA" | "depthB";
 type Side = { edges: number[]; length: number; unit: "ft" | "m"; roadFacing: boolean; source: string; verified: boolean };
 type Plot = { id: string; corners: Point[]; layout: "three" | "four";
   sides: Partial<Record<Role, Side>>; area: { value: number; unit: "sqft" | "sqm" | "sqyd"; source: string; verified: boolean };
-  facing: string; facingSource:string; facingVerified:boolean; road: string; notes: string };
+  facing: string; facingSource:string; facingVerified:boolean; planeY?:number;planeSource?:string;planeVerified?:boolean;road: string; notes: string };
 type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | null;
   draft: {revision:number;verifiedRevision:number|null;stale:boolean;plots:Plot[]};
   activeMapping:{id:string;version:number;current:boolean}|null;
   releases:Array<{id:string;version:number;geoReleaseId:string}> };
 type GeoPublic = { geoRelease:{id:string}; buildingRelease:{id:string};
-  model:{url:string;sha256?:string;byteSize?:number}; canonicalModel?:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number} };
+  model:{url:string;sha256?:string;byteSize?:number}; canonicalModel?:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number;scale:number} };
 type ToolMode = "pan" | "draw" | "edit";
 const ROLES: Role[] = ["front", "back", "depthA", "depthB"];
 const directions=["north","north-east","east","south-east","south","south-west","west","north-west"];
@@ -207,7 +207,7 @@ export default function GeoPlotMapper(){
     }
     return point;
   };
-  const choose=(plot:Plot)=>{setWorking(structuredClone(plot));setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");setMode("edit");};
+  const choose=(plot:Plot)=>{setWorking(structuredClone(plot));if(Number.isFinite(plot.planeY))setGroundY(plot.planeY!);setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");setMode("edit");};
   const onDraw=(event:React.PointerEvent<SVGSVGElement>)=>{
     if(mode!=="draw"||dragRef.current!==null)return;
     const p=unproject(event.clientX,event.clientY);if(!p)return;
@@ -283,7 +283,7 @@ export default function GeoPlotMapper(){
   const begin=(kind:"four"|"irregular")=>{
     setShape(kind);setMode("draw");setOriginalId(null);
     const ids=new Set(plots.map(p=>p.id));let id=1;while(ids.has(String(id)))id++;
-    setWorking(blank(String(id)));setMessage("Tap each plot corner on the top-down verified model.");
+    setWorking({...blank(String(id)),planeY:groundY,planeSource:"",planeVerified:false});setMessage("Tap each plot corner on the top-down verified model.");
   };
   const editable=Boolean(state&&!state.draft.stale&&geo);
   const path=(points:Point[])=>points.map(p=>project(p).join(",")).join(" ");
@@ -350,7 +350,15 @@ export default function GeoPlotMapper(){
         {working&&<>
           <h3>{plots.some(p=>p.id===working.id)?"Update":"New"} Plot {working.id}</h3>
           <label>Plot Number<input readOnly={Boolean(originalId)} value={working.id} onChange={e=>setWorking({...working,id:e.target.value})}/></label>
-          <p className="geo-plot-hint">Corners: {working.corners.length} · Geometry area (unverified): {areaSqm(working.corners).toFixed(2)} m²</p>
+          <p className="geo-plot-hint">Corners: {working.corners.length} · Model area (unverified): {areaSqm(working.corners).toFixed(2)} m²
+          · Geo-scale area estimate: {(areaSqm(working.corners)*(geo?.placement.scale||1)**2).toFixed(2)} m²</p>
+          <label>Mapping plane height (model-local Y, metres)<input type="number" step="any"
+            value={working.planeY??""} onChange={e=>{const y=Number(e.target.value);if(Number.isFinite(y)){setGroundY(y);setWorking({...working,planeY:y,planeVerified:false});}}}/></label>
+          <label>Site plane source<input value={working.planeSource||""} placeholder="Verified GLB floor/approved survey elevation"
+            onChange={e=>setWorking({...working,planeSource:e.target.value,planeVerified:false})}/></label>
+          <label className="geo-plot-check"><input type="checkbox" checked={working.planeVerified===true}
+            onChange={e=>setWorking({...working,planeVerified:e.target.checked})}/> Verified model-local plot mapping plane</label>
+          <p className="geo-plot-hint">Changing this plane affects the projected public map footprint. A model bounding-box minimum is a starting suggestion, not a surveyed measurement.</p>
           <label>Approved Area<input inputMode="decimal" type="number" min="0.001" value={working.area.value||""}
             onChange={e=>setWorking({...working,area:{...working.area,value:Number(e.target.value),verified:false}})}/></label>
           <label>Area Unit<select value={working.area.unit} onChange={e=>setWorking({...working,area:{...working.area,unit:e.target.value as Plot["area"]["unit"]}})}>
