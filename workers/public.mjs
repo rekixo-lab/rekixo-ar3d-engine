@@ -8,6 +8,7 @@ import {
 import { assertProjectAssetKey } from "./storage-boundary.mjs";
 import { publicGeoPlotMapping } from "./geo-plot-public.mjs";
 import { publicMasterplanResponse } from "./masterplan-geo-public.mjs";
+import { servePublicMasterplanShareCard } from "./masterplan-share-public.mjs";
 import { serveR2Object } from "./http-range.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
 import {
@@ -424,6 +425,9 @@ export default {
       const parts = remainder.split("/").filter(Boolean).map(decodeURIComponent);
       const slug = parts[0]?.trim();
       if (!slug) return json({ error: "Project slug is required." }, { status: 400 });
+
+      if (parts[1]==="masterplan-share-card"&&parts.length===2)
+        return addSecurityHeaders(await servePublicMasterplanShareCard(request,env,slug));
 
       if ((parts[1]==="masterplan"||parts[1]==="masterplan-image")&&parts.length===2)
         return addSecurityHeaders(await publicMasterplanResponse(request,env,slug,parts[1]));
