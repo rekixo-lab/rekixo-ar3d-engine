@@ -290,7 +290,8 @@ export default function GeoPlotMapper(){
     if(!host||!raw)return null;
     const rect=host.getBoundingClientRect();
     const screen:Point=[clientX-rect.left,clientY-rect.top];
-    const rings=plots.filter(p=>p.id!==originalId).map(p=>({points:p.corners}));
+    const rings:Array<{points:Point[];skipIndex?:number}>=
+      plots.filter(p=>p.id!==originalId).map(p=>({points:p.corners}));
     if(workingRef.current?.corners.length)
       rings.push({points:workingRef.current.corners,...(skipIndex>=0?{skipIndex}:{})});
     const target=precisionSnap(raw,screen,rings,project,{enabled:snap,thresholdPx:6});
@@ -361,6 +362,22 @@ export default function GeoPlotMapper(){
       pointerPreviewRef.current.pointerType,dragRef.current??-1);
   };
   const zoomBy=(factor:number)=>setZoom(boundedZoom((cameraRef.current?.zoom||1),factor)*100);
+  const wheelZoomRef=useRef<(value:number,x:number,y:number)=>void>(()=>{});
+  wheelZoomRef.current=(value,x,y)=>setZoom(value,x,y);
+  useEffect(()=>{
+    const overlay=overlayRef.current;
+    if(!overlay)return;
+    const handleWheel=(event:WheelEvent)=>{
+      event.preventDefault();
+      const current=cameraRef.current?.zoom||1;
+      wheelZoomRef.current(boundedZoom(current,Math.exp(-event.deltaY*0.0016))*100,
+        event.clientX,event.clientY);
+    };
+    // React's wheel listener can be passive. We must prevent scroll on mapping
+    // canvas and zoom about the exact cursor, including when SVG masks WebGL.
+    overlay.addEventListener("wheel",handleWheel,{passive:false});
+    return()=>overlay.removeEventListener("wheel",handleWheel);
+  },[geo]);
   const toggleFullscreen=async()=>{
     try{
       if(document.fullscreenElement===editorRef.current)await document.exitFullscreen();
@@ -379,22 +396,52 @@ export default function GeoPlotMapper(){
     window.addEventListener("beforeunload",beforeUnload);
     return()=>window.removeEventListener("beforeunload",beforeUnload);
   },[dirty,hasUnapplied]);
-  const onDraw=(event:React.PointerEvent<SVGSVGElement>)=>{
-    if(mode!=="draw"||dragRef.current!==null)return;
-    const p=unproject(event.clientX,event.clientY);if(!p)return;
+  const commitCorner=(clientX:number,clientY:number)=>{
+    const target=precisionPointer(clientX,clientY);if(!target)return;
     setWorking(prev=>{
       if(!prev||prev.corners.length>=80||(shape==="four"&&prev.corners.length>=4))return prev;
-      const points=[...prev.corners,p];
-      const sourceRow=inventoryRows.find(r=>r.id.toLowerCase()===prev.id.toLowerCase());
-      return {...prev,corners:points,layout:points.length===3?"three":"four",
-        sides:sidesWithInventory(points,sourceRow)};
+      const corners=[...prev.corners,target.point];
+      const sourceRow=inventoryRows.find(row=>row.id.toLowerCase()===prev.id.toLowerCase());
+      return {...prev,corners,layout:corners.length===3?"three":"four",
+        sides:sidesWithInventory(corners,sourceRow),
+        area:{...prev.area,verified:false},facingVerified:false};
     });
   };
   const editPoint=(index:number,clientX:number,clientY:number)=>{
-    const p=unproject(clientX,clientY);if(!p)return;
-    setWorking(prev=>{if(!prev)return prev;const corners=prev.corners.map((q,i)=>i===index?p:q);
+    const target=precisionPointer(clientX,clientY,index);if(!target)return;
+    setWorking(prev=>{if(!prev)return prev;
+      const corners=prev.corners.map((point,i)=>i===index?target.point:point);
       return {...prev,corners,area:{...prev.area,verified:false},facingVerified:false,
-        sides:Object.fromEntries(Object.entries(prev.sides).map(([k,v])=>[k,{...v,verified:false}]))};});
+        sides:Object.fromEntries(Object.entries(prev.sides).map(([k,v])=>[k,{...v,verified:false}]))};
+    });
+  };
+  const onOverlayPointerDown=(e:React.PointerEvent<SVGSVGElement>)=>{
+    if(mode!=="draw"||dragRef.current!==null||(e.pointerType==="mouse"&&e.button!==0))return;
+    pointerStartRef.current={id:e.pointerId,x:e.clientX,y:e.clientY};
+    e.currentTarget.setPointerCapture(e.pointerId);
+    queuePointer(e.clientX,e.clientY,e.pointerType);
+  };
+  const onOverlayPointerMove=(e:React.PointerEvent<SVGSVGElement>)=>{
+    const dragging=dragRef.current;
+    if(dragging!==null)editPoint(dragging,e.clientX,e.clientY);
+    queuePointer(e.clientX,e.clientY,e.pointerType,dragging??-1);
+    const start=pointerStartRef.current;
+    if(start&&start.id===e.pointerId&&
+      Math.hypot(e.clientX-start.x,e.clientY-start.y)>9)start.cancelled=true;
+  };
+  const onOverlayPointerUp=(e:React.PointerEvent<SVGSVGElement>)=>{
+    const start=pointerStartRef.current;
+    if(mode==="draw"&&start&&!start.cancelled&&
+      isMappingTap(start,{id:e.pointerId,x:e.clientX,y:e.clientY}))
+      commitCorner(e.clientX,e.clientY);
+    if(start?.id===e.pointerId)pointerStartRef.current=null;
+    if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+    dragRef.current=null;
+    queuePointer(e.clientX,e.clientY,e.pointerType);
+  };
+  const onOverlayPointerCancel=(e:React.PointerEvent<SVGSVGElement>)=>{
+    if(pointerStartRef.current?.id===e.pointerId)pointerStartRef.current=null;
+    dragRef.current=null;clearPointer();
   };
   const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>p?{...p,sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...patch}}}:p);
   const applyPlot=(openNext=false)=>{
