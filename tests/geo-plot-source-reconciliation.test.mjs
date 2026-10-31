@@ -106,6 +106,12 @@ test("both editors offer road edge selection and reset geometry-dependent approv
   assert.match(image,/area:\{\.\.\.prev.area,verified:false\},facingVerified:false/);
   assert.match(image,/assignFourCornerRoadFront/);
   assert.match(image,/facingVerified:false/);
+  // Manual edits bypass the guided Front selector; they must also invalidate
+  // verified compass-facing metadata in both editor modes.
+  assert.match(legacy,/role==="front"&&Object\.hasOwn\(patch,"edges"\)/,
+    "manual Front edge edits must reset legacy Geo facing approval");
+  assert.match(image,/role==="front"&&Object\.hasOwn\(patch,"edges"\)/,
+    "manual Front edge edits must reset image Geo facing approval");
   const imagePublish=read("workers/masterplan-geo-admin.mjs");
   assert.match(imagePublish,/plot\.road && plot\.sides\.front\?\.roadFacing!==true/);
   assert.match(imagePublish,/before verification/);
