@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { listAssets, uploadAsset, type CloudAssetSummary } from "../studio/cloud";
 import type { Asset } from "../studio/domain";
+import {fitImageFrame,imageWorldAt,panImageFrame,pinchImageFrame,zoomImageFrame} from "../../../../shared/masterplan-image-gestures.js";
 import "./masterplan-workspace.css";
 
 type Point=[number,number];type Role="front"|"back"|"depthA"|"depthB";
@@ -68,7 +69,6 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const svgRef=useRef<SVGSVGElement>(null);
   const activeProject=useRef(slug);activeProject.current=slug;
   const pointerRef=useRef<Map<number,Point>>(new Map());
-  const panRef=useRef<Point|null>(null);
   const dragRef=useRef<number|null>(null);
   const workingRef=useRef(working);workingRef.current=working;
   const load=useCallback(async()=>{
@@ -78,7 +78,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     const next=await parseResponse<MasterplanState>(r);
     if(activeProject.current!==id)return;
     setState(next);setDraft(next.draft);setAssets(a.assets);setWorking(null);setDirty(false);
-    setFrame({x:0,y:0,w:next.draft.width||1,h:next.draft.height||1});
+    setFrame(fitImageFrame({width:next.draft.width||1,height:next.draft.height||1}));
     setError("");setStatus("");
   },[slug,endpoint]);
   useEffect(()=>{let on=true;void load().catch(e=>{if(on)setError(String(e));});
@@ -106,7 +106,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     setAssets(a=>[...a.filter(v=>v.id!==result.asset.id),result.asset]);
     changeDraft({imageAssetId:result.asset.id,width,height,controlPoints:[],plots:[],
       verifiedRevision:null});
-    setFrame({x:0,y:0,w:width,h:height});setWorking(null);
+    setFrame(fitImageFrame({width,height}));setWorking(null);
     setStatus("Original image archived; all previous calibration and polygons cleared. Save the new draft.");
   }
   async function operation(action:"save"|"verify"|"publish"|"activate",releaseId?:string){
@@ -152,11 +152,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     setStatus("Polygon and dimensions staged. Save Draft to persist.");
   }
   function zoom(factor:number,uv?:Point){
-    const center=uv||[frame.x+frame.w/2,frame.y+frame.h/2];
-    const w=Math.max(1,Math.min(draft?.width||1,frame.w*factor));
-    const h=Math.max(1,Math.min(draft?.height||1,frame.h*factor));
-    setFrame({x:center[0]-(center[0]-frame.x)*w/frame.w,
-      y:center[1]-(center[1]-frame.y)*h/frame.h,w,h});
+    if(!draft)return;
+    setFrame(previous=>zoomImageFrame(previous,{width:draft.width,height:draft.height},factor,uv));
   }
   const setSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>p?
     {...p,sides:{...p.sides,[role]:{...(p.sides[role]||blankSide()),...patch}}}:p);
@@ -164,8 +161,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     const svg=svgRef.current;if(!svg||!draft)return;
     const p=normalizedSvgPoint(e,svg,draft.width,draft.height);
     pointerRef.current.set(e.pointerId,[e.clientX,e.clientY]);
-    if(tool==="pan"){panRef.current=[e.clientX,e.clientY];e.currentTarget.setPointerCapture(e.pointerId);return;}
-    if(!p)return;
+    if(tool==="pan"){e.currentTarget.setPointerCapture(e.pointerId);return;}
+    if(pointerRef.current.size>1||!p)return;
     if(tool==="point" && controlIndex!==null){
       const arr=draft.controlPoints.map((cp,i)=>i===controlIndex?{...cp,u:p[0],v:p[1],verified:false}:cp);
       changeDraft({controlPoints:arr});setControlIndex(null);setTool("pan");return;
@@ -187,11 +184,24 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   function move(e:ReactPointerEvent<SVGSVGElement>){
     const svg=svgRef.current;if(!svg||!draft||!pointerRef.current.has(e.pointerId))return;
     const previous=pointerRef.current.get(e.pointerId)!;
+    const before=[...pointerRef.current.values()];
     pointerRef.current.set(e.pointerId,[e.clientX,e.clientY]);
-    if(tool==="pan"&&panRef.current){
-      const dx=(e.clientX-previous[0])*frame.w/(svg.clientWidth||1);
-      const dy=(e.clientY-previous[1])*frame.h/(svg.clientHeight||1);
-      setFrame(v=>({...v,x:v.x-dx,y:v.y-dy}));return;
+    if(tool==="pan"){
+      const box=svg.getBoundingClientRect(),extent={width:draft.width,height:draft.height};
+      const viewport={width:box.width,height:box.height};
+      const after=[...pointerRef.current.values()];
+      if(after.length===2){
+        const midpoint=(points:Point[]):Point=>[(points[0][0]+points[1][0])/2-box.left,
+          (points[0][1]+points[1][1])/2-box.top];
+        const distance=(points:Point[])=>Math.hypot(points[0][0]-points[1][0],
+          points[0][1]-points[1][1]);
+        setFrame(v=>pinchImageFrame(v,extent,viewport,midpoint(before),
+          midpoint(after),distance(before),distance(after)));
+      }else if(after.length===1){
+        setFrame(v=>panImageFrame(v,extent,viewport,
+          [e.clientX-previous[0],e.clientY-previous[1]]));
+      }
+      return;
     }
     if(tool==="edit"&&dragRef.current!==null&&workingRef.current){
       const point=normalizedSvgPoint(e,svg,draft.width,draft.height);if(!point)return;
@@ -200,7 +210,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     }
   }
   function up(e:ReactPointerEvent<SVGSVGElement>){
-    pointerRef.current.delete(e.pointerId);dragRef.current=null;panRef.current=null;
+    pointerRef.current.delete(e.pointerId);dragRef.current=null;
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   }
   const approved=state?.draft.verifiedRevision===state?.draft.revision&&Boolean(state?.draft.revision);
@@ -222,7 +232,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       <button onClick={()=>setTool("pan")} className={tool==="pan"?"active":""}>Pan</button>
       <button onClick={()=>zoom(.8)}>Zoom +</button>
       <button onClick={()=>zoom(1.25)}>Zoom −</button>
-      <button onClick={()=>draft&&setFrame({x:0,y:0,w:draft.width,h:draft.height})}>Fit</button>
+      <button onClick={()=>draft&&setFrame(fitImageFrame({width:draft.width,height:draft.height}))}>Fit</button>
       {mode!=="source"&&<button onClick={newBoundary} disabled={!imageUrl}>+ New Polygon</button>}
       <button disabled={!dirty||busy||!draft?.imageAssetId} onClick={()=>void operation("save")}>Save Draft</button>
       <button disabled={dirty||busy||!state?.draft.revision||Boolean(working)} onClick={()=>void operation("verify")}>Verify</button>
@@ -235,7 +245,11 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
         {imageUrl&&draft?.width&&draft?.height?<svg ref={svgRef} viewBox={`${frame.x} ${frame.y} ${frame.w} ${frame.h}`}
           preserveAspectRatio="xMidYMid meet" onPointerDown={down} onPointerMove={move}
           onPointerUp={up} onPointerCancel={up}
-          onWheel={e=>{if(e.ctrlKey||e.deltaY){zoom(e.deltaY>0?1.12:.88);}}}>
+          onWheel={e=>{if(!draft)return;e.preventDefault();
+            const box=e.currentTarget.getBoundingClientRect();
+            const focus=imageWorldAt(frame,{width:box.width,height:box.height},
+              [e.clientX-box.left,e.clientY-box.top]);
+            zoom(e.deltaY>0?1.12:.88,focus);}}>
           <image href={imageUrl} x="0" y="0" width={draft.width} height={draft.height} />
           {draft.plots.map(plot=><g key={plot.id} onClick={()=>tool!=="draw"&&choose(plot)}>
             <polygon points={plot.corners.map(p=>p[0]*draft.width+","+p[1]*draft.height).join(" ")}
@@ -259,7 +273,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
           <strong>No approved masterplan source selected</strong>
           <p>Upload an image in the Source workspace. No Building GLB is needed.</p>
         </div>}
-        <p className="masterplan-stage-hint">{tool==="pan"?"Drag to pan; use Zoom/Fit controls.":
+        <p className="masterplan-stage-hint">{tool==="pan"?"Drag to pan; use two fingers to pinch-zoom on touch screens, or Zoom/Fit.":
           tool==="draw"?"Tap each plot corner; then enter approved details and apply.":
           tool==="edit"?"Drag an individual polygon corner; side approvals reset.":
           "Tap a location on the image for selected GPS control point."}</p>
