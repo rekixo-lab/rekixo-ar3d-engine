@@ -12,9 +12,9 @@ export function auditMasterplanSurvey(spec){
   if(!spec||typeof spec!=="object"||Array.isArray(spec))
     throw Error("Expected one survey QA object.");
   const controlPoints=validateControlPoints(spec.controlPoints,{publish:true});
-  const checkpoints=validateControlPoints(spec.checkpoints,{publish:true});
-  if(checkpoints.length<3)
+  if(!Array.isArray(spec.checkpoints)||spec.checkpoints.length<3)
     throw Error("At least three independent verified field checkpoints are required.");
+  const checkpoints=validateControlPoints(spec.checkpoints,{publish:true});
   // Checkpoints must cover the site, rather than all falling near one mapped corner.
   const us=checkpoints.map(p=>p.u),vs=checkpoints.map(p=>p.v);
   if(Math.max(...us)-Math.min(...us)<0.4 || Math.max(...vs)-Math.min(...vs)<0.4)
