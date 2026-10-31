@@ -5,7 +5,7 @@ type Sale={id:string;plotId:string;buyerName:string;buyerPhone:string;agreementP
   receivedPaise:number;balancePaise:number;createdAt:string};
 type Payment={id:string;saleId:string;kind:"receipt"|"reversal";amountPaise:number;
   paidOn:string;method:string;reference:string;note:string;reversesId?:string|null};
-type Ledger={sales:Sale[];payments:Payment[];inventory:{mappedPlotCount:number;availablePlotIds:string[];sourceReleaseId:string|null};
+type Ledger={sales:Sale[];totalSales:number;nextOffset:number|null;payments:Payment[];inventory:{mappedPlotCount:number;availablePlotIds:string[];sourceReleaseId:string|null};
   totals:{agreementPaise:number;receivedPaise:number;balancePaise:number};role:string};
 const money=(paise:number)=>"₹"+(Number(paise||0)/100).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 const quote=(value:unknown)=>'"'+String(value??"").replace(/"/g,'""').replace(/^[=+@-]/,"'$&")+'"';
@@ -48,6 +48,17 @@ export default function SalesAccounts(){
     }catch(e){setError(e instanceof Error?e.message:"Ledger operation failed.");return false;}
     finally{setBusy(false);}
   }
+  async function loadMore(){
+    if(!state||state.nextOffset===null||busy)return;
+    const offset=state.nextOffset;
+    setBusy(true);setError("");
+    try{
+      const page=await api<Ledger>(url+"?offset="+offset);
+      setState(previous=>previous?.nextOffset===offset
+        ? {...page,sales:[...previous.sales,...page.sales]}:previous);
+    }catch(e){setError(e instanceof Error?e.message:"Could not load more sales.");}
+    finally{setBusy(false);}
+  }
   async function book(){
     const amount=Math.round(Number(agreement)*100);
     const ok=await perform({action:"book",plotId,buyerName:buyer,buyerPhone:phone,agreementPaise:amount});
@@ -60,15 +71,32 @@ export default function SalesAccounts(){
       paidOn,method,reference,idempotencyKey},selected.id);
     if(ok){receiptToken.current=crypto.randomUUID();setPaymentAmount("");setReference("");}
   }
-  function exportCsv(){
-    if(!state)return;
-    const lines=[["plotId","buyerName","buyerPhone","agreementPaise","receivedPaise",
-      "balancePaise","state","sourceReleaseId","createdAt"].map(quote).join(","),
-      ...state.sales.map(s=>[s.plotId,s.buyerName,s.buyerPhone,s.agreementPaise,s.receivedPaise,
-        s.balancePaise,s.state,s.sourceReleaseId,s.createdAt].map(quote).join(","))];
-    const object=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"}));
-    const a=document.createElement("a");a.href=object;a.download=slug+"-private-sales.csv";a.click();
-    setTimeout(()=>URL.revokeObjectURL(object),1000);
+  async function exportCsv(){
+    if(!state||busy)return;
+    setBusy(true);setError("");setMessage("");
+    try{
+      const expected=state.totalSales;
+      const rows=[...state.sales];
+      let next=state.nextOffset;
+      // CSV must contain the complete private register, not merely the visible page.
+      while(next!==null){
+        const page=await api<Ledger>(url+"?offset="+next);
+        rows.push(...page.sales);
+        if(page.nextOffset===next)throw Error("Sales pagination did not advance.");
+        next=page.nextOffset;
+      }
+      if(rows.length!==expected||new Set(rows.map(s=>s.id)).size!==rows.length)
+        throw Error("Sales register changed during export. Reload and retry to avoid an incomplete CSV.");
+      const lines=[["plotId","buyerName","buyerPhone","agreementPaise","receivedPaise",
+        "balancePaise","state","sourceReleaseId","createdAt"].map(quote).join(","),
+        ...rows.map(s=>[s.plotId,s.buyerName,s.buyerPhone,s.agreementPaise,s.receivedPaise,
+          s.balancePaise,s.state,s.sourceReleaseId,s.createdAt].map(quote).join(","))];
+      const object=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"}));
+      const a=document.createElement("a");a.href=object;a.download=slug+"-private-sales.csv";a.click();
+      setTimeout(()=>URL.revokeObjectURL(object),1000);
+      setMessage("Exported all "+rows.length+" private sale records.");
+    }catch(e){setError(e instanceof Error?e.message:"Private CSV export failed.");}
+    finally{setBusy(false);}
   }
   const active=state?.sales.filter(s=>s.state!=="void"&&[s.plotId,s.buyerName,s.buyerPhone]
     .some(v=>v.toLowerCase().includes(search.trim().toLowerCase())))||[];
@@ -117,7 +145,10 @@ export default function SalesAccounts(){
           </div><button onClick={()=>void details(s.id)}>Open Ledger</button></div>)}
           {!active.length&&<p>No sales registered.</p>}
         </div>
-        <button disabled={!state?.sales.length} onClick={exportCsv}>Export Private Sales CSV</button>
+        <p>Showing {state?.sales.length||0} of {state?.totalSales||0} sales (including voided records in the export).</p>
+        {state?.nextOffset!==null&&state&&<button disabled={busy}
+          onClick={()=>void loadMore()}>Load More Sales</button>}
+        <button disabled={busy||!state?.sales.length} onClick={()=>void exportCsv()}>Export All Private Sales CSV</button>
       </section>
       {selected&&<section className="engine-manage-card">
         <div className="engine-manage-actions"><h2>Plot {selected.plotId} · {selected.buyerName}</h2>
