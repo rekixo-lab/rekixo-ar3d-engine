@@ -10,6 +10,10 @@ const ComponentMapper = lazy(() => import("./source-pack/ComponentMapper"));
 const BuildingWorkspace = lazy(() => import("./building/BuildingWorkspace"));
 const GeoWorkspace = lazy(() => import("./geo/GeoWorkspace"));
 const GeoPlotMapper = lazy(() => import("./geo/GeoPlotMapper"));
+const MasterplanWorkspace = lazy(() => import("./masterplan/MasterplanWorkspace"));
+const ProjectManagement = lazy(() => import("./management/ProjectManagement"));
+const ProjectAssets = lazy(() => import("./management/ProjectAssets"));
+const SalesAccounts = lazy(() => import("./management/SalesAccounts"));
 const EngineReleases = lazy(() => import("./releases/EngineReleases"));
 const ProjectShareBuilder = lazy(() => import("./branding/ProjectShareBuilder"));
 const EngineAdvanced = lazy(() => import("./advanced/EngineAdvanced"));
@@ -65,6 +69,28 @@ function AdminRouter() {
 
   if (path === "/3Dprojects/studio") {
     return <LegacyStudioRedirect />;
+  }
+
+  if (path === "/3Dprojects/profile") {
+    return <AdminShellRoute label="Opening Project Profile…"><ProjectManagement section="profile" /></AdminShellRoute>;
+  }
+  if (path === "/3Dprojects/clients") {
+    return <AdminShellRoute label="Opening Client Directory…"><ProjectManagement section="clients" /></AdminShellRoute>;
+  }
+  if (path === "/3Dprojects/assets") {
+    return <AdminShellRoute label="Opening Project Assets…"><ProjectAssets /></AdminShellRoute>;
+  }
+  if (path === "/3Dprojects/masterplan") {
+    return <AdminShellRoute label="Opening Geo Masterplan…"><MasterplanWorkspace mode="source" /></AdminShellRoute>;
+  }
+  if (path === "/3Dprojects/masterplan-plots") {
+    return <AdminShellRoute label="Opening Masterplan Plot Mapper…"><MasterplanWorkspace mode="plots" /></AdminShellRoute>;
+  }
+  if (path === "/3Dprojects/mapping-controls") {
+    return <AdminShellRoute label="Opening Mapping Controls…"><MasterplanWorkspace mode="controls" /></AdminShellRoute>;
+  }
+  if (path === "/3Dprojects/sales") {
+    return <AdminShellRoute label="Opening private Plot Sales Ledger…"><SalesAccounts /></AdminShellRoute>;
   }
 
   if (path === "/3Dprojects/source-pack") {
