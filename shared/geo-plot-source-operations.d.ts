@@ -2,8 +2,7 @@ export type FourCornerSide={edges:number[];length:number;unit:"ft"|"m";roadFacin
 export type ReviewedPlot={id:string;corners:Array<[number,number]>;layout:"three"|"four";
   sides:Partial<Record<"front"|"back"|"depthA"|"depthB",FourCornerSide>>;
   area:{value:number;unit:"sqft"|"sqm"|"sqyd";source:string;verified:boolean};
-  facing:string;facingSource:string;facingVerified:boolean;road:string;
-  [key:string]:unknown};
+  facing:string;facingSource:string;facingVerified:boolean;road:string};
 export type ApprovedRow={id:string;area:number;areaUnit:"sqft"|"sqm"|"sqyd"|"";
  areaSource:string;front:number;back:number;depthA:number;depthB:number;
  lengthUnit:"ft"|"m"|"";
