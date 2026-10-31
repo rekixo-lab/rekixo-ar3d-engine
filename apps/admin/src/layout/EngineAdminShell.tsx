@@ -9,8 +9,11 @@ import {
   type CloudProjectSummary,
 } from "../studio/cloud";
 import "./engine-admin-shell.css";
+import { projectModuleVisible, PROJECT_KIND_LABELS } from "../../../../shared/engine-project-kinds.js";
 
-type ShellSection = "overview" | "source" | "building" | "geo" | "geo-plots" | "releases" | "branding" | "advanced";
+type ShellSection = "overview" | "profile" | "clients" | "assets" |
+  "source" | "building" | "geo" | "geo-plots" | "masterplan" | "masterplan-plots" |
+  "mapping-controls" | "sales" | "releases" | "branding" | "advanced";
 
 type NavItem = {
   id: ShellSection;
@@ -27,6 +30,41 @@ const navItems: NavItem[] = [
     short: "OV",
     href: (slug) => `/3Dprojects${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
     description: "Project status and next action",
+  },
+  {
+    id: "clients",label:"Clients",short:"CL",
+    href:slug=>`/3Dprojects/clients${slug?`?project=${encodeURIComponent(slug)}`:""}`,
+    description:"Owner-managed client directory and intended roles",
+  },
+  {
+    id: "profile",label:"Project Profile",short:"PF",
+    href:slug=>`/3Dprojects/profile${slug?`?project=${encodeURIComponent(slug)}`:""}`,
+    description:"Builder, contacts, address, WhatsApp and maps",
+  },
+  {
+    id: "assets",label:"Project Assets",short:"AS",
+    href:slug=>`/3Dprojects/assets${slug?`?project=${encodeURIComponent(slug)}`:""}`,
+    description:"Original source inventory and checksum downloads",
+  },
+  {
+    id: "masterplan",label:"Geo Masterplan",short:"IM",
+    href:slug=>`/3Dprojects/masterplan${slug?`?project=${encodeURIComponent(slug)}`:""}`,
+    description:"Approved image source and GPS control points",
+  },
+  {
+    id: "masterplan-plots",label:"Plot Mapper",short:"PL",
+    href:slug=>`/3Dprojects/masterplan-plots${slug?`?project=${encodeURIComponent(slug)}`:""}`,
+    description:"Draw polygon plots on the approved image",
+  },
+  {
+    id: "mapping-controls",label:"Mapping Controls",short:"MC",
+    href:slug=>`/3Dprojects/mapping-controls${slug?`?project=${encodeURIComponent(slug)}`:""}`,
+    description:"Dimensions, facing, road and source verification",
+  },
+  {
+    id: "sales",label:"Sales & Accounts",short:"SA",
+    href:slug=>`/3Dprojects/sales${slug?`?project=${encodeURIComponent(slug)}`:""}`,
+    description:"Plot inventory and separate financial records",
   },
   {
     id: "source",
@@ -84,6 +122,8 @@ function requestedProjectSlug() {
 }
 
 function currentSection(pathname: string): ShellSection {
+  for(const id of ["masterplan-plots","mapping-controls","masterplan","profile","clients","assets","sales"] as const)
+    if(pathname.includes("/"+id))return id;
   if (pathname.includes("/component-mapper") || pathname.includes("/source-pack")) return "source";
   if (pathname.includes("/geo-plots")) return "geo-plots";
   if (pathname.includes("/geo-mapper")) return "geo";
@@ -95,6 +135,20 @@ function currentSection(pathname: string): ShellSection {
 }
 
 const sectionMeta: Record<ShellSection, { eyebrow: string; title: string; help: string }> = {
+  profile:{eyebrow:"PROJECT CONTACTS",title:"Project Profile",
+    help:"Manage canonical developer, contact and location information."},
+  clients:{eyebrow:"PROJECT ACCESS",title:"Clients",
+    help:"Manage project client directory and intended permissions without granting unfinished logins."},
+  assets:{eyebrow:"SOURCE INVENTORY",title:"Project Assets",
+    help:"Review original source files and download verified copies."},
+  masterplan:{eyebrow:"IMAGE GEO AUTHORING",title:"Geo Masterplan",
+    help:"Upload approved masterplan imagery and calibrate its real-world GPS location."},
+  "masterplan-plots":{eyebrow:"PLOT POLYGONS",title:"Plot Mapper",
+    help:"Draw and verify plots on the Geo Masterplan image."},
+  "mapping-controls":{eyebrow:"PLOT DIMENSIONS",title:"Mapping Controls",
+    help:"Review Front/Back/Depth, plot area, directions, road access and source documents."},
+  sales:{eyebrow:"PRIVATE BUSINESS",title:"Sales & Accounts",
+    help:"Project-isolated inventory and ledger with explicit sale confirmation."},
   overview: {
     eyebrow: "CONTROL CENTER",
     title: "Project Overview",
@@ -152,6 +206,7 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
     () => projectItems.find((project) => project.slug === selectedSlug),
     [projectItems, selectedSlug],
   );
+  const projectKind=selectedProject?.projectKind||"legacy";
 
   useEffect(() => {
     let live = true;
@@ -236,13 +291,12 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
     }
   }
 
-  const liveHref = section === "geo"
-    ? selectedSlug && geoLive
-      ? geoPublicProjectPath(selectedSlug)
-      : ""
-    : selectedSlug && buildingLive
-      ? publicProjectPath(selectedSlug)
-      : "";
+  const liveHref=projectKind==="masterplan_geo"
+    ? (selectedSlug&&selectedProject?.status==="published"
+      ? `/3Dprojects/${encodeURIComponent(selectedSlug)}/masterplan` : "")
+    : section==="geo"||section==="geo-plots"
+      ? (selectedSlug&&geoLive?geoPublicProjectPath(selectedSlug):"")
+      : (selectedSlug&&buildingLive?publicProjectPath(selectedSlug):"");
 
   return (
     <div className="engine-admin-shell">
@@ -268,11 +322,11 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
               <option key={project.id} value={project.slug}>{project.name}</option>
             ))}
           </select>
-          <small>{selectedProject?.location || selectedProject?.slug || "Create a project from Overview"}</small>
+          <small>{selectedProject ? PROJECT_KIND_LABELS[projectKind] : "Create a project from Overview"}</small>
         </div>
 
         <nav className="engine-admin-nav" aria-label="AR3D Engine sections">
-          {navItems.map((item) => {
+          {navItems.filter(item=>projectModuleVisible(projectKind,item.id)).map((item) => {
             const active = item.id === section;
             const status = item.id === "building" || item.id === "releases"
               ? buildingLive

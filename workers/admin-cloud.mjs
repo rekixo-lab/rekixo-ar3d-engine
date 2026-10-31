@@ -6,6 +6,7 @@ import {
 import { assertDraftAssetKey } from "./storage-boundary.mjs";
 import { validateStudioDraft } from "./studio-draft-validation.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
+import { isEngineProjectKind } from "../shared/engine-project-kinds.js";
 import { listGeoReleases } from "./geo-release-admin.mjs";
 import { verifyGeoDraftPreview } from "./geo-release-verify.mjs";
 import { publishGeoRelease } from "./geo-release-publish.mjs";
@@ -18,6 +19,12 @@ import {
 } from "./project-deletion.mjs";
 import { processDwgArchitecture } from "./dwg-processor-route.mjs";
 import { handleProjectBrandingAdmin } from "./project-branding.mjs";
+import { handleProjectManagementAdmin } from "./project-management.mjs";
+import { handleMasterplanGeoAdmin } from "./masterplan-geo-admin.mjs";
+import { handleMasterplanSalesAdmin } from "./masterplan-sales.mjs";
+import { handleMasterplanShareAdmin } from "./masterplan-share-admin.mjs";
+import { referencedMasterplanAssetIds } from "./masterplan-asset-protection.mjs";
+import { cloudProjectRow, projectBySlug } from "./project-registry.mjs";
 const BASE_PATH = "/3Dprojects";
 const CLOUD_PATH = `${BASE_PATH}/api/cloud`;
 const COOKIE = "rekixo_3d_admin";
@@ -482,31 +489,6 @@ async function sessionStatus(request, env) {
   });
 }
 
-function cloudProjectRow(row) {
-  return {
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    location: row.location ?? undefined,
-    status: row.status,
-    updatedAt: row.updated_at,
-    draftRevision:
-      row.draft_revision === null || row.draft_revision === undefined
-        ? undefined
-        : Number(row.draft_revision),
-    assetCount: Number(row.asset_count || 0),
-  };
-}
-
-async function projectBySlug(env, slug) {
-  return env.DB.prepare(
-    `SELECT id,slug,name,location,status,updated_at,active_release_id
-       FROM projects_3d
-      WHERE slug=?
-      LIMIT 1`,
-  ).bind(slug).first();
-}
-
 export function cloudAssetKey(slug, assetId) {
   if (!validProjectSlug(slug) || !validAssetId(assetId))
     throw Error("Invalid cloud asset identity.");
@@ -567,7 +549,7 @@ async function listCloudProjects(env, url) {
   }
 
   const select = env.DB.prepare(
-    `SELECT p.id,p.slug,p.name,p.location,p.status,p.updated_at,
+    `SELECT p.id,p.slug,p.name,p.location,p.status,p.project_kind,p.updated_at,
             d.revision AS draft_revision,
             (SELECT COUNT(*) FROM studio_assets_3d a
               WHERE a.project_id=p.id AND a.deleted_at IS NULL) AS asset_count
@@ -614,8 +596,12 @@ async function createCloudProject(request, env, actor) {
   const slug = String(body.slug || "").trim().toLowerCase();
   const name = String(body.name || "").trim();
   const location = String(body.location || "").trim();
+  // Legacy API callers intentionally preserve the pre-v2 workflow; the
+  // new create-project wizard sends an explicit kind.
+  const projectKind = body.projectKind === undefined ? "legacy" : body.projectKind;
 
   if (
+    !isEngineProjectKind(projectKind) ||
     !validProjectId(id) ||
     !validProjectSlug(slug) ||
     !safeText(name, 200) ||
@@ -624,14 +610,15 @@ async function createCloudProject(request, env, actor) {
     return json({ error: "Valid project ID, slug, name and location are required." }, { status: 400 });
 
   const existing = await env.DB.prepare(
-    "SELECT id,slug,name,location,status,updated_at FROM projects_3d WHERE id=? OR slug=? LIMIT 2",
+    "SELECT id,slug,name,location,status,project_kind,updated_at FROM projects_3d WHERE id=? OR slug=? LIMIT 2",
   ).bind(id, slug).all();
   if ((existing.results || []).length) {
     const exact = (existing.results || []).find(
       (row) => row.id === id && row.slug === slug,
     );
-    if (exact)
+    if (exact && (exact.project_kind || "legacy") === projectKind)
       return json({ project: cloudProjectRow(exact), created: false });
+    if (exact) return json({ error: "Existing project identity has a different project kind." }, { status: 409 });
     return json({ error: "Project ID or slug already exists." }, { status: 409 });
   }
 
@@ -640,9 +627,9 @@ async function createCloudProject(request, env, actor) {
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO projects_3d
-          (id,slug,name,location,status,created_at,updated_at)
-          VALUES (?,?,?,?,'draft',?,?)`,
-      ).bind(id, slug, name, location || null, now, now),
+          (id,slug,name,location,status,project_kind,created_at,updated_at)
+          VALUES (?,?,?,?,'draft',?,?,?)`,
+      ).bind(id, slug, name, location || null, projectKind, now, now),
       env.DB.prepare(
         `INSERT INTO engine_admin_audit
           (id,actor_email,action,project_id,target_id,details_json,created_at)
@@ -653,7 +640,7 @@ async function createCloudProject(request, env, actor) {
         "project.created",
         id,
         id,
-        JSON.stringify({ slug, name, location: location || null }),
+        JSON.stringify({ slug, name, location: location || null, projectKind }),
         now,
       ),
     ]);
@@ -669,6 +656,7 @@ async function createCloudProject(request, env, actor) {
         name,
         location: location || undefined,
         status: "draft",
+        projectKind,
         updatedAt: now,
         assetCount: 0,
       },
@@ -802,7 +790,7 @@ async function cloudDraft(request, env, actor, project, slug) {
   const assetRows = await env.DB.prepare(
     "SELECT id FROM studio_assets_3d WHERE project_id=? AND deleted_at IS NULL",
   ).bind(project.id).all();
-  const referenced = new Set(assetIds);
+  const referenced = new Set([...assetIds,...await referencedMasterplanAssetIds(env,project.id)]);
   const statements = [
     env.DB.prepare(
       "UPDATE projects_3d SET name=?,location=?,updated_at=? WHERE id=?",
@@ -1066,6 +1054,8 @@ async function deleteAsset(request, env, actor, project, slug, assetId) {
     }
   }
 
+  if ((await referencedMasterplanAssetIds(env,project.id)).has(assetId))
+    return json({error:"Asset belongs to a Geo Masterplan draft, published release or social preview. Deletion blocked."},{status:409});
   const expectedKey = cloudAssetKey(slug, assetId);
   if (row.r2_key !== expectedKey)
     return json({ error: "Asset storage key violates project isolation." }, { status: 500 });
@@ -2330,6 +2320,21 @@ async function routeProjects(request, env, actor, url) {
 
   if (parts.length === 1)
     return patchProject(request, env, actor, project);
+
+  if (parts[1] === "manage") {
+    const response=await handleProjectManagementAdmin(request,env,actor,project,parts);
+    if(response)return response;
+  }
+  if (parts[1] === "masterplan-geo") {
+    const response=await handleMasterplanGeoAdmin(request,env,actor,project,parts);
+    if(response)return response;
+  }
+  if (parts[1] === "sales") {
+    const response=await handleMasterplanSalesAdmin(request,env,actor,project,parts,url);
+    if(response)return response;
+  }
+
+  if (parts[1] === "masterplan-share") return handleMasterplanShareAdmin(request,env,actor,project,parts);
 
   if (parts[1] === "branding")
     return handleProjectBrandingAdmin(request, env, actor, project, slug, parts.slice(2));

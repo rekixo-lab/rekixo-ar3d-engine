@@ -1,3 +1,4 @@
+import { publicMasterplanShareSnapshot } from "./masterplan-share-public.mjs";
 import {
   activeReleaseState,
 } from "./release-runtime.mjs";
@@ -737,14 +738,17 @@ export async function injectPublicBrandingMetadata(request, env, response, url =
   let path = url.pathname;
   if (path === BASE_PATH || path === `${BASE_PATH}/`) path = "/";
   else if (path.startsWith(`${BASE_PATH}/`)) path = path.slice(BASE_PATH.length);
-  const match = /^\/([a-z0-9]+(?:-[a-z0-9]+)*)(\/geo)?\/?$/.exec(path);
+  const match = /^\/([a-z0-9]+(?:-[a-z0-9]+)*)(\/(?:geo|masterplan))?\/?$/.exec(path);
   if (!match) return response;
   const slug = match[1];
-  const experience = match[2] ? "geo" : "building";
+  const experience = match[2] === "/geo" ? "geo" : "building";
+  const isMasterplan = match[2] === "/masterplan";
   const requestedVersion = url.searchParams.get("share") || "";
   let snapshot;
   try {
-    snapshot = await publicBrandingSnapshot(env, slug, experience, requestedVersion, Boolean(requestedVersion));
+    snapshot = isMasterplan
+      ? await publicMasterplanShareSnapshot(env,slug)
+      : await publicBrandingSnapshot(env, slug, experience, requestedVersion, Boolean(requestedVersion));
   } catch (error) {
     console.error("Public branding metadata lookup failed.", error instanceof Error ? error.message : "unknown error");
     return response;

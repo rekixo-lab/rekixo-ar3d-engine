@@ -1,4 +1,5 @@
 import type { EngineExperienceSummary } from "@rekixo/3d-contracts";
+import type { EngineProjectKind } from "../../../../shared/engine-project-kinds.js";
 import type { DwgNormalizedDocument } from "./dwgNormalized";
 import {
   projectSlug,
@@ -23,6 +24,7 @@ export interface CloudProjectSummary {
   name: string;
   location?: string;
   status: "draft" | "published" | "archived";
+  projectKind: EngineProjectKind;
   updatedAt: string;
   draftRevision?: number;
   assetCount: number;
@@ -268,7 +270,7 @@ export async function deleteAllProjects(
   });
 }
 
-export async function ensureProject(project: Project) {
+export async function ensureProject(project: Project, projectKind: EngineProjectKind = "legacy") {
   validateProject(project);
   const slug = projectSlug(project);
   return api<{ project: CloudProjectSummary; created: boolean }>(
@@ -281,6 +283,7 @@ export async function ensureProject(project: Project) {
         slug,
         name: project.name,
         location: project.location ?? "",
+        projectKind,
       }),
     },
   );

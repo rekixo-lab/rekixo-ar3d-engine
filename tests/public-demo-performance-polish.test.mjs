@@ -54,7 +54,7 @@ test("public Geo route does not eagerly import the Building viewer bundle", () =
   assert.ok(app.includes('const Viewer3D = lazy(() => loadViewer3D().then((module) => ({ default: module.Viewer3D })));'));
   assert.ok(app.includes("void loadViewer3D().catch(() => undefined);"));
   assert.ok(app.includes("<Suspense fallback={<LoadingPage />}>"));
-  assert.ok(app.includes("{geoRoute ? <GeoPublicDemo /> : <App />}"));
+  assert.ok(app.includes("masterplanRoute ? <MasterplanPublic /> : geoRoute ? <GeoPublicDemo /> : <App />"));
 });
 test("Building renderer honors the presentation performance quality profile", () => {
   const viewer = fs.readFileSync("apps/public/src/viewer/Viewer3D.tsx", "utf8");

@@ -4,7 +4,7 @@ import test from "node:test";
 
 const read = (path) => fs.readFileSync(path, "utf8");
 
-test("Engine overview exposes the systematic Building-first workflow and keeps Geo optional", () => {
+test("Engine overview preserves the Building workflow and keeps Geo optional for legacy projects", () => {
   const dashboard = read("apps/admin/src/dashboard/EngineDashboard.tsx");
 
   assert.match(dashboard, /ENGINE WORKFLOW/);
@@ -17,7 +17,7 @@ test("Engine overview exposes the systematic Building-first workflow and keeps G
   assert.match(dashboard, /3D Geo Experience/);
   assert.match(dashboard, /OPTIONAL/);
   assert.match(dashboard, /Create 3D Project/);
-  assert.match(dashboard, /Create & Open Source Pack/);
+  assert.match(dashboard, /newProjectStartPath\(createKind\)/);
   assert.doesNotMatch(dashboard, /Create → Edit → Map → Live/);
 });
 
@@ -25,7 +25,7 @@ test("Engine project context crosses the shared control-center routes and compat
   const dashboard = read("apps/admin/src/dashboard/EngineDashboard.tsx");
   const main = read("apps/admin/src/main.tsx");
 
-  assert.match(dashboard, /function projectHref\(path: "source-pack" \| "building" \| "geo-mapper" \| "releases", slug: string\)/);
+  assert.match(dashboard, /function projectHref\(path: "source-pack" \| "building" \| "geo-mapper" \| "releases" \| "masterplan"/);
   assert.match(dashboard, /\/3Dprojects\/\$\{path\}\?project=\$\{encodeURIComponent\(slug\)\}/);
   assert.match(dashboard, /projectHref\("source-pack", selectedProject\.slug\)/);
   assert.match(dashboard, /projectHref\("geo-mapper", selectedProject\.slug\)/);
@@ -41,8 +41,8 @@ test("Engine overview creates isolated projects through the existing cloud contr
 
   assert.match(dashboard, /const draft = newProject\(name\)/);
   assert.match(dashboard, /draft\.slug = projectSlug\(draft\)/);
-  assert.match(dashboard, /await ensureProject\(draft\)/);
-  assert.match(dashboard, /window\.location\.assign\(projectHref\("source-pack", result\.project\.slug\)\)/);
+  assert.match(dashboard, /await ensureProject\(draft, createKind\)/);
+  assert.match(dashboard, /window\.location\.assign\(projectHref\(newProjectStartPath\(createKind\), result\.project\.slug\)\)/);
   assert.doesNotMatch(dashboard, /DELETE FROM|DROP TABLE|geo_placements_3d/);
 });
 
@@ -79,10 +79,21 @@ test("Engine Admin keeps a consistent control-center identity while the proven G
 test("project creation starts the Source Pack workflow, preserves Building-first delivery and keeps Geo optional", () => {
   const dashboard = read("apps/admin/src/dashboard/EngineDashboard.tsx");
 
-  assert.match(dashboard, /Project create hote hi Source Pack workflow open hoga/);
+  assert.match(dashboard, /Choose one independent Engine project type/);
   assert.match(dashboard, /Finish Building workflow/);
   assert.match(dashboard, /immutable Building release publish karein/);
   assert.match(dashboard, /Customer ko map-based experience chahiye to Geo add karein; otherwise Building complete hai/);
   assert.match(dashboard, /Exact real-world Building placement\. Optional unless the customer needs map context/);
-  assert.match(dashboard, /Create & Open Source Pack/);
+  assert.match(dashboard, /newProjectStartPath\(createKind\)/);
+});
+
+test("new projects offer three isolated types without breaking Building-first legacy path",()=>{
+  const dashboard=read("apps/admin/src/dashboard/EngineDashboard.tsx");
+  const projectKinds=read("shared/engine-project-kinds.js");
+  assert.match(dashboard,/createKind, setCreateKind/);
+  assert.match(dashboard,/"building_geo"/);
+  assert.match(dashboard,/"masterplan_geo"/);
+  assert.match(dashboard,/selectedProject\.projectKind !== "masterplan_geo"/);
+  assert.match(dashboard,/newProjectStartPath\(createKind\)/);
+  assert.match(projectKinds,/return kind === "masterplan_geo" \? "masterplan" : "source-pack"/);
 });

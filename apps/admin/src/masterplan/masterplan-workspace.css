@@ -1,0 +1,36 @@
+.masterplan-workspace{padding:18px 12px 72px;max-width:1700px;margin:auto;color:#e5f4fc}
+.masterplan-workspace header h1{font-size:clamp(24px,3vw,34px);margin:5px 0}
+.masterplan-workspace header>p:not(.eyebrow){color:#a9cbdc}
+.masterplan-error,.masterplan-ok{margin:10px 0;padding:12px;border-radius:9px;background:#482626;border:1px solid #a96f62}
+.masterplan-ok{background:#133d33;border-color:#55c6a2}
+.masterplan-stats{display:flex;flex-wrap:wrap;gap:8px;margin:15px 0}
+.masterplan-stats span{display:grid;gap:4px;min-width:92px;border:1px solid #416174;border-radius:9px;background:#11293b;padding:9px;font-size:11px;color:#abc8d5}
+.masterplan-stats b{font-size:14px;color:#fff}
+.masterplan-workspace button,.masterplan-workspace .masterplan-tools a{background:#123d42;color:#f0fcff;border:1px solid #70b2a5;border-radius:7px;padding:9px 11px;font:inherit;cursor:pointer;text-decoration:none}
+.masterplan-workspace button:disabled{opacity:.45;cursor:not-allowed}
+.masterplan-workspace button.active{background:#216553}
+.masterplan-tools{display:flex;flex-wrap:wrap;gap:8px;background:#0d2535;border:1px solid #39586d;border-radius:10px;padding:10px;margin:10px 0}
+.masterplan-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(295px,370px);gap:13px;align-items:start}
+.masterplan-stage{height:min(75vh,850px);min-height:450px;position:relative;border:1px solid #385a6e;border-radius:12px;overflow:hidden;background:#101e2c}
+.masterplan-stage svg{display:block;width:100%;height:100%;touch-action:none;user-select:none;cursor:crosshair}
+.masterplan-stage svg image{pointer-events:none}
+.masterplan-stage-hint{position:absolute;bottom:12px;left:12px;right:12px;max-width:520px;background:#10273fed;border:1px solid #456e85;border-radius:8px;padding:8px 10px;color:#ecf8ff;font-size:12px;pointer-events:none}
+.masterplan-placeholder{display:grid;place-content:center;height:100%;text-align:center;padding:30px;color:#bad0dd}
+.masterplan-placeholder strong{font-size:19px}
+.masterplan-dock{border:1px solid #426375;border-radius:12px;padding:16px;background:#102536;max-height:78vh;overflow:auto;display:grid;gap:10px}
+.masterplan-dock h2{font-size:18px;margin:10px 0 0}
+.masterplan-dock>p{font-size:12px;color:#b6d0de;line-height:1.5}
+.masterplan-dock fieldset{border:1px solid #466b7d;border-radius:9px;padding:10px;display:grid;gap:7px;min-width:0}
+.masterplan-dock fieldset legend{font-weight:700;color:#8ee2c9;padding:0 6px}
+.masterplan-dock label{display:grid;gap:5px;color:#c4dce9;font-size:12px;font-weight:600}
+.masterplan-dock input:not([type=checkbox]):not([type=file]),.masterplan-dock select,.masterplan-dock textarea{
+  width:100%;min-width:0;box-sizing:border-box;padding:8px;color:#fff;background:#172f42;
+  border:1px solid #527387;border-radius:7px;font:inherit;min-height:36px
+}
+.masterplan-dock input[type=file]{font-size:11px;max-width:100%}
+.masterplan-check{display:flex!important;flex-direction:row;gap:7px;align-items:center}
+.masterplan-check input{accent-color:#61dfb7}
+.masterplan-inventory{display:flex;flex-wrap:wrap;gap:6px;max-height:145px;overflow:auto}
+.masterplan-dock small{color:#a7c7d5}
+.masterplan-guidance{border-top:1px solid #446378;padding-top:10px}
+@media(max-width:950px){.masterplan-grid{grid-template-columns:1fr}.masterplan-stage{height:55vh;min-height:360px}.masterplan-dock{max-height:none}.masterplan-workspace{padding:10px 6px 50px}}

@@ -12,6 +12,7 @@ import "./styles.css";
 import { clientViewerCapabilities } from "./clientPresentation";
 
 const GeoPublicDemo = lazy(() => import("./geo/GeoPublicDemo"));
+const MasterplanPublic = lazy(() => import("./masterplan/MasterplanPublic"));
 const loadViewer3D = () => import("./viewer/Viewer3D");
 const Viewer3D = lazy(() => loadViewer3D().then((module) => ({ default: module.Viewer3D })));
 
@@ -787,10 +788,11 @@ function App() {
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root mount node");
 const geoRoute = /^\/3Dprojects\/[^/]+\/geo\/?$/.test(window.location.pathname);
+const masterplanRoute = /^\/3Dprojects\/[^/]+\/masterplan\/?$/.test(window.location.pathname);
 createRoot(root).render(
   <React.StrictMode>
     <Suspense fallback={<LoadingPage />}>
-      {geoRoute ? <GeoPublicDemo /> : <App />}
+      {masterplanRoute ? <MasterplanPublic /> : geoRoute ? <GeoPublicDemo /> : <App />}
     </Suspense>
   </React.StrictMode>,
 );

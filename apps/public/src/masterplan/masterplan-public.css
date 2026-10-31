@@ -1,0 +1,26 @@
+.masterplan-public{background:#0b1d2b;color:#edf8ff;min-height:100vh;display:flex;flex-direction:column}
+.masterplan-public header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:15px 22px;background:#09202c;border-bottom:1px solid #426675}
+.masterplan-public header p{font-size:11px;letter-spacing:.14em;color:#88d4b8;margin:0}
+.masterplan-public header h1{font-size:clamp(19px,3vw,29px);margin:5px 0}.masterplan-public header span{font-size:12px;color:#aecad8}
+.masterplan-public-header-actions a{display:inline-block;color:#e5fff3;text-decoration:none;border:1px solid #54bc91;padding:9px 12px;border-radius:9px}
+.masterplan-public-map{position:relative;flex:1;min-height:70vh;background:#142c3a;overflow:hidden}
+.masterplan-public-mapcanvas{position:absolute;inset:0;width:100%;height:100%}
+.masterplan-public-fallback{position:absolute;inset:0;background:#0b1d2b;display:flex;align-items:center;justify-content:center}
+.masterplan-public-fallback>p{position:absolute;left:12px;top:6px;right:12px;font-size:12px;background:#3c2920ea;color:#fff2d5;padding:9px;border-radius:9px;z-index:3}
+.masterplan-public-fallback svg{width:100%;height:100%;cursor:crosshair}
+.masterplan-public-fallback polygon{cursor:pointer}
+.masterplan-public-toolbar{position:absolute;top:14px;left:14px;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:10px;max-width:calc(100% - 28px);border:1px solid #558978;border-radius:11px;padding:8px 12px;background:#092433ec;box-shadow:0 3px 12px #0004;font-size:12px}
+.masterplan-public-toolbar button{border:1px solid #46ca9c;color:#ecfff9;background:#1b5649;padding:8px 10px;border-radius:7px;cursor:pointer}
+.masterplan-public-toolbar label{display:flex;align-items:center;gap:6px}
+.masterplan-public-toolbar input{accent-color:#4fdbac}
+.masterplan-public-detail{position:absolute;bottom:20px;left:16px;max-width:min(340px,calc(100% - 32px));max-height:60vh;overflow:auto;z-index:6;background:#0b2a38f4;border:1px solid #5bcca6;border-radius:12px;padding:18px;color:#ecfffa;box-shadow:0 12px 30px #0008}
+.masterplan-public-detail>button{position:absolute;top:8px;right:8px;cursor:pointer;background:transparent;border:0;color:#f4fff9;font-size:21px}
+.masterplan-public-detail small{color:#9bd9c4;font-size:10px}
+.masterplan-public-detail h2{margin:5px 0 10px;font-size:25px}
+.masterplan-public-detail strong{font-size:18px}
+.masterplan-public-detail p{margin:7px 0;font-size:13px}
+.masterplan-public-error{background:#472725;color:#ffe1d1;padding:12px;border:1px solid #a56959}
+.masterplan-public-error button{margin-left:12px}
+.masterplan-public-loading{position:absolute;inset:0;display:grid;place-items:center;font-size:16px;color:#d9e8ef}
+.masterplan-public footer{padding:12px 20px;font-size:12px;color:#a6c6d2;background:#09202c}
+@media(max-width:650px){.masterplan-public header{padding:10px}.masterplan-public-map{min-height:80vh}.masterplan-public-toolbar{top:6px;left:6px;padding:6px;font-size:11px}.masterplan-public-detail{bottom:10px;left:7px}}
