@@ -409,7 +409,7 @@ export default function GeoPlotMapper(){
     setMessage("Start at the road-facing Front edge, then tap corners clockwise. Complete the boundary before entering surveyed sizes.");
   };
   const undoCorner=()=>{
-    if(!working?.corners.length||busy)return;
+    if(!working?.corners.length||busy||originalId)return;
     setWorking(p=>{if(!p)return p;
       const corners=p.corners.slice(0,-1);
       return {...p,corners,sides:initialSides(corners),
@@ -444,7 +444,7 @@ export default function GeoPlotMapper(){
       if(k==="i"){begin("irregular");return;}
       if(k==="e"&&working){setMode("edit");return;}
       if(k==="f"){fitView();return;}
-      if(k==="backspace"&&working?.corners.length){event.preventDefault();undoCorner();return;}
+      if(k==="backspace"&&working?.corners.length&&!originalId){event.preventDefault();undoCorner();return;}
       if(k==="+"||k==="="){event.preventDefault();zoomBy(1.25);return;}
       if(k==="-"){event.preventDefault();zoomBy(0.8);}
     };
@@ -512,7 +512,7 @@ export default function GeoPlotMapper(){
             onClick={finishBoundary}>✓ Boundary complete</button>
         </div>
         <div className="geo-plot-tool-group geo-plot-tool-group--secondary">
-          <button type="button" disabled={!working?.corners.length||busy}
+          <button type="button" disabled={!working?.corners.length||busy||Boolean(originalId)}
             title="Undo last plotted corner (Backspace)" onClick={undoCorner}>↶ Undo</button>
           <button type="button" disabled={!working||busy} onClick={cancelWorking}>Cancel</button>
           <label className="geo-plot-toggle"><input type="checkbox" checked={snap}
@@ -539,7 +539,8 @@ export default function GeoPlotMapper(){
             onClick={()=>void execute("publish")}>Publish Mapping</button>
         </div>
       </section>
-    <div className="geo-plot-workspace">
+      {focused&&message&&<div className={message.startsWith("ERROR")?"geo-plot-warning":"geo-plot-message"} role={message.startsWith("ERROR")?"alert":"status"}>{message}</div>}
+      <div className="geo-plot-workspace">
       <div className="geo-plot-scene">
         <div className="geo-plot-canvas" ref={hostRef} aria-label="Top-down 3D masterplan plot mapping canvas"/>
         {geo&&<svg className="geo-plot-overlay" viewBox={`0 0 ${viewport.w} ${viewport.h}`}
@@ -564,10 +565,26 @@ export default function GeoPlotMapper(){
         <div className="geo-plot-scene-info">{modelStatus||("Top view · Model coordinates in metres · "+(mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Tap corners":"Drag corner handles"))}</div>
       </div>
       <aside className="geo-plot-dock">
-        <h3>Plot Inventory</h3>
-        <div className="geo-plot-inventory">{plots.map(p=><button type="button" key={p.id} onClick={()=>choose(p)}
-          className={working?.id===p.id?"active":""}>{p.id}<small>{p.corners.length} corners</small></button>)}</div>
-        {working&&<>
+        <div className="geo-plot-inspector-head">
+           <div><small>PROJECT PLOT INVENTORY</small><h3>Plot Editor</h3></div>
+           <span>{displayedPlots.length}/{plots.length}</span>
+         </div>
+         <label className="geo-plot-inventory-search">Find plot
+           <input type="search" placeholder="Search plot number" value={inventoryQuery}
+             onChange={e=>setInventoryQuery(e.target.value)}/>
+         </label>
+         <div className="geo-plot-inventory-navigation">
+           <button type="button" disabled={!plots.length} onClick={()=>chooseSibling(-1)} aria-label="Previous plot">← Previous</button>
+           <button type="button" disabled={!plots.length} onClick={()=>chooseSibling(1)} aria-label="Next plot">Next →</button>
+         </div>
+         <div className="geo-plot-inventory" aria-label="Mapped plot selection">
+           {displayedPlots.map(p=><button type="button" key={p.id} onClick={()=>choose(p)}
+             className={working?.id===p.id?"active":""} aria-pressed={working?.id===p.id}>
+             Plot {p.id}<small>{p.corners.length} corners</small></button>)}
+           {plots.length===0&&<p className="geo-plot-hint">No plot boundaries yet. Select 4 corners or Irregular to draw the first plot.</p>}
+           {plots.length>0&&displayedPlots.length===0&&<p className="geo-plot-hint">No plots match this search.</p>}
+         </div>
+         {working&&<>
           <h3>{plots.some(p=>p.id===working.id)?"Update":"New"} Plot {working.id}</h3>
           <label>Plot Number<input readOnly={Boolean(originalId)} value={working.id} onChange={e=>setWorking({...working,id:e.target.value})}/></label>
           <p className="geo-plot-hint">Corners: {working.corners.length} · Model area (unverified): {areaSqm(working.corners).toFixed(2)} m²
