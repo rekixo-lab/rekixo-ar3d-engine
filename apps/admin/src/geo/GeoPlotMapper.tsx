@@ -937,7 +937,7 @@ export default function GeoPlotMapper(){
             </select>
           </label>}
           {working.road&&working.sides.front?.roadFacing!==true&&
-            <p className="geo-plot-warning">Road/access is entered but Front has not been marked Road side. Publishing requires explicit road-front confirmation.</p>
+            <p className="geo-plot-warning">Road/access is entered but Front has not been marked Road side. Publishing requires explicit road-front confirmation.</p>}
           {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{const side=working.sides[role]||emptySide();
             const referenceM=geometrySideLengthMetres(working.corners,side.edges,geo?.placement.scale||1);
             const reference=side.unit==="ft"?referenceM*3.280839895:referenceM;
