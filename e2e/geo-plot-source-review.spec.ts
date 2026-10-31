@@ -47,7 +47,7 @@ test("legacy Geo editor reveals stale CSV evidence and offers safe road Front re
     activeMapping:null,releases:[]
   })));
   await page.goto("/3Dprojects/geo-plots?project=e2e-geo");
-  await expect(page.getByRole("heading",{name:"3D Geo Plot Mapper"})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"3D Geo Plot Mapper"}).last()).toBeVisible();
   const review=page.locator(".geo-plot-source-review").first();
   await expect(review).toContainText("1 issue(s)");
   await expect(review).toContainText("front");
@@ -68,8 +68,8 @@ test("legacy Geo editor reveals stale CSV evidence and offers safe road Front re
   await expect(front.getByLabel("Road side")).toBeChecked();
   await expect(front.getByLabel("Source verified")).not.toBeChecked();
 
-  await page.getByRole("button",{name:"⛶ Full screen"}).click();
+  await page.getByRole("button",{name:/Full screen/}).last().click();
   await expect(page.locator(".geo-plot-editor-shell")).toHaveAttribute("data-fullscreen","true");
-  await page.getByRole("button",{name:"⊟ Exit full screen"}).click();
+  await page.getByRole("button",{name:/Exit full screen/}).last().click();
   await expect(page.locator(".geo-plot-editor-shell")).toHaveAttribute("data-fullscreen","false");
 });
