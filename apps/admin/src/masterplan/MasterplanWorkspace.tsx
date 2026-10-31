@@ -326,7 +326,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               onChange={e=>updatePlot("id",e.target.value)}/></label>
             <small>{working.corners.length} polygon corners</small>
             <button disabled={!working.corners.length} onClick={()=>setWorking(p=>p?{...p,
-              corners:p.corners.slice(0,-1),sides:assignSides(p.corners.slice(0,-1))}:p)}>Undo Corner</button>
+              corners:p.corners.slice(0,-1),sides:assignSides(p.corners.slice(0,-1)),
+               area:{...p.area,verified:false},facingVerified:false}:p)}>Undo Corner</button>
             <button disabled={working.corners.length<3} onClick={()=>setTool("edit")}>Drag Corners</button>
             <label>Approved Area<input type="number" step="any" min="0" value={working.area.value||""}
               onChange={e=>updatePlot("area",{...working.area,value:Number(e.target.value),verified:false})}/></label>
@@ -345,7 +346,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               setWorking({...working,facingSource:e.target.value,facingVerified:false})}/></label>
             <label className="masterplan-check"><input type="checkbox" checked={working.facingVerified}
               onChange={e=>updatePlot("facingVerified",e.target.checked)}/> Facing reviewed</label>
-            <label>Road<input value={working.road} onChange={e=>{updatePlot("road",e.target.value);setWorking(p=>p?{...p,road:e.target.value,facingVerified:false}:p);}}/></label>
+            <label>Road<input value={working.road} onChange={e=>setWorking(p=>p?{...p,road:e.target.value,facingVerified:false}:p)}/></label>
             {working.corners.length===4&&<label>Road-facing FRONT edge
               <select value={working.sides.front?.edges[0]??0} onChange={e=>setRoadFront(Number(e.target.value))}>
                 {working.corners.map((_,i)=><option key={i} value={i}>Edge {i} · Corner {i+1} → {i===3?1:i+2}</option>)}
