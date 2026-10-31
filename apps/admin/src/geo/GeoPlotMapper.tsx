@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { projects as listProjects, type CloudProjectSummary } from "../studio/cloud";
+import {adjacentPlot,boundedZoom,hasPendingPlotEdits,isTextEditingTarget,
+  nextFreePlotId,sideLabelAnchor} from "../../../../shared/geo-plot-editor.js";
 import "./geo-plot-mapper.css";
 
 type Point = [number, number]; // Immutable Building-local X/Z metres.
@@ -129,15 +131,24 @@ export default function GeoPlotMapper(){
   const [groundY,setGroundY]=useState(0);
   const [snap,setSnap]=useState(true);
   const [selectedRole,setSelectedRole]=useState<Role>("front");
+  const [inventoryQuery,setInventoryQuery]=useState("");
+  const [focused,setFocused]=useState(false);
+  const [zoomPercent,setZoomPercent]=useState(100);
+  const [showGuides,setShowGuides]=useState(true);
   const activeProjectRef=useRef(slug);
   activeProjectRef.current=slug;
+  const editorRef=useRef<HTMLDivElement>(null);
   const hostRef=useRef<HTMLDivElement>(null);
+  const modelBoundsRef=useRef<{center:THREE.Vector3;size:THREE.Vector3;maxY:number}|null>(null);
   const rendererRef=useRef<THREE.WebGLRenderer|null>(null);
   const cameraRef=useRef<THREE.OrthographicCamera|null>(null);
   const controlsRef=useRef<OrbitControls|null>(null);
   const dragRef=useRef<number|null>(null);
   const workingRef=useRef(working);
   workingRef.current=working;
+  const displayedPlots=useMemo(()=>plots.filter(p=>p.id.toLowerCase().includes(inventoryQuery.trim().toLowerCase())),
+    [plots,inventoryQuery]);
+  const hasUnapplied=hasPendingPlotEdits(working,originalId?plots.find(p=>p.id===originalId):null);
   const api=slug?`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/geo-plots`:"";
   const refresh=useCallback(async(isCurrent:()=>boolean)=>{
     if(!slug){setState(null);setGeo(null);setPlots([]);return;}
@@ -175,6 +186,7 @@ export default function GeoPlotMapper(){
     renderer.outputColorSpace=THREE.SRGBColorSpace;host.appendChild(renderer.domElement);
     const controls=new OrbitControls(camera,renderer.domElement);
     controlsRef.current=controls;controls.enableRotate=false;controls.enableDamping=true;
+    controls.minZoom=1;controls.maxZoom=32;
     controls.mouseButtons.LEFT=THREE.MOUSE.PAN;controls.touches.ONE=THREE.TOUCH.PAN;
     controls.touches.TWO=THREE.TOUCH.DOLLY_PAN;controls.screenSpacePanning=true;
     const render=()=>{frame=requestAnimationFrame(render);controls.update();renderer.render(scene,camera);};
@@ -184,27 +196,30 @@ export default function GeoPlotMapper(){
       camera.left=-mid;camera.right=mid;camera.top=mid*h/w;camera.bottom=-mid*h/w;
       camera.updateProjectionMatrix();setViewTick(v=>v+1);};
     const obs=new ResizeObserver(resize);obs.observe(host);
-    const changed=()=>setViewTick(v=>v+1);controls.addEventListener("change",changed);
+    const changed=()=>{setViewTick(v=>v+1);setZoomPercent(Math.round(camera.zoom*100));};
+    controls.addEventListener("change",changed);
     setModelStatus("Loading checksum-verified 3D master plan…");
     void modelFromVerifiedSource(geo.canonicalModel||geo.model).then(m=>{
       if(!alive){m.traverse(n=>{if(n instanceof THREE.Mesh){n.geometry.dispose();}});return;}
       object=m;scene.add(m);const box=new THREE.Box3().setFromObject(m);
       if(box.isEmpty())throw Error("3D source has no geometry.");
       const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
+      modelBoundsRef.current={center:center.clone(),size:size.clone(),maxY:box.max.y};
       const span=Math.max(size.x,size.z,1)*0.68;
       camera.left=-span;camera.right=span;
       const w=Math.max(host.clientWidth,1),h=Math.max(host.clientHeight,1);
       camera.top=span*h/w;camera.bottom=-span*h/w;
       camera.position.set(center.x,box.max.y+Math.max(size.y,span)*2.5,center.z);
       camera.up.set(0,0,-1);camera.lookAt(center);camera.updateProjectionMatrix();
-      controls.target.copy(center);controls.update();setGroundY(box.min.y);setModelStatus("");
+      camera.zoom=1;controls.target.copy(center);controls.update();
+      setZoomPercent(100);setGroundY(box.min.y);setModelStatus("");
       setViewTick(v=>v+1);
     }).catch(e=>{if(alive)setModelStatus(e instanceof Error?e.message:"Model failed to load.");});
     resize();render();
     return()=>{alive=false;cancelAnimationFrame(frame);obs.disconnect();controls.removeEventListener("change",changed);
       controls.dispose();renderer.forceContextLoss();renderer.dispose();renderer.domElement.remove();
       if(object)object.traverse(n=>{if(n instanceof THREE.Mesh){n.geometry.dispose();const mats=Array.isArray(n.material)?n.material:[n.material];mats.forEach(mat=>mat.dispose());}});
-      cameraRef.current=null;rendererRef.current=null;controlsRef.current=null;};
+      cameraRef.current=null;rendererRef.current=null;controlsRef.current=null;modelBoundsRef.current=null;};
   },[geo?.canonicalModel?.url,geo?.canonicalModel?.sha256,geo?.model.url,geo?.model.sha256]);
   const project=(p:Point):Point=>{
     const camera=cameraRef.current;if(!camera)return [0,0];
@@ -224,7 +239,57 @@ export default function GeoPlotMapper(){
     }
     return point;
   };
-  const choose=(plot:Plot)=>{setWorking(structuredClone(plot));if(Number.isFinite(plot.planeY))setGroundY(plot.planeY!);setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");setMode("edit");};
+  const confirmUnapplied=()=>!hasUnapplied||window.confirm(
+    "This plot has unapplied changes. Leave this plot without applying them?");
+  const choose=(plot:Plot)=>{
+    if(working?.id===plot.id&&originalId===plot.id)return;
+    if(!confirmUnapplied())return;
+    setWorking(structuredClone(plot));
+    if(Number.isFinite(plot.planeY))setGroundY(plot.planeY!);
+    setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");setMode("edit");
+  };
+  const chooseSibling=(direction:1|-1)=>{
+    const neighbor=adjacentPlot(plots,working?.id||"",direction);
+    if(neighbor)choose(neighbor);
+  };
+  const fitView=()=>{
+    const camera=cameraRef.current,controls=controlsRef.current,bounds=modelBoundsRef.current;
+    if(!camera||!controls||!bounds)return;
+    const span=Math.max(bounds.size.x,bounds.size.z,1)*0.68;
+    const width=Math.max(hostRef.current?.clientWidth||1,1);
+    const height=Math.max(hostRef.current?.clientHeight||1,1);
+    camera.left=-span;camera.right=span;camera.top=span*height/width;camera.bottom=-span*height/width;
+    camera.zoom=1;
+    camera.position.set(bounds.center.x,bounds.maxY+Math.max(bounds.size.y,span)*2.5,bounds.center.z);
+    camera.up.set(0,0,-1);camera.lookAt(bounds.center);camera.updateProjectionMatrix();
+    controls.target.copy(bounds.center);controls.update();
+    setZoomPercent(100);setViewTick(v=>v+1);
+  };
+  const setZoom=(value:number)=>{
+    const camera=cameraRef.current;if(!camera)return;
+    camera.zoom=boundedZoom(1,value/100);
+    camera.updateProjectionMatrix();controlsRef.current?.update();
+    setZoomPercent(Math.round(camera.zoom*100));setViewTick(v=>v+1);
+  };
+  const zoomBy=(factor:number)=>setZoom(boundedZoom(zoomPercent/100,factor)*100);
+  const toggleFullscreen=async()=>{
+    try{
+      if(document.fullscreenElement===editorRef.current)await document.exitFullscreen();
+      else if(!document.fullscreenElement)await editorRef.current?.requestFullscreen();
+      else setMessage("ERROR: Exit the other fullscreen view before opening Plot Mapper focus mode.");
+    }catch{setMessage("ERROR: Fullscreen was blocked. Use the normal editor view.");}
+  };
+  useEffect(()=>{
+    const changed=()=>setFocused(document.fullscreenElement===editorRef.current);
+    document.addEventListener("fullscreenchange",changed);
+    return()=>document.removeEventListener("fullscreenchange",changed);
+  },[]);
+  useEffect(()=>{
+    if(!dirty&&!hasUnapplied)return;
+    const beforeUnload=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue="";};
+    window.addEventListener("beforeunload",beforeUnload);
+    return()=>window.removeEventListener("beforeunload",beforeUnload);
+  },[dirty,hasUnapplied]);
   const onDraw=(event:React.PointerEvent<SVGSVGElement>)=>{
     if(mode!=="draw"||dragRef.current!==null)return;
     const p=unproject(event.clientX,event.clientY);if(!p)return;
@@ -237,14 +302,24 @@ export default function GeoPlotMapper(){
   const editPoint=(index:number,clientX:number,clientY:number)=>{
     const p=unproject(clientX,clientY);if(!p)return;
     setWorking(prev=>{if(!prev)return prev;const corners=prev.corners.map((q,i)=>i===index?p:q);
-      return {...prev,corners,sides:Object.fromEntries(Object.entries(prev.sides).map(([k,v])=>[k,{...v,verified:false}]))};});
+      return {...prev,corners,area:{...prev.area,verified:false},facingVerified:false,
+        sides:Object.fromEntries(Object.entries(prev.sides).map(([k,v])=>[k,{...v,verified:false}]))};});
   };
   const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>p?{...p,sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...patch}}}:p);
-  const applyPlot=()=>{
+  const applyPlot=(openNext=false)=>{
     if(!working)return;const id=working.id.trim();if(!id||working.corners.length<3)throw Error("Plot number and at least 3 mapped corners required.");
     if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId))throw Error("Duplicate plot ID.");
-    setPlots(prev=>[...prev.filter(p=>p.id!==(originalId||id)),{...working,id}].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})));
-    setDirty(true);setMessage("Plot staged locally. Save Draft to persist it.");
+    const updated=[...plots.filter(p=>p.id!==(originalId||id)),{...working,id}]
+      .sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
+    setPlots(updated);setDirty(true);
+    if(openNext){
+      setWorking({...blank(nextFreePlotId(updated)),planeY:groundY,planeSource:"",planeVerified:false});
+      setOriginalId(null);setMode("draw");
+      setMessage("Plot "+id+" staged. Draw the next plot, then Save Mapping Draft.");
+     }else {
+      setWorking(null);setOriginalId(null);setMode("pan");
+      setMessage("Plot "+id+" staged. Save Mapping Draft before verification.");
+    }
   };
   const execute=async(action:"save"|"verify"|"publish"|"activate"|"rebind-reset",id?:string)=>{
     if(!state||!geo) return;setBusy(true);setMessage("");
@@ -332,10 +407,54 @@ export default function GeoPlotMapper(){
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   const begin=(kind:"four"|"irregular")=>{
+    if(!confirmUnapplied())return;
     setShape(kind);setMode("draw");setOriginalId(null);
-    const ids=new Set(plots.map(p=>p.id));let id=1;while(ids.has(String(id)))id++;
-    setWorking({...blank(String(id)),planeY:groundY,planeSource:"",planeVerified:false});setMessage("Tap each plot corner on the top-down verified model.");
+    setWorking({...blank(nextFreePlotId(plots)),planeY:groundY,planeSource:"",planeVerified:false});
+    setMessage("Start at the road-facing Front edge, then tap corners clockwise. Complete the boundary before entering surveyed sizes.");
   };
+  const undoCorner=()=>{
+    if(!working?.corners.length||busy||originalId)return;
+    setWorking(p=>{if(!p)return p;
+      const corners=p.corners.slice(0,-1);
+      return {...p,corners,sides:initialSides(corners),
+        area:{...p.area,verified:false},facingVerified:false};
+    });setMode("draw");
+  };
+  const cancelWorking=()=>{
+    if(!confirmUnapplied())return;
+    setWorking(null);setOriginalId(null);setMode("pan");setMessage("Unapplied plot selection cleared; saved draft unchanged.");
+  };
+  const finishBoundary=()=>{
+    if(!working||working.corners.length<3){setMessage("ERROR: Mark at least 3 corners before completing the boundary.");return;}
+    if(shape==="four"&&working.corners.length!==4){
+      setMessage("ERROR: A 4-corner boundary requires exactly 4 points.");return;
+    }
+    setMode("edit");setMessage("Boundary ready. Adjust corner handles and enter approved measurements in the inspector.");
+  };
+  useEffect(()=>{
+    const handleKey=(event:KeyboardEvent)=>{
+      if(isTextEditingTarget(event.target)||event.altKey||event.metaKey||busy)return;
+      if(event.ctrlKey&&event.key.toLowerCase()==="s"){
+        event.preventDefault();
+        if(working&&hasUnapplied)setMessage("Apply Plot to Draft before saving the mapping.");
+        else if(dirty)void execute("save");
+        return;
+      }
+      if(event.ctrlKey)return;
+      const k=event.key.toLowerCase();
+      if((k==="p"||k==="d"||k==="i"||k==="e"||k==="f")&&!editable)return;
+      if(k==="p"){setMode("pan");return;}
+      if(k==="d"){begin("four");return;}
+      if(k==="i"){begin("irregular");return;}
+      if(k==="e"&&working){setMode("edit");return;}
+      if(k==="f"){fitView();return;}
+      if(k==="backspace"&&working?.corners.length&&!originalId){event.preventDefault();undoCorner();return;}
+      if(k==="+"||k==="="){event.preventDefault();zoomBy(1.25);return;}
+      if(k==="-"){event.preventDefault();zoomBy(0.8);}
+    };
+    document.addEventListener("keydown",handleKey);
+    return()=>document.removeEventListener("keydown",handleKey);
+  });
   const editable=Boolean(state&&!state.draft.stale&&geo);
   const path=(points:Point[])=>points.map(p=>project(p).join(",")).join(" ");
   return <main className="geo-plot-page">
@@ -365,16 +484,67 @@ export default function GeoPlotMapper(){
         role={message.startsWith("ERROR")?"alert":"status"}>{message}
         {message.startsWith("ERROR")&&<button type="button" onClick={()=>window.location.reload()}>
           Retry loading Geo source</button>}</div>}
-    <section className="geo-plot-tools" aria-label="Plot mapper controls">
-      <button disabled={!editable||busy} className={mode==="pan"?"active":""} onClick={()=>setMode("pan")}>Pan / Pinch</button>
-      <button disabled={!editable||busy} onClick={()=>begin("four")}>4 Corner</button>
-      <button disabled={!editable||busy} onClick={()=>begin("irregular")}>Irregular Polygon</button>
-      <button disabled={!editable||busy||!working} onClick={()=>setMode("edit")}>Edit Corners</button>
-      <button disabled={!working||!working.corners.length} onClick={()=>{setWorking(p=>p?{...p,corners:p.corners.slice(0,-1),sides:initialSides(p.corners.slice(0,-1))}:p);}}>Undo Corner</button>
-      <label><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/> Snap Corners</label>
-      <button disabled={!editable||busy||dirty||Boolean(working)||!state||state.draft.verifiedRevision!==state.draft.revision} onClick={()=>void execute("publish")}>Publish Mapping</button>
-    </section>
-    <div className="geo-plot-workspace">
+    <div className="geo-plot-editor-shell" ref={editorRef} data-fullscreen={focused?"true":"false"}>
+      <div className="geo-plot-editor-head">
+        <div><strong>PRECISION PLOT STUDIO</strong>
+          <span>Front-first boundaries · editable corners · source-backed measurements</span></div>
+        <div className="geo-plot-editor-head-stats">
+          <span><b>{plots.length}</b> mapped</span>
+          <span><b>{working?.id||"—"}</b> current plot</span>
+          {dirty&&<span className="geo-plot-unsaved">Unsaved mapping draft</span>}
+        </div>
+      </div>
+      <section className="geo-plot-tools" aria-label="Plot mapper controls">
+        <div className="geo-plot-tool-group" aria-label="Boundary drawing tools">
+          <button type="button" disabled={!editable||busy} className={mode==="pan"?"active":""}
+            title="Pan and pinch zoom (P)" aria-pressed={mode==="pan"}
+            onClick={()=>setMode("pan")}>✋ Pan</button>
+          <button type="button" disabled={!editable||busy}
+            className={mode==="draw"&&shape==="four"?"active":""}
+            title="Draw four-corner boundary, first edge is Front (D)"
+            onClick={()=>begin("four")}>▱ 4 corners</button>
+          <button type="button" disabled={!editable||busy}
+            className={mode==="draw"&&shape==="irregular"?"active":""}
+            title="Draw irregular boundary with 3–80 corners (I)"
+            onClick={()=>begin("irregular")}>⬡ Irregular</button>
+          <button type="button" disabled={!editable||busy||!working}
+            className={mode==="edit"?"active":""} title="Drag corners for precision (E)"
+            onClick={()=>setMode("edit")}>✎ Edit</button>
+          <button type="button" className="geo-plot-tool-complete"
+            disabled={!editable||busy||!working||working.corners.length<3||
+              (shape==="four"&&working.corners.length!==4)}
+            onClick={finishBoundary}>✓ Boundary complete</button>
+        </div>
+        <div className="geo-plot-tool-group geo-plot-tool-group--secondary">
+          <button type="button" disabled={!working?.corners.length||busy||Boolean(originalId)}
+            title="Undo last plotted corner (Backspace)" onClick={undoCorner}>↶ Undo</button>
+          <button type="button" disabled={!working||busy} onClick={cancelWorking}>Cancel</button>
+          <label className="geo-plot-toggle"><input type="checkbox" checked={snap}
+            onChange={e=>setSnap(e.target.checked)}/> Snap {snap?"ON":"OFF"}</label>
+          <label className="geo-plot-toggle"><input type="checkbox" checked={showGuides}
+            onChange={e=>setShowGuides(e.target.checked)}/> Labels</label>
+        </div>
+        <div className="geo-plot-tool-group geo-plot-zoom-tools" aria-label="Precision viewport zoom">
+          <button type="button" disabled={!geo} aria-label="Zoom out" onClick={()=>zoomBy(.8)}>−</button>
+          <input type="range" min="100" max="3200" step="25"
+            value={zoomPercent} onChange={e=>setZoom(Number(e.target.value))}
+            aria-label="Zoom percent" aria-valuetext={zoomPercent+" percent"}/>
+          <output>{zoomPercent}%</output>
+          <button type="button" disabled={!geo} aria-label="Zoom in" onClick={()=>zoomBy(1.25)}>+</button>
+          <button type="button" disabled={!geo} title="Fit all geometry (F)" onClick={fitView}>Fit</button>
+          <button type="button" className="geo-plot-fullscreen-toggle" title="Show toolbar, canvas and inspector in full screen"
+            aria-pressed={focused} onClick={()=>void toggleFullscreen()}>
+            {focused?"⊟ Exit full screen":"⛶ Full screen"}</button>
+        </div>
+        <div className="geo-plot-tool-group geo-plot-tool-group--publish">
+          <button type="button" className="geo-plot-publish-button"
+            disabled={!editable||busy||dirty||Boolean(working)||!state||
+              state.draft.verifiedRevision!==state.draft.revision}
+            onClick={()=>void execute("publish")}>Publish Mapping</button>
+        </div>
+      </section>
+      {focused&&message&&<div className={message.startsWith("ERROR")?"geo-plot-warning":"geo-plot-message"} role={message.startsWith("ERROR")?"alert":"status"}>{message}</div>}
+      <div className="geo-plot-workspace">
       <div className="geo-plot-scene">
         <div className="geo-plot-canvas" ref={hostRef} aria-label="Top-down 3D masterplan plot mapping canvas"/>
         {geo&&<svg className="geo-plot-overlay" viewBox={`0 0 ${viewport.w} ${viewport.h}`}
@@ -382,13 +552,34 @@ export default function GeoPlotMapper(){
            onPointerDown={onDraw}
            onPointerMove={e=>{if(dragRef.current!==null)editPoint(dragRef.current,e.clientX,e.clientY);}}
            onPointerUp={()=>dragRef.current=null} onPointerCancel={()=>dragRef.current=null}>
-          {plots.map(p=><polygon key={p.id} points={path(p.corners)} fill="rgba(16,185,129,.16)"
-            stroke={working?.id===p.id?"#f5dd6d":"#3fe3b1"} strokeWidth="2"
-            onPointerDown={e=>{if(mode==="draw")return;e.stopPropagation();choose(p);}}/>)}
-          {working&&working.corners.length>0&&<>
+          {plots.map(p=>{
+             const x=p.corners.reduce((n,q)=>n+q[0],0)/p.corners.length;
+             const y=p.corners.reduce((n,q)=>n+q[1],0)/p.corners.length;
+             const [cx,cy]=project([x,y]);
+             return <g key={p.id} className="geo-plot-mapped-outline">
+               <polygon points={path(p.corners)} fill="rgba(16,185,129,.16)"
+                 stroke={working?.id===p.id?"#f5dd6d":"#3fe3b1"} strokeWidth="2"
+                 onPointerDown={e=>{if(mode==="draw")return;e.stopPropagation();choose(p);}}/>
+               {showGuides&&<text className="geo-plot-map-number" x={cx} y={cy}
+                 textAnchor="middle" dominantBaseline="middle">{p.id}</text>}
+             </g>;
+           })}
+           {working&&working.corners.length>0&&<>
             <polyline points={path(working.corners)} fill={working.corners.length>=3?"rgba(250,204,21,.22)":"none"}
               stroke="#ffd965" strokeWidth="2.5" strokeDasharray="7 4"/>
-            {working.corners.map((point,i)=>{const [x,y]=project(point);
+            {showGuides&&ROLES.filter(role=>working.layout==="four"||role!=="depthB")
+               .map(role=>{
+                 const side=working.sides[role],anchor=sideLabelAnchor(working.corners,side?.edges||[]);
+                 if(!side||!anchor)return null;
+                 const [x,y]=project(anchor);
+                 const label=role==="depthA"?"Depth A":role==="depthB"?"Depth B":
+                   role==="front"?"Front":"Back";
+                 const value=side.verified&&side.length>0
+                   ? " · "+side.length.toFixed(2)+" "+side.unit+" ✓" : " · verify";
+                 return <text key={role} className="geo-plot-map-side-label"
+                   x={x} y={y-14} textAnchor="middle">{label+value}</text>;
+               })}
+             {working.corners.map((point,i)=>{const [x,y]=project(point);
               return <g key={i}><circle cx={x} cy={y} r="9" fill="#ffe49d" stroke="#182a3e" strokeWidth="2"
                 onPointerDown={e=>{if(mode!=="edit")return;e.stopPropagation();dragRef.current=i;e.currentTarget.setPointerCapture(e.pointerId);}}
                 onPointerUp={e=>{dragRef.current=null;if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}/>
@@ -396,15 +587,44 @@ export default function GeoPlotMapper(){
             })}
           </>}
         </svg>}
-        <div className="geo-plot-scene-info">{modelStatus||("Top view · Model coordinates in metres · "+(mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Tap corners":"Drag corner handles"))}</div>
+        {working&&<div className="geo-plot-scene-status" aria-live="polite">
+           <b>Plot {working.id}</b>
+           <span>{shape==="four"?working.corners.length+"/4":working.corners.length+" (irregular)"} corners</span>
+           <span>{mode==="draw"?"Mark Front edge first":mode==="edit"?"Drag numbered corner handles":"Pan / pinch to inspect"}</span>
+         </div>}
+         <div className="geo-plot-scene-info">{modelStatus||("Top view · model coordinates in metres · "+
+           (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Tap corners clockwise":"Drag corner handles"))}</div>
       </div>
       <aside className="geo-plot-dock">
-        <h3>Plot Inventory</h3>
-        <div className="geo-plot-inventory">{plots.map(p=><button type="button" key={p.id} onClick={()=>choose(p)}
-          className={working?.id===p.id?"active":""}>{p.id}<small>{p.corners.length} corners</small></button>)}</div>
-        {working&&<>
+        <div className="geo-plot-inspector-head">
+           <div><small>PROJECT PLOT INVENTORY</small><h3>Plot Editor</h3></div>
+           <span>{displayedPlots.length}/{plots.length}</span>
+         </div>
+         <label className="geo-plot-inventory-search">Find plot
+           <input type="search" placeholder="Search plot number" value={inventoryQuery}
+             onChange={e=>setInventoryQuery(e.target.value)}/>
+         </label>
+         <div className="geo-plot-inventory-navigation">
+           <button type="button" disabled={!plots.length} onClick={()=>chooseSibling(-1)} aria-label="Previous plot">← Previous</button>
+           <button type="button" disabled={!plots.length} onClick={()=>chooseSibling(1)} aria-label="Next plot">Next →</button>
+         </div>
+         <div className="geo-plot-inventory" aria-label="Mapped plot selection">
+           {displayedPlots.map(p=><button type="button" key={p.id} onClick={()=>choose(p)}
+             className={working?.id===p.id?"active":""} aria-pressed={working?.id===p.id}>
+             Plot {p.id}<small>{p.corners.length} corners</small></button>)}
+           {plots.length===0&&<p className="geo-plot-hint">No plot boundaries yet. Select 4 corners or Irregular to draw the first plot.</p>}
+           {plots.length>0&&displayedPlots.length===0&&<p className="geo-plot-hint">No plots match this search.</p>}
+         </div>
+         {working&&<>
           <h3>{plots.some(p=>p.id===working.id)?"Update":"New"} Plot {working.id}</h3>
+          <div className="geo-plot-inspector-selection">
+             <span>{originalId?"Editing mapped plot":"New polygon"}</span>
+             <strong>Plot {working.id}</strong>
+             <small>{working.corners.length} corners · {hasUnapplied?"Not applied to draft":"Up to date"}</small>
+           </div>
           <label>Plot Number<input readOnly={Boolean(originalId)} value={working.id} onChange={e=>setWorking({...working,id:e.target.value})}/></label>
+          <details open className="geo-plot-inspector-section">
+            <summary>01 · Geometry & site plane</summary>
           <p className="geo-plot-hint">Corners: {working.corners.length} · Model area (unverified): {areaSqm(working.corners).toFixed(2)} m²
           · Geo-scale area estimate: {(areaSqm(working.corners)*(geo?.placement.scale||1)**2).toFixed(2)} m²</p>
           <label>Mapping plane height (model-local Y, metres)<input type="number" step="any"
@@ -422,6 +642,9 @@ export default function GeoPlotMapper(){
                 Recheck approved plan dimensions, GLB metric scale and Geo alignment before verifying.</p>
               : null;
           })()}
+          </details>
+          <details open className="geo-plot-inspector-section">
+            <summary>02 · Approved area & source</summary>
           <label>Approved Area<input inputMode="decimal" type="number" min="0.001" value={working.area.value||""}
             onChange={e=>setWorking({...working,area:{...working.area,value:Number(e.target.value),verified:false}})}/></label>
           <label>Area Unit<select value={working.area.unit} onChange={e=>setWorking({...working,area:{...working.area,unit:e.target.value as Plot["area"]["unit"]}})}>
@@ -430,6 +653,9 @@ export default function GeoPlotMapper(){
             onChange={e=>setWorking({...working,area:{...working.area,source:e.target.value,verified:false}})}/></label>
           <label className="geo-plot-check"><input type="checkbox" checked={working.area.verified}
             onChange={e=>setWorking({...working,area:{...working.area,verified:e.target.checked}})}/> Area verified against source</label>
+          </details>
+          <details open className="geo-plot-inspector-section">
+            <summary>03 · Road, facing & north</summary>
           <label>Road / Access<input value={working.road} onChange={e=>setWorking({...working,road:e.target.value})}/></label>
           <label>Facing <select value={working.facing} onChange={e=>setWorking({...working,facing:e.target.value,facingVerified:false})}>
             {directions.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
@@ -438,7 +664,10 @@ export default function GeoPlotMapper(){
             onChange={e=>setWorking({...working,facingSource:e.target.value,facingVerified:false})}/></label>
           <label className="geo-plot-check"><input type="checkbox" checked={working.facingVerified}
             onChange={e=>setWorking({...working,facingVerified:e.target.checked})}/> Facing verified against reference</label>
-          <p className="geo-plot-hint">Side edge numbers are zero-based; a logical side may contain multiple consecutive edges.</p>
+          </details>
+          <details open className="geo-plot-inspector-section">
+            <summary>04 · Front, Back & Depth sizes</summary>
+          <p className="geo-plot-hint">Side edge numbers are zero-based; one side may contain multiple consecutive edges. The first boundary edge is Front by convention—verify against the approved drawing.</p>
           {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{const side=working.sides[role]||emptySide();
             const referenceM=geometrySideLengthMetres(working.corners,side.edges,geo?.placement.scale||1);
             const reference=side.unit==="ft"?referenceM*3.280839895:referenceM;
@@ -459,10 +688,25 @@ export default function GeoPlotMapper(){
               <label className="geo-plot-check"><input type="checkbox" checked={side.verified} onChange={e=>changeSide(role,{verified:e.target.checked})}/> Source verified</label>
             </fieldset>;
           })}
+          </details>
+          <details open className="geo-plot-inspector-section">
+            <summary>05 · Notes & confirm</summary>
           <label>Notes<textarea rows={2} value={working.notes} onChange={e=>setWorking({...working,notes:e.target.value})}/></label>
-          <button disabled={!editable||busy||working.corners.length<3} onClick={()=>{try{applyPlot();}catch(e){setMessage(String(e));}}}>Apply Plot to Draft</button>
+          <div className="geo-plot-inspector-actions">
+            <button type="button" className="geo-plot-action-primary"
+              disabled={!editable||busy||working.corners.length<3||
+                (shape==="four"&&working.corners.length!==4)}
+              onClick={()=>{try{applyPlot();}catch(e){setMessage("ERROR: "+String(e));}}}>✓ Apply Plot to Draft</button>
+            <button type="button" disabled={!editable||busy||working.corners.length<3||
+                (shape==="four"&&working.corners.length!==4)}
+              onClick={()=>{try{applyPlot(true);}catch(e){setMessage("ERROR: "+String(e));}}}>
+              Apply & Draw Next →</button>
+          </div>
+          </details>
         </>}
-        <h3>Project Mapping Actions</h3>
+        <div className="geo-plot-draft-actions">
+          <h3>Save, review & publish</h3>
+          <p className="geo-plot-hint">Apply individual plots, save the complete mapping draft, then verify every source-backed measurement before publishing.</p>
         <button disabled={!editable||busy||!dirty} onClick={()=>void execute("save")}>{busy?"Saving…":"Save Mapping Draft"}</button>
         <button disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision} onClick={()=>void execute("verify")}>Verify All Plots</button>
         <label className="geo-plot-import">Import Measurements CSV<input type="file" accept=".csv,text/csv" onChange={e=>{
@@ -470,7 +714,14 @@ export default function GeoPlotMapper(){
         }}/></label>
         <button disabled={!plots.length} onClick={exportCsv}>Export Measurement CSV</button>
         {state?.releases.map(r=><button key={r.id} disabled={!editable||busy||r.geoReleaseId!==state.geoReleaseId} onClick={()=>void execute("activate",r.id)}>Activate Mapping v{r.version}</button>)}
+        </div>
+        <div className="geo-plot-shortcuts">
+          <strong>Keyboard shortcuts</strong>
+          <span>P Pan · D 4 corners · I Irregular · E Edit · F Fit</span>
+          <span>+ / − Zoom · Backspace Undo (new plot) · Ctrl+S Save draft</span>
+        </div>
       </aside>
+      </div>
     </div>
   </main>;
 }
