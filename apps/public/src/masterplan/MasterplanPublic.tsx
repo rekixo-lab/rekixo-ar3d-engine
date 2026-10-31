@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import "./masterplan-public.css";
 import {fitImageFrame,panImageFrame,pinchImageFrame} from "../../../../shared/masterplan-image-gestures.js";
 type Point=[number,number];
@@ -61,13 +61,13 @@ export default function MasterplanPublic(){
   const [fallbackFrame,setFallbackFrame]=useState({x:0,y:0,w:1,h:1});
   const fallbackPointers=useRef<Map<number,Point>>(new Map());
   const fallbackMoved=useRef(false);
-  function fallbackDown(e:React.PointerEvent<SVGSVGElement>){
+  function fallbackDown(e:ReactPointerEvent<SVGSVGElement>){
     if(!data)return;
     if(!fallbackPointers.current.size)fallbackMoved.current=false;
     fallbackPointers.current.set(e.pointerId,[e.clientX,e.clientY]);
     if(e.target===e.currentTarget)e.currentTarget.setPointerCapture(e.pointerId);
   }
-  function fallbackMove(e:React.PointerEvent<SVGSVGElement>){
+  function fallbackMove(e:ReactPointerEvent<SVGSVGElement>){
     if(!data||!fallbackPointers.current.has(e.pointerId))return;
     const previous=fallbackPointers.current.get(e.pointerId)!;
     const before=[...fallbackPointers.current.values()];
@@ -89,7 +89,7 @@ export default function MasterplanPublic(){
       setFallbackFrame(f=>panImageFrame(f,image,viewport,[dx,dy]));
     }
   }
-  function fallbackUp(e:React.PointerEvent<SVGSVGElement>){
+  function fallbackUp(e:ReactPointerEvent<SVGSVGElement>){
     fallbackPointers.current.delete(e.pointerId);
     if(e.currentTarget.hasPointerCapture(e.pointerId))
       e.currentTarget.releasePointerCapture(e.pointerId);
