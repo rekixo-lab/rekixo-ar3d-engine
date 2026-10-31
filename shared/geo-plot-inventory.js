@@ -28,7 +28,7 @@ const positive=(input,label)=>{
   const text=String(input).trim();
   if(!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(text))throw Error(label+" must be a numeric measurement.");
   const n=Number(text);
-  if(!Number.isFinite(n)||n<=0||n>1e7)throw Error(label+" must be positive and finite.");
+  if(!Number.isFinite(n)||n<0||n>1e7)throw Error(label+" must be zero or positive and finite.");
   return n;
 };
 export function parseGeoInventoryCsv(raw){
