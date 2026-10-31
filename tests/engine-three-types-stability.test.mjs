@@ -6,6 +6,8 @@ import { serveR2Object } from "../workers/http-range.mjs";
 import { publicMasterplanResponse } from "../workers/masterplan-geo-public.mjs";
 import { publicMasterplanShareSnapshot } from "../workers/masterplan-share-public.mjs";
 import { handleProjectManagementAdmin } from "../workers/project-management.mjs";
+import { handleMasterplanGeoAdmin } from "../workers/masterplan-geo-admin.mjs";
+import { handleMasterplanShareAdmin } from "../workers/masterplan-share-admin.mjs";
 import { validateMasterplanDraft } from "../workers/masterplan-geo-geometry.mjs";
 
 const sha = text => createHash("sha256").update(text).digest("hex");
@@ -129,4 +131,64 @@ test("authenticated asset previews are inline only when explicitly requested",()
   assert.match(viewer,/if\(!data\)return;/);
   assert.match(viewer,/visibility:fallback\?"hidden":"visible"/);
   assert.doesNotMatch(viewer,/display:fallback\?"none":"block"/);
+});
+test("repeating Publish of the live verified masterplan revision does not insert a duplicate release",async()=>{
+  const draft={revision:3,verified_revision:3,image_asset_id:source.imageAssetId,
+    source_width:source.width,source_height:source.height,
+    control_points_json:JSON.stringify(source.controlPoints),plots_json:JSON.stringify(source.plots)};
+  const env={DB:{batch(){throw Error("Duplicate immutable release must not be inserted.");},
+    prepare(sql){
+      const response=sql.includes("SELECT * FROM masterplan_geo_drafts_3d") ? draft
+        :sql.includes("FROM studio_assets_3d WHERE id=?") ?
+         {id:source.imageAssetId,project_id:"project-id",kind:"source",mime_type:"image/png",
+          byte_size:3000,sha256:originalHash,deleted_at:null}
+        :sql.includes("EXISTS(SELECT 1 FROM masterplan_geo_active_3d") ?
+         {id:"release1",active:1}
+        :sql.includes("FROM masterplan_geo_active_3d a") ?
+         {id:"release1",version:1,draft_revision:3,mapping_sha256:originalHash,published_at:"2026-10-31"}
+        :null;
+      return {bind(){return {
+        first:async()=>response,
+        all:async()=>({results:[{id:"release1",version:1,publishedAt:"2026-10-31"}]})
+      }}};
+    }
+  }};
+  const req=new Request("https://engine.example/3Dprojects/api/cloud/projects/example-project/masterplan-geo",{
+    method:"POST",headers:{"Origin":"https://engine.example","Content-Type":"application/json"},
+    body:JSON.stringify({action:"publish",expectedRevision:3})});
+  const res=await handleMasterplanGeoAdmin(req,env,{email:"owner@example.com"},
+    {id:"project-id",slug:"example-project",name:"Surveyed Project",status:"published",
+     project_kind:"masterplan_geo"},["example-project","masterplan-geo"]);
+  assert.equal(res.status,200);
+  const result=await res.json();
+  assert.equal(result.activeRelease.draftRevision,3);
+  assert.equal(result.activeRelease.id,"release1");
+});
+test("repeating Publish of the active WhatsApp poster does not insert another immutable share version",async()=>{
+  const draft={revision:4,title:"My Masterplan",description:"Published approved masterplan",
+    card_asset_id:"card-id"};
+  const env={DB:{batch(){throw Error("Duplicate share release must not be inserted.");},
+    prepare(sql){
+      const response=sql.includes("SELECT * FROM masterplan_share_drafts_3d")?draft
+        :sql.includes("EXISTS(SELECT 1 FROM masterplan_share_active_3d")?
+          {id:"share1",active:1}
+        :sql.includes("FROM masterplan_share_active_3d a")?
+          {id:"share1",version:2,revision:4,title:draft.title,
+            description:draft.description,card_asset_id:"card-id"}:null;
+      return {bind(){return {
+        first:async()=>response,
+        all:async()=>({results:[{id:"share1",version:2}]})
+      }}};
+    }
+  }};
+  const req=new Request("https://engine.example/3Dprojects/api/cloud/projects/example-project/masterplan-share",{
+    method:"POST",headers:{"Origin":"https://engine.example","Content-Type":"application/json"},
+    body:JSON.stringify({action:"publish",expectedRevision:4})});
+  const res=await handleMasterplanShareAdmin(req,env,{email:"owner@example.com"},
+    {id:"project-id",slug:"example-project",name:"Surveyed Project",status:"published",
+      project_kind:"masterplan_geo"},["example-project","masterplan-share"]);
+  assert.equal(res.status,200);
+  const result=await res.json();
+  assert.equal(result.active.revision,4);
+  assert.equal(result.active.id,"share1");
 });
