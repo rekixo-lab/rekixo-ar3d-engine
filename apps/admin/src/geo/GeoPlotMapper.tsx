@@ -73,7 +73,11 @@ function facingFromGeo(points:Point[],edges:number[],heading:number) {
 }
 async function callApi<T>(url:string,init?:RequestInit):Promise<T> {
   const r=await fetch(url,{cache:"no-store",...init,headers:{"Accept":"application/json",...init?.headers}});
-  const data=await r.json() as T & {error?:string};
+  if(!r.headers.get("content-type")?.toLowerCase().includes("application/json"))
+    throw Error("Geo Plot Mapper API returned a web page instead of JSON. Please retry or contact support.");
+  let data:T & {error?:string};
+  try{data=await r.json() as T & {error?:string};}
+  catch{throw Error("Geo Plot Mapper API returned malformed JSON. Please retry or contact support.");}
   if(!r.ok) throw Error(data.error || "Request failed ("+r.status+").");
   return data;
 }
@@ -140,7 +144,7 @@ export default function GeoPlotMapper(){
     setMessage("");
     const [mapped,experience]=await Promise.all([
       callApi<MappingState>(`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/geo-plots`),
-      callApi<GeoPublic>(`/3Dprojects/api/projects/${encodeURIComponent(slug)}/geo-placement`)
+      callApi<GeoPublic>(`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/geo-plots/source`)
     ]);
     if(!isCurrent())return; // Never load a previous project after rapid project switching.
     if(mapped.geoReleaseId!==experience.geoRelease.id || mapped.buildingReleaseId!==experience.buildingRelease.id)
@@ -151,7 +155,8 @@ export default function GeoPlotMapper(){
   useEffect(()=>{
     let live=true;
     setState(null);setGeo(null);setPlots([]);setWorking(null);setDirty(false);
-    void refresh(()=>live).catch(e=>{if(live){setState(null);setGeo(null);setMessage(String(e));}});
+    void refresh(()=>live).catch(e=>{if(live){setState(null);setGeo(null);
+      setMessage("ERROR: "+(e instanceof Error?e.message:"Unable to load published Geo source."));}});
     return()=>{live=false;};
   },[refresh]);
   useEffect(()=>{
@@ -340,7 +345,8 @@ export default function GeoPlotMapper(){
         <option value="">Choose project</option>{options.map(o=><option key={o.id} value={o.slug}>{o.name}</option>)}</select></label>
     </header>
     <section className="geo-plot-stats">
-      <span>Geo source <b>{state?.geoReleaseId?.slice(0,18)||"Not published"}</b></span>
+      <span>Geo source <b>{state?.geoReleaseId?.slice(0,18)||
+          (message.startsWith("ERROR:")?"Load failed":"Checking…")}</b></span>
       <span>Draft <b>r{state?.draft.revision||0}</b></span>
       <span>Mapped <b>{plots.length}</b></span>
       <span>Verified <b>{state?.draft.verifiedRevision===state?.draft.revision&&state?.draft.revision?"Yes":"No"}</b></span>
@@ -355,7 +361,10 @@ export default function GeoPlotMapper(){
           void execute("rebind-reset");
       }}>Start new mapping for active Geo</button>
     </div>}
-    {message&&<p className={message.startsWith("ERROR")?"geo-plot-warning":"geo-plot-message"} role="status">{message}</p>}
+    {message&&<div className={message.startsWith("ERROR")?"geo-plot-warning":"geo-plot-message"}
+        role={message.startsWith("ERROR")?"alert":"status"}>{message}
+        {message.startsWith("ERROR")&&<button type="button" onClick={()=>window.location.reload()}>
+          Retry loading Geo source</button>}</div>}
     <section className="geo-plot-tools" aria-label="Plot mapper controls">
       <button disabled={!editable||busy} className={mode==="pan"?"active":""} onClick={()=>setMode("pan")}>Pan / Pinch</button>
       <button disabled={!editable||busy} onClick={()=>begin("four")}>4 Corner</button>
