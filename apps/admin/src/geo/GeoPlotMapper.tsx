@@ -186,6 +186,7 @@ export default function GeoPlotMapper(){
     renderer.outputColorSpace=THREE.SRGBColorSpace;host.appendChild(renderer.domElement);
     const controls=new OrbitControls(camera,renderer.domElement);
     controlsRef.current=controls;controls.enableRotate=false;controls.enableDamping=true;
+    controls.minZoom=1;controls.maxZoom=32;
     controls.mouseButtons.LEFT=THREE.MOUSE.PAN;controls.touches.ONE=THREE.TOUCH.PAN;
     controls.touches.TWO=THREE.TOUCH.DOLLY_PAN;controls.screenSpacePanning=true;
     const render=()=>{frame=requestAnimationFrame(render);controls.update();renderer.render(scene,camera);};
