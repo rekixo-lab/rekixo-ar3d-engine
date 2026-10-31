@@ -21,6 +21,7 @@ import { processDwgArchitecture } from "./dwg-processor-route.mjs";
 import { handleProjectBrandingAdmin } from "./project-branding.mjs";
 import { handleProjectManagementAdmin } from "./project-management.mjs";
 import { handleMasterplanGeoAdmin } from "./masterplan-geo-admin.mjs";
+import { handleMasterplanSalesAdmin } from "./masterplan-sales.mjs";
 const BASE_PATH = "/3Dprojects";
 const CLOUD_PATH = `${BASE_PATH}/api/cloud`;
 const COOKIE = "rekixo_3d_admin";
@@ -2347,6 +2348,10 @@ async function routeProjects(request, env, actor, url) {
   }
   if (parts[1] === "masterplan-geo") {
     const response=await handleMasterplanGeoAdmin(request,env,actor,project,parts);
+    if(response)return response;
+  }
+  if (parts[1] === "sales") {
+    const response=await handleMasterplanSalesAdmin(request,env,actor,project,parts,url);
     if(response)return response;
   }
 
