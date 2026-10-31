@@ -747,7 +747,7 @@ export async function injectPublicBrandingMetadata(request, env, response, url =
   let snapshot;
   try {
     snapshot = isMasterplan
-      ? await publicMasterplanShareSnapshot(env,slug)
+      ? await publicMasterplanShareSnapshot(env,slug,requestedVersion)
       : await publicBrandingSnapshot(env, slug, experience, requestedVersion, Boolean(requestedVersion));
   } catch (error) {
     console.error("Public branding metadata lookup failed.", error instanceof Error ? error.message : "unknown error");

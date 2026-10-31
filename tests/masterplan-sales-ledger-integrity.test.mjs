@@ -12,11 +12,15 @@ const makeSale=i=>({
   createdAt:"2026-10-31T00:00:00.000Z",confirmedAt:"2026-10-31T00:00:00.000Z",
   receivedPaise:0
 });
-function paginatedDB(rows){
+function paginatedDB(rows,paymentRows=[]){
   return {prepare(sql){
     return {bind(...args){
       return {
         async all(){
+          if(sql.includes("FROM masterplan_sale_payments_3d")&&sql.includes("ORDER BY created_at")){
+            const offset=args.at(-1);
+            return {results:paymentRows.slice(offset,offset+250)};
+          }
           if(sql.includes("FROM masterplan_sales_3d s WHERE s.project_id=?")){
             const offset=args.at(-1);
             return {results:rows.slice(offset,offset+250)};
@@ -32,6 +36,8 @@ function paginatedDB(rows){
             return {agreementPaise:rows.length*10000,receivedPaise:0};
           if(sql.includes("SELECT COUNT(*) AS total FROM masterplan_sales_3d"))
             return {total:rows.length};
+          if(sql.includes("SELECT COUNT(*) AS total FROM masterplan_sale_payments_3d"))
+            return {total:paymentRows.length};
           throw Error("Unexpected single-row query: "+sql);
         }
       };
@@ -92,5 +98,37 @@ test("confirm and void audit writes are in the same transaction as the sale chan
     assert.equal(batches,1);
     assert.equal(res.status,409);
     assert.match((await res.json()).error,/audit insert failed/);
+  }
+});
+
+test("payment and reversal histories remain accessible after the first 1000 entries",async()=>{
+  const sale=makeSale(1), payments=Array.from({length:1001},(_,i)=>({
+    id:"payment-"+(i+1),saleId:sale.id,kind:"receipt",amountPaise:1,
+    paidOn:"2026-10-31",method:"upi",reference:"",note:""
+  }));
+  const env={DB:paginatedDB([sale],payments)};
+  const ids=new Set();
+  for(const offset of [0,250,500,750,1000]){
+    const req=new Request(base+"?saleId="+sale.id+"&paymentOffset="+offset);
+    const res=await handleMasterplanSalesAdmin(req,env,actor,project,
+      ["sample","sales"],new URL(req.url));
+    assert.equal(res.status,200);
+    const payload=await res.json();
+    assert.equal(payload.totalPayments,1001);
+    assert.equal(payload.payments.length,offset===1000?1:250);
+    assert.equal(payload.nextPaymentOffset,offset===1000?null:offset+250);
+    for(const p of payload.payments){
+      assert.ok(!ids.has(p.id));
+      ids.add(p.id);
+    }
+  }
+  assert.equal(ids.size,1001);
+});
+test("payment history rejects invalid offsets without database access",async()=>{
+  for(const offset of ["-1","1.25","Infinity","1000001","NaN"]){
+    const req=new Request(base+"?saleId=00000000-0000-4000-8000-000000000001&paymentOffset="+encodeURIComponent(offset));
+    const res=await handleMasterplanSalesAdmin(req,{DB:{}},actor,project,
+      ["sample","sales"],new URL(req.url));
+    assert.equal(res.status,400,offset);
   }
 });

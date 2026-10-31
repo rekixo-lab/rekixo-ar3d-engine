@@ -27,3 +27,14 @@ export function projectModuleVisible(kind, module) {
   if (k === "building_geo") return ["source","building","geo","releases","branding"].includes(module);
   return ["source","building","releases","branding"].includes(module);
 }
+
+// Hide-only navigation is not an authorization boundary. Gate direct Admin API
+// calls too, while leaving every existing legacy project route unchanged.
+export function projectKindAllowsCloudRoute(kind,route) {
+  const k=selectedProjectKind(kind);
+  if(k==="legacy")return true;
+  const geoRoutes=["geo-draft","geo-releases","geo-placement","geo-plots"];
+  if(k==="building")return !geoRoutes.includes(route);
+  if(k==="building_geo")return route!=="geo-plots";
+  return !["draft","releases","experiences","branding",...geoRoutes].includes(route);
+}

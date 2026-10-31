@@ -10,7 +10,7 @@ const text=(v,max=250)=>typeof v==="string"&&v.length<=max&&
   !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(v)?v.trim():"";
 const origin=req=>{try{return new URL(req.headers.get("origin")||"").origin===new URL(req.url).origin;}catch{return false;}};
 const now=()=>new Date().toISOString();
-async function getSales(env,project,saleId,offset=0){
+async function getSales(env,project,saleId,offset=0,paymentOffset=0){
   const sql=`SELECT s.id,s.plot_id AS plotId,s.buyer_name AS buyerName,
     s.buyer_phone AS buyerPhone,s.agreement_paise AS agreementPaise,s.state,s.revision,
     s.notes,s.source_mapping_release_id AS sourceReleaseId,s.created_at AS createdAt,
@@ -22,14 +22,20 @@ async function getSales(env,project,saleId,offset=0){
     .bind(...(saleId?[project.id,saleId,0]:[project.id,offset])).all();
   const result=(sales.results||[]).map(s=>({...s,
     balancePaise:Number(s.agreementPaise)-Number(s.receivedPaise)}));
-  let payments=[];
+  let payments=[],totalPayments=0,nextPaymentOffset=null;
   if(saleId){
-    const rows=await env.DB.prepare(`SELECT id,sale_id AS saleId,kind,amount_paise AS amountPaise,
-      paid_on AS paidOn,method,reference,note,reverses_id AS reversesId,
-      created_at AS createdAt FROM masterplan_sale_payments_3d
-      WHERE project_id=? AND sale_id=? ORDER BY created_at DESC LIMIT 1000`)
-      .bind(project.id,saleId).all();
+    const [rows,count]=await Promise.all([
+      env.DB.prepare(`SELECT id,sale_id AS saleId,kind,amount_paise AS amountPaise,
+        paid_on AS paidOn,method,reference,note,reverses_id AS reversesId,
+        created_at AS createdAt FROM masterplan_sale_payments_3d
+        WHERE project_id=? AND sale_id=? ORDER BY created_at DESC,id DESC LIMIT 250 OFFSET ?`)
+        .bind(project.id,saleId,paymentOffset).all(),
+      env.DB.prepare(`SELECT COUNT(*) AS total FROM masterplan_sale_payments_3d
+        WHERE project_id=? AND sale_id=?`).bind(project.id,saleId).first()
+    ]);
     payments=rows.results||[];
+    totalPayments=Number(count?.total||0);
+    nextPaymentOffset=paymentOffset+payments.length<totalPayments?paymentOffset+payments.length:null;
   }
   const current=await env.DB.prepare(`SELECT r.id,r.mapping_json FROM masterplan_geo_active_3d a
     JOIN masterplan_geo_releases_3d r ON r.id=a.release_id AND r.project_id=a.project_id
@@ -57,7 +63,7 @@ async function getSales(env,project,saleId,offset=0){
     balancePaise:Number(ledger?.agreementPaise||0)-Number(ledger?.receivedPaise||0)};
   const totalSales=Number(count?.total||0);
   return {sales:result,totalSales,nextOffset:(!saleId&&offset+result.length<totalSales)?offset+result.length:null,
-    payments,inventory:{
+    payments,totalPayments,nextPaymentOffset,inventory:{
     mappedPlotCount:mapped.length,availablePlotIds:mapped.filter(id=>!occupied.has(id.toLowerCase())),
     sourceReleaseId:current?.id||null},totals,role:"owner"};
 }
@@ -201,7 +207,12 @@ export async function handleMasterplanSalesAdmin(request,env,actor,project,parts
     const offset=offsetText===null?0:Number(offsetText);
     if(!Number.isSafeInteger(offset)||offset<0||offset>100000)
       return fail("Invalid sales page offset.",400);
-    return json(await getSales(env,project,saleId,offset));
+    const paymentText=url.searchParams.get("paymentOffset");
+    const paymentOffset=paymentText===null?0:Number(paymentText);
+    if(!Number.isSafeInteger(paymentOffset)||paymentOffset<0||paymentOffset>1000000||
+       (paymentOffset!==0&&!saleId))
+      return fail("Invalid payment history offset.",400);
+    return json(await getSales(env,project,saleId,offset,paymentOffset));
   }
   if(request.method!=="POST")return fail("Method not allowed.",405);
   if(!origin(request))return fail("Same-origin financial write required.",403);

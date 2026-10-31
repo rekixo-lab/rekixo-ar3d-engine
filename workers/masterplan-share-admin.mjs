@@ -28,7 +28,7 @@ async function state(env,project){
       {revision:0,title:project.name,description:"",cardAssetId:null},
     active:a?{id:a.id,version:a.version,revision:a.revision,title:a.title,description:a.description,
       cardAssetId:a.card_asset_id,publishedAt:a.published_at}:null,
-    history:releases.results||[],shareUrl:`/3Dprojects/${encodeURIComponent(project.slug)}/masterplan`};
+    history:releases.results||[],shareUrl:`https://ar3dstudio.in/3Dprojects/${encodeURIComponent(project.slug)}/masterplan${a?"?share="+encodeURIComponent(a.id):""}`};
 }
 async function audit(env,actor,action,project,id,detail={}){
   await env.DB.prepare(`INSERT INTO engine_admin_audit
