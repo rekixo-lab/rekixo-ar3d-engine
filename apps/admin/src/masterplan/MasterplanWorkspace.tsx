@@ -366,7 +366,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
             <label className="masterplan-check"><input type="checkbox" checked={working.facingVerified}
               onChange={e=>updatePlot("facingVerified",e.target.checked)}/> Facing reviewed</label>
             <label>Road<input value={working.road} onChange={e=>setWorking(p=>p?{...p,road:e.target.value,facingVerified:false}:p)}/></label>
-            {working.corners.length===4&&<label>Road-facing FRONT edge
+            {working.corners.length===4&&working.layout==="four"&&<label>Road-facing FRONT edge
               <select value={working.sides.front?.edges[0]??0} onChange={e=>setRoadFront(Number(e.target.value))}>
                 {working.corners.map((_,i)=><option key={i} value={i}>Edge {i} · Corner {i+1} → {i===3?1:i+2}</option>)}
               </select></label>}
