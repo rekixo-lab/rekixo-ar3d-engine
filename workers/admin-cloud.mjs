@@ -22,6 +22,7 @@ import { handleProjectBrandingAdmin } from "./project-branding.mjs";
 import { handleProjectManagementAdmin } from "./project-management.mjs";
 import { handleMasterplanGeoAdmin } from "./masterplan-geo-admin.mjs";
 import { handleMasterplanSalesAdmin } from "./masterplan-sales.mjs";
+import { handleMasterplanShareAdmin } from "./masterplan-share-admin.mjs";
 import { cloudProjectRow, projectBySlug } from "./project-registry.mjs";
 const BASE_PATH = "/3Dprojects";
 const CLOUD_PATH = `${BASE_PATH}/api/cloud`;
@@ -2329,6 +2330,8 @@ async function routeProjects(request, env, actor, url) {
     const response=await handleMasterplanSalesAdmin(request,env,actor,project,parts,url);
     if(response)return response;
   }
+
+  if (parts[1] === "masterplan-share") return handleMasterplanShareAdmin(request,env,actor,project,parts);
 
   if (parts[1] === "branding")
     return handleProjectBrandingAdmin(request, env, actor, project, slug, parts.slice(2));
