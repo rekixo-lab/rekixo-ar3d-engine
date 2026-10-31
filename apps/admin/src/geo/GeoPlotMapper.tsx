@@ -678,7 +678,7 @@ export default function GeoPlotMapper(){
         </div>
         <div className="geo-plot-tool-group geo-plot-zoom-tools" aria-label="Precision viewport zoom">
           <button type="button" disabled={!geo} aria-label="Zoom out" onClick={()=>zoomBy(.8)}>−</button>
-          <input type="range" min="100" max="5000" step="25"
+          <input type="range" min="100" max="5000" step="1"
             value={zoomPercent} onChange={e=>setZoom(Number(e.target.value))}
             aria-label="Zoom percent" aria-valuetext={zoomPercent+" percent"}/>
           <output>{zoomPercent}%</output>
