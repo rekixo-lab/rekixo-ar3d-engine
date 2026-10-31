@@ -20,10 +20,10 @@ export function newProjectStartPath(kind) {
 }
 export function projectModuleVisible(kind, module) {
   const k = selectedProjectKind(kind);
-  if (k === "legacy") return true;
-  const common = ["overview","profile","clients","assets","branding","advanced","releases"];
+  const common = ["overview","profile","clients","assets","advanced"];
   if (common.includes(module)) return true;
-  if (k === "masterplan_geo") return ["masterplan","masterplan-plots","mapping-controls","sales"].includes(module);
-  if (k === "building_geo") return ["source","building","geo"].includes(module);
-  return ["source","building"].includes(module);
+  if (k === "legacy") return ["source","building","geo","geo-plots","releases","branding"].includes(module);
+  if (k === "masterplan_geo") return ["masterplan","masterplan-plots","mapping-controls","sales","branding"].includes(module);
+  if (k === "building_geo") return ["source","building","geo","releases","branding"].includes(module);
+  return ["source","building","releases","branding"].includes(module);
 }
