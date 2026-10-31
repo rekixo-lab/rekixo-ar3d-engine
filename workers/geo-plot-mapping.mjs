@@ -1,6 +1,7 @@
 import { engineAdminReadAccess } from "./admin-cloud.mjs";
 import { validateGeoPlotCollection } from "./geo-plot-geometry.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
+import { activeGeoReleaseState,publicGeoExperienceFromState } from "./geo-release-runtime.mjs";
 
 const json = (value, init = {}) => Response.json(value, {headers: {"Cache-Control":"no-store"}, ...init});
 const fail = (message, status = 400) => json({error:message}, {status});
@@ -165,8 +166,36 @@ async function activate(env,ctx,actor,id) {
   ]);
   return state(env,ctx);
 }
+export async function readPublishedGeoPlotSource(env,ctx,slug) {
+  // An authenticated Admin read, not a cross-origin public-site fetch.
+  // The source GLB URL belongs to the Engine release route, which the Admin
+  // Worker also serves. Avoid the public /api/projects route: on Admin it is
+  // an SPA fallback document, not the Geo JSON API.
+  const released=await activeGeoReleaseState(env,slug);
+  if(released.state!=="ok")
+    return fail(released.state==="corrupt"
+      ?"The published Geo release failed integrity validation."
+      :"A verified published Geo release is required before plot mapping.",
+      released.state==="corrupt"?503:409);
+  const experience=await publicGeoExperienceFromState(env,released);
+  if(!experience?.model?.url||!experience.canonicalModel?.url)
+    return fail("Published Building/Geo model is unavailable or failed integrity checks.",503);
+  if(experience.geoRelease.id!==ctx.active.geo_release_id||
+     experience.buildingRelease.id!==ctx.active.source_building_release_id)
+    return fail("Geo release changed during load. Reload the plot mapper.",409);
+  const canonical=experience.canonicalModel;
+  if(!canonical.url.startsWith("/3Dprojects/api/releases/")||
+     !canonical.url.includes("/models/")||
+     typeof canonical.sha256!=="string"||!/^[a-f0-9]{64}$/i.test(canonical.sha256))
+    return fail("Published canonical model URL or checksum is not valid.",503);
+  return json({
+    geoRelease:experience.geoRelease,buildingRelease:experience.buildingRelease,
+    canonicalModel:canonical,model:experience.model,
+    placement:{headingDeg:experience.placement.headingDeg,scale:experience.placement.scale}
+  });
+}
 export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.url)) {
-  const match=url.pathname.match(/^\/3Dprojects\/api\/cloud\/projects\/([^/]+)\/geo-plots$/);
+  const match=url.pathname.match(/^\/3Dprojects\/api\/cloud\/projects\/([^/]+)\/geo-plots(?:\/(source))?$/);
   if (!match) return null;
   const slug=decodeURIComponent(match[1]).toLowerCase();
   if (!validProjectSlug(slug)) return fail("Invalid project slug.");
@@ -178,6 +207,10 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
     if ((ctx.project.project_kind||"legacy")!=="legacy")
       return fail("The legacy Geo Plot Mapper is not enabled for this project type.",403);
     if (!ctx.active) return fail("Publish a verified Geo Experience before mapping plots.",409);
+    if (match[2]==="source") {
+      if(request.method!=="GET")return fail("Method not allowed.",405);
+      return readPublishedGeoPlotSource(env,ctx,slug);
+    }
     if (request.method==="GET") return json(await state(env,ctx));
     if (!["PUT","POST"].includes(request.method)) return fail("Method not allowed.",405);
     if (!sameOrigin(request)) return fail("Same-origin request required.",403);
