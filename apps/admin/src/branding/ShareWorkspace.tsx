@@ -8,7 +8,7 @@ export default function ShareWorkspace(){
   const [error,setError]=useState("");
   useEffect(()=>{let valid=true;setProject(null);setError("");
     if(!slug)return;
-    void projects("", "all",100,0).then(result=>{
+    void projects(slug, "all",50,0).then(result=>{
       if(valid)setProject(result.projects.find(p=>p.slug===slug)||null);
     }).catch(e=>{if(valid)setError(String(e));});
     return()=>{valid=false;};
