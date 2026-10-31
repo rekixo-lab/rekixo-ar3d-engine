@@ -165,7 +165,15 @@ async function deleteProjectRecords(env, project) {
   const masterplanSchema=await env.DB.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='masterplan_geo_releases_3d' LIMIT 1"
   ).first();
+  const ledgerSchema=await env.DB.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='masterplan_sales_3d' LIMIT 1"
+  ).first();
   await env.DB.batch([
+    ...(ledgerSchema ? [
+      env.DB.prepare("DELETE FROM masterplan_sale_payments_3d WHERE project_id=? AND kind='reversal'").bind(project.id),
+      env.DB.prepare("DELETE FROM masterplan_sale_payments_3d WHERE project_id=?").bind(project.id),
+      env.DB.prepare("DELETE FROM masterplan_sales_3d WHERE project_id=?").bind(project.id),
+    ] : []),
     ...(masterplanSchema ? [
       env.DB.prepare("DELETE FROM masterplan_geo_active_3d WHERE project_id=?").bind(project.id),
       env.DB.prepare("DELETE FROM masterplan_geo_releases_3d WHERE project_id=?").bind(project.id),
