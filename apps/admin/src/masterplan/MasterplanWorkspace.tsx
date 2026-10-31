@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { listAssets, uploadAsset, type CloudAssetSummary } from "../studio/cloud";
 import type { Asset } from "../studio/domain";
 import {fitImageFrame,imageWorldAt,panImageFrame,pinchImageFrame,zoomImageFrame} from "../../../../shared/masterplan-image-gestures.js";
+import {assignFourCornerRoadFront} from "../../../../shared/geo-plot-source-operations.js";
 import "./masterplan-workspace.css";
 
 type Point=[number,number];type Role="front"|"back"|"depthA"|"depthB";
@@ -155,8 +156,18 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     if(!draft)return;
     setFrame(previous=>zoomImageFrame(previous,{width:draft.width,height:draft.height},factor,uv));
   }
-  const setSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>p?
-    {...p,sides:{...p.sides,[role]:{...(p.sides[role]||blankSide()),...patch}}}:p);
+  const setSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>{
+    if(!p)return p;
+    const changed=["edges","length","unit","source","roadFacing"].some(k=>Object.hasOwn(patch,k));
+    return {...p,...(Object.hasOwn(patch,"roadFacing")?{facingVerified:false}:{}),
+      sides:{...p.sides,[role]:{...(p.sides[role]||blankSide()),...patch,
+        ...(changed?{verified:false}:{})}}};
+  });
+  const setRoadFront=(edge:number)=>{
+    if(!working)return;
+    if(!window.confirm("Make edge "+edge+" the road-facing Front? All side/facing approvals will be reset."))return;
+    setWorking(p=>p?assignFourCornerRoadFront(p,edge):p);
+  };
   function down(e:ReactPointerEvent<SVGSVGElement>){
     const svg=svgRef.current;if(!svg||!draft)return;
     const p=normalizedSvgPoint(e,svg,draft.width,draft.height);
@@ -206,6 +217,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     if(tool==="edit"&&dragRef.current!==null&&workingRef.current){
       const point=normalizedSvgPoint(e,svg,draft.width,draft.height);if(!point)return;
       setWorking(prev=>prev?{...prev,corners:prev.corners.map((v,i)=>i===dragRef.current?point:v),
+        area:{...prev.area,verified:false},facingVerified:false,
         sides:Object.fromEntries(Object.entries(prev.sides).map(([k,v])=>[k,{...v,verified:false}]))}:prev);
     }
   }
@@ -333,7 +345,13 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               setWorking({...working,facingSource:e.target.value,facingVerified:false})}/></label>
             <label className="masterplan-check"><input type="checkbox" checked={working.facingVerified}
               onChange={e=>updatePlot("facingVerified",e.target.checked)}/> Facing reviewed</label>
-            <label>Road<input value={working.road} onChange={e=>updatePlot("road",e.target.value)}/></label>
+            <label>Road<input value={working.road} onChange={e=>{updatePlot("road",e.target.value);setWorking(p=>p?{...p,road:e.target.value,facingVerified:false}:p);}}/></label>
+            {working.corners.length===4&&<label>Road-facing FRONT edge
+              <select value={working.sides.front?.edges[0]??0} onChange={e=>setRoadFront(Number(e.target.value))}>
+                {working.corners.map((_,i)=><option key={i} value={i}>Edge {i} · Corner {i+1} → {i===3?1:i+2}</option>)}
+              </select></label>}
+            {working.road&&working.sides.front?.roadFacing!==true&&
+              <p className="masterplan-guidance">Review the Front boundary against the road on the approved image. Mark its Road-facing checkbox.</p>}
             {roles.filter(role=>working.layout!=="three"||role!=="depthB").map(role=>{
               const side=working.sides[role]||blankSide();return <fieldset key={role}><legend>{role}</legend>
                 <label>Edge indices (0 to {Math.max(0,working.corners.length-1)})
