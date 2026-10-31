@@ -12,6 +12,7 @@ import {
   type CloudReleaseSummary,
 } from "../studio/cloud";
 import { newProject, projectSlug } from "../studio/domain";
+import { PROJECT_KIND_LABELS, newProjectStartPath, type EngineProjectKind } from "../../../../shared/engine-project-kinds.js";
 import "./engine-dashboard.css";
 
 type SourcePackState = {
@@ -26,7 +27,7 @@ function requestedProjectSlug() {
   return new URLSearchParams(window.location.search).get("project")?.trim().toLowerCase() || "";
 }
 
-function projectHref(path: "source-pack" | "building" | "geo-mapper" | "releases", slug: string) {
+function projectHref(path: "source-pack" | "building" | "geo-mapper" | "releases" | "masterplan" | "masterplan-plots", slug: string) {
   return `/3Dprojects/${path}?project=${encodeURIComponent(slug)}`;
 }
 
@@ -49,6 +50,7 @@ export default function EngineDashboard() {
   const [showCreate, setShowCreate] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createLocation, setCreateLocation] = useState("");
+  const [createKind, setCreateKind] = useState<EngineProjectKind>("building");
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -160,6 +162,12 @@ export default function EngineDashboard() {
   const geoLive = Boolean(activeGeo && selectedProject?.status === "published");
 
   const nextAction = useMemo(() => {
+    if (selectedProject?.projectKind === "masterplan_geo") return {
+      label: "Prepare Geo Masterplan",
+      help: "Upload the approved masterplan image, verify geographic control points, then map polygon plots independently of Building.",
+      href: projectHref("masterplan", selectedProject.slug),
+      action: "link" as const,
+    };
     if (!selectedProject) {
       return {
         label: "Create your first Engine project",
@@ -187,6 +195,12 @@ export default function EngineDashboard() {
         action: "link" as const,
       };
     }
+    if (selectedProject.projectKind === "building") return {
+      label:"Building customer website workflow",
+      help:"Building is reviewed. Manage the customer site, profile, assets and share presentation.",
+      href:projectHref("building",selectedProject.slug),
+      action:"link" as const,
+    };
     if (!geoExperience) {
       return {
         label: "Building is ready",
@@ -230,8 +244,8 @@ export default function EngineDashboard() {
       const draft = newProject(name);
       draft.location = createLocation.trim();
       draft.slug = projectSlug(draft);
-      const result = await ensureProject(draft);
-      window.location.assign(projectHref("source-pack", result.project.slug));
+      const result = await ensureProject(draft, createKind);
+      window.location.assign(projectHref(newProjectStartPath(createKind), result.project.slug));
     } catch (reason) {
       setCreateError(reason instanceof Error ? reason.message : "Project create nahi ho saka.");
     } finally {
@@ -274,7 +288,7 @@ export default function EngineDashboard() {
                 <span className="engine-overview-project__dot" data-status={project.status} />
                 <span>
                   <b>{project.name}</b>
-                  <small>{project.location || project.slug}</small>
+                  <small>{project.location || project.slug} · {PROJECT_KIND_LABELS[project.projectKind || "legacy"]}</small>
                 </span>
                 <em>{project.status === "published" ? "LIVE" : "DRAFT"}</em>
               </button>
@@ -295,7 +309,7 @@ export default function EngineDashboard() {
               <span className="engine-overview-empty__mark">R</span>
               <p>CLEAN ENGINE</p>
               <h2>No project selected</h2>
-              <span>Create a project to start the Source → Building → Geo workflow.</span>
+              <span>Choose Building Website, Building on Geo Map or Geo Masterplan. Each project gets its own workspace.</span>
               <button className="engine-control-button engine-control-button--primary" type="button" onClick={() => setShowCreate(true)}>
                 + Create First Project
               </button>
@@ -311,7 +325,7 @@ export default function EngineDashboard() {
                       {selectedProject.status.toUpperCase()}
                     </span>
                   </div>
-                  <span>{selectedProject.location || selectedProject.slug}</span>
+                  <span>{selectedProject.location || selectedProject.slug} · {PROJECT_KIND_LABELS[selectedProject.projectKind || "legacy"]}</span>
                 </div>
                 <div className="engine-overview-live-actions">
                   {buildingLive ? (
@@ -337,7 +351,28 @@ export default function EngineDashboard() {
                 )}
               </section>
 
-              <section className="engine-overview-status-grid" aria-label="Project readiness">
+              {selectedProject.projectKind === "masterplan_geo" ? (
+                <section className="engine-overview-status-grid" aria-label="Masterplan project workflow">
+                  <article className="engine-control-card">
+                    <div className="engine-overview-card-head"><span>MASTERPLAN SOURCE</span><i>START HERE</i></div>
+                    <h3>Image + Geo Calibration</h3>
+                    <p>Independent 2D source and geographic control points; no Building model required.</p>
+                    <a href={projectHref("masterplan",selectedProject.slug)}>Open Masterplan</a>
+                  </article>
+                  <article className="engine-control-card">
+                    <div className="engine-overview-card-head"><span>PLOT MAPPING</span><i>INDEPENDENT</i></div>
+                    <h3>Polygon Plot Mapping</h3>
+                    <p>Draw plots, assign measurements and facing, verify then publish.</p>
+                    <a href={projectHref("masterplan-plots",selectedProject.slug)}>Open Plot Mapper</a>
+                  </article>
+                  <article className="engine-control-card">
+                    <div className="engine-overview-card-head"><span>CLIENT & BUSINESS</span><i>MANAGEMENT</i></div>
+                    <h3>Project Profile & Clients</h3>
+                    <p>Keep builder contact records and client directory separate from published maps.</p>
+                    <a href={`/3Dprojects/profile?project=${encodeURIComponent(selectedProject.slug)}`}>Open Profile</a>
+                  </article>
+                </section>
+              ) : <section className="engine-overview-status-grid" aria-label="Project readiness">
                 <article className="engine-control-card">
                   <div className="engine-overview-card-head">
                     <span>SOURCE PACK</span>
@@ -379,7 +414,7 @@ export default function EngineDashboard() {
                 </article>
               </section>
 
-              <section className="engine-overview-flow engine-control-card">
+              {selectedProject.projectKind !== "masterplan_geo" ? <section className="engine-overview-flow engine-control-card">
                 <div>
                   <p>ENGINE WORKFLOW</p>
                   <h3>One clear path from source to live experience</h3>
