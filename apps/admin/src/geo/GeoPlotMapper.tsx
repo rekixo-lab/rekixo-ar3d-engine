@@ -470,7 +470,7 @@ export default function GeoPlotMapper(){
     if(!p)return p;
     const changesReference=["edges","length","unit","source","roadFacing"].some(k=>Object.hasOwn(patch,k));
     return {...p,...((Object.hasOwn(patch,"roadFacing") || (role==="front"&&Object.hasOwn(patch,"edges")))?{facingVerified:false}:{}),
-      sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...patch,
+      sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...(Object.hasOwn(patch,"edges")?{roadFacing:false}:{}),...patch,
         ...(changesReference?{verified:false}:{})}}};
   });
   const selectRoadFront=(edge:number)=>{
