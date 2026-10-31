@@ -6,6 +6,7 @@ import {
 import { assertDraftAssetKey } from "./storage-boundary.mjs";
 import { validateStudioDraft } from "./studio-draft-validation.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
+import { isEngineProjectKind } from "../shared/engine-project-kinds.js";
 import { listGeoReleases } from "./geo-release-admin.mjs";
 import { verifyGeoDraftPreview } from "./geo-release-verify.mjs";
 import { publishGeoRelease } from "./geo-release-publish.mjs";
@@ -489,6 +490,7 @@ function cloudProjectRow(row) {
     name: row.name,
     location: row.location ?? undefined,
     status: row.status,
+    projectKind: row.project_kind || "legacy",
     updatedAt: row.updated_at,
     draftRevision:
       row.draft_revision === null || row.draft_revision === undefined
@@ -500,7 +502,7 @@ function cloudProjectRow(row) {
 
 async function projectBySlug(env, slug) {
   return env.DB.prepare(
-    `SELECT id,slug,name,location,status,updated_at,active_release_id
+    `SELECT id,slug,name,location,status,project_kind,updated_at,active_release_id
        FROM projects_3d
       WHERE slug=?
       LIMIT 1`,
@@ -567,7 +569,7 @@ async function listCloudProjects(env, url) {
   }
 
   const select = env.DB.prepare(
-    `SELECT p.id,p.slug,p.name,p.location,p.status,p.updated_at,
+    `SELECT p.id,p.slug,p.name,p.location,p.status,p.project_kind,p.updated_at,
             d.revision AS draft_revision,
             (SELECT COUNT(*) FROM studio_assets_3d a
               WHERE a.project_id=p.id AND a.deleted_at IS NULL) AS asset_count
@@ -614,8 +616,12 @@ async function createCloudProject(request, env, actor) {
   const slug = String(body.slug || "").trim().toLowerCase();
   const name = String(body.name || "").trim();
   const location = String(body.location || "").trim();
+  // Legacy API callers intentionally preserve the pre-v2 workflow; the
+  // new create-project wizard sends an explicit kind.
+  const projectKind = body.projectKind === undefined ? "legacy" : body.projectKind;
 
   if (
+    !isEngineProjectKind(projectKind) ||
     !validProjectId(id) ||
     !validProjectSlug(slug) ||
     !safeText(name, 200) ||
@@ -624,14 +630,15 @@ async function createCloudProject(request, env, actor) {
     return json({ error: "Valid project ID, slug, name and location are required." }, { status: 400 });
 
   const existing = await env.DB.prepare(
-    "SELECT id,slug,name,location,status,updated_at FROM projects_3d WHERE id=? OR slug=? LIMIT 2",
+    "SELECT id,slug,name,location,status,project_kind,updated_at FROM projects_3d WHERE id=? OR slug=? LIMIT 2",
   ).bind(id, slug).all();
   if ((existing.results || []).length) {
     const exact = (existing.results || []).find(
       (row) => row.id === id && row.slug === slug,
     );
-    if (exact)
+    if (exact && (exact.project_kind || "legacy") === projectKind)
       return json({ project: cloudProjectRow(exact), created: false });
+    if (exact) return json({ error: "Existing project identity has a different project kind." }, { status: 409 });
     return json({ error: "Project ID or slug already exists." }, { status: 409 });
   }
 
@@ -640,9 +647,9 @@ async function createCloudProject(request, env, actor) {
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO projects_3d
-          (id,slug,name,location,status,created_at,updated_at)
-          VALUES (?,?,?,?,'draft',?,?)`,
-      ).bind(id, slug, name, location || null, now, now),
+          (id,slug,name,location,status,project_kind,created_at,updated_at)
+          VALUES (?,?,?,?,'draft',?,?,?)`,
+      ).bind(id, slug, name, location || null, projectKind, now, now),
       env.DB.prepare(
         `INSERT INTO engine_admin_audit
           (id,actor_email,action,project_id,target_id,details_json,created_at)
@@ -653,7 +660,7 @@ async function createCloudProject(request, env, actor) {
         "project.created",
         id,
         id,
-        JSON.stringify({ slug, name, location: location || null }),
+        JSON.stringify({ slug, name, location: location || null, projectKind }),
         now,
       ),
     ]);
@@ -669,6 +676,7 @@ async function createCloudProject(request, env, actor) {
         name,
         location: location || undefined,
         status: "draft",
+        projectKind,
         updatedAt: now,
         assetCount: 0,
       },
