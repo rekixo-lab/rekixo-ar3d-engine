@@ -186,7 +186,7 @@ export async function readPublishedGeoPlotSource(env,ctx,slug) {
   const canonical=experience.canonicalModel;
   if(!canonical.url.startsWith("/3Dprojects/api/releases/")||
      !canonical.url.includes("/models/")||
-     typeof canonical.sha256!=="string"||!/^[a-f0-9]{64}$/i.test(canonical.sha256))
+     (canonical.sha256!=null && !/^[a-f0-9]{64}$/i.test(canonical.sha256)))
     return fail("Published canonical model URL or checksum is not valid.",503);
   return json({
     geoRelease:experience.geoRelease,buildingRelease:experience.buildingRelease,
