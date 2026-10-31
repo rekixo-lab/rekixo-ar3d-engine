@@ -15,7 +15,7 @@ const ProjectManagement = lazy(() => import("./management/ProjectManagement"));
 const ProjectAssets = lazy(() => import("./management/ProjectAssets"));
 const SalesAccounts = lazy(() => import("./management/SalesAccounts"));
 const EngineReleases = lazy(() => import("./releases/EngineReleases"));
-const ProjectShareBuilder = lazy(() => import("./branding/ProjectShareBuilder"));
+const ShareWorkspace = lazy(() => import("./branding/ShareWorkspace"));
 const EngineAdvanced = lazy(() => import("./advanced/EngineAdvanced"));
 const PublishedViewer = lazy(() => import("./studio/PublishedViewer"));
 const CloudLogin = lazy(() => import("./CloudLogin"));
@@ -140,7 +140,7 @@ function AdminRouter() {
   if (path === "/3Dprojects/share") {
     return (
       <AdminShellRoute label="Opening Share & Branding…">
-        <ProjectShareBuilder />
+        <ShareWorkspace />
       </AdminShellRoute>
     );
   }
