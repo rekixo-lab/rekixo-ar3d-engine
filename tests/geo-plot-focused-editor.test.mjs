@@ -34,7 +34,7 @@ test("keyboard shortcuts exclude inputs and contenteditable targets",()=>{
 });
 test("zoom is bounded and side labels respect weighted multi-edge frontage",()=>{
   assert.equal(boundedZoom(1,2),2);
-  assert.equal(boundedZoom(30,3),32);
+  assert.equal(boundedZoom(30,3),50);
   assert.equal(boundedZoom(2,0.01),1);
   assert.equal(boundedZoom(NaN,2),1);
   assert.equal(boundedZoom(1,-1),1);
@@ -60,7 +60,7 @@ test("normal and fullscreen authoring use the same toolbar, inspector and publis
   assert.match(editor,/beforeunload/);
   assert.match(editor,/sideLabelAnchor/);
   assert.match(editor,/area:\{\.\.\.prev\.area,verified:false\}/);
-  assert.match(editor,/controls\.minZoom=1;controls\.maxZoom=32/);
+  assert.match(editor,/controls\.minZoom=1;controls\.maxZoom=50/);
   assert.match(css,/\.geo-plot-editor-shell:fullscreen/);
   assert.match(css,/\.geo-plot-editor-shell:fullscreen \.geo-plot-workspace/);
   assert.match(css,/\.geo-plot-editor-shell:fullscreen \.geo-plot-dock/);

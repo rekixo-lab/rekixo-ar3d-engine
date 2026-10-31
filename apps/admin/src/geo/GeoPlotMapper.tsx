@@ -8,6 +8,7 @@ import {adjacentPlot,boundedZoom,hasPendingPlotEdits,isTextEditingTarget,
   nextFreePlotId,sideLabelAnchor} from "../../../../shared/geo-plot-editor.js";
 import GeoPlotInventoryPanel from "./GeoPlotInventoryPanel";
 import {nextUnmappedInventory,type GeoInventoryRow} from "../../../../shared/geo-plot-inventory.js";
+import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
 import "./geo-plot-mapper.css";
 
 type Point = [number, number]; // Immutable Building-local X/Z metres.
@@ -23,6 +24,9 @@ type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | n
 type GeoPublic = { geoRelease:{id:string}; buildingRelease:{id:string};
   model:{url:string;sha256?:string;byteSize?:number}; canonicalModel?:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number;scale:number} };
 type ToolMode = "pan" | "draw" | "edit";
+type PointerPreview = {clientX:number;clientY:number;rawScreen:Point;screen:Point;
+  point:Point;kind:"none"|"vertex"|"edge";pointerType:string};
+type PointerStart = {id:number;x:number;y:number;cancelled?:boolean};
 const ROLES: Role[] = ["front", "back", "depthA", "depthB"];
 const directions=["north","north-east","east","south-east","south","south-west","west","north-west"];
 const emptySide = (edges:number[]=[]):Side => ({edges,length:0,unit:"ft",roadFacing:false,source:"",verified:false});
@@ -149,12 +153,14 @@ export default function GeoPlotMapper(){
   const [viewport,setViewport]=useState({w:800,h:520});
   const [modelStatus,setModelStatus]=useState("Choose a published Geo project.");
   const [groundY,setGroundY]=useState(0);
-  const [snap,setSnap]=useState(true);
+  // Like the Platform mapper, snapping is opt-in: don't silently move approved corners.
+  const [snap,setSnap]=useState(false);
   const [selectedRole,setSelectedRole]=useState<Role>("front");
   const [inventoryQuery,setInventoryQuery]=useState("");
   const [focused,setFocused]=useState(false);
   const [zoomPercent,setZoomPercent]=useState(100);
   const [showGuides,setShowGuides]=useState(true);
+  const [pointerPreview,setPointerPreview]=useState<PointerPreview|null>(null);
   const activeProjectRef=useRef(slug);
   activeProjectRef.current=slug;
   const editorRef=useRef<HTMLDivElement>(null);
@@ -164,6 +170,13 @@ export default function GeoPlotMapper(){
   const cameraRef=useRef<THREE.OrthographicCamera|null>(null);
   const controlsRef=useRef<OrbitControls|null>(null);
   const dragRef=useRef<number|null>(null);
+  const pointerStartRef=useRef<PointerStart|null>(null);
+  const pointerPreviewRef=useRef<PointerPreview|null>(null);
+  const pointerRafRef=useRef(0);
+  const pointerPendingRef=useRef<{x:number;y:number;kind:string;skip?:number}|null>(null);
+  const overlayRef=useRef<SVGSVGElement>(null);
+  const loupeCanvasRef=useRef<HTMLCanvasElement>(null);
+  const renderFramesRef=useRef(0);
   const workingRef=useRef(working);
   workingRef.current=working;
   const displayedPlots=useMemo(()=>plots.filter(p=>p.id.toLowerCase().includes(inventoryQuery.trim().toLowerCase())),
@@ -186,6 +199,7 @@ export default function GeoPlotMapper(){
   useEffect(()=>{
     let live=true;
     setState(null);setGeo(null);setPlots([]);setInventoryRows([]);setWorking(null);setDirty(false);
+    pointerPreviewRef.current=null;setPointerPreview(null);
     void refresh(()=>live).catch(e=>{if(live){setState(null);setGeo(null);
       setMessage("ERROR: "+(e instanceof Error?e.message:"Unable to load published Geo source."));}});
     return()=>{live=false;};
@@ -206,10 +220,35 @@ export default function GeoPlotMapper(){
     renderer.outputColorSpace=THREE.SRGBColorSpace;host.appendChild(renderer.domElement);
     const controls=new OrbitControls(camera,renderer.domElement);
     controlsRef.current=controls;controls.enableRotate=false;controls.enableDamping=true;
-    controls.minZoom=1;controls.maxZoom=32;
+    controls.minZoom=1;controls.maxZoom=50;controls.zoomToCursor=true;
     controls.mouseButtons.LEFT=THREE.MOUSE.PAN;controls.touches.ONE=THREE.TOUCH.PAN;
     controls.touches.TWO=THREE.TOUCH.DOLLY_PAN;controls.screenSpacePanning=true;
-    const render=()=>{frame=requestAnimationFrame(render);controls.update();renderer.render(scene,camera);};
+    const render=()=>{
+      frame=requestAnimationFrame(render);
+      controls.update();renderer.render(scene,camera);
+      // The loupe samples this exact frame of the canonical model, not a guessed image.
+      // WebGL capture must happen immediately after render (drawing buffer may be transient).
+      const pointer=pointerPreviewRef.current,loupe=loupeCanvasRef.current;
+      if(pointer&&loupe&&++renderFramesRef.current%3===0){
+        const source=renderer.domElement,ctx=loupe.getContext("2d");
+        if(ctx&&host.clientWidth&&host.clientHeight){
+          const scaleX=source.width/host.clientWidth,scaleY=source.height/host.clientHeight;
+          const sourceW=Math.min(42*scaleX,source.width),sourceH=Math.min(42*scaleY,source.height);
+          const targetX=pointer.screen[0]*scaleX,targetY=pointer.screen[1]*scaleY;
+          const sx=Math.max(0,targetX-sourceW/2),sy=Math.max(0,targetY-sourceH/2);
+          const ex=Math.min(source.width,targetX+sourceW/2),ey=Math.min(source.height,targetY+sourceH/2);
+          const dstX=(sx-targetX+sourceW/2)/sourceW*loupe.width;
+          const dstY=(sy-targetY+sourceH/2)/sourceH*loupe.height;
+          const dstW=(ex-sx)/sourceW*loupe.width,dstH=(ey-sy)/sourceH*loupe.height;
+          ctx.clearRect(0,0,loupe.width,loupe.height);
+          if(ex>sx&&ey>sy){
+            try{ctx.imageSmoothingEnabled=false;
+              ctx.drawImage(source,sx,sy,ex-sx,ey-sy,dstX,dstY,dstW,dstH);}
+            catch{/* A temporarily unavailable WebGL capture never changes mapping coordinates. */}
+          }
+        }
+      }
+    };
     const resize=()=>{const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;
       renderer.setSize(w,h,false);setViewport({w,h});
       const mid=Math.max(camera.right,-camera.left);
@@ -239,26 +278,57 @@ export default function GeoPlotMapper(){
     return()=>{alive=false;cancelAnimationFrame(frame);obs.disconnect();controls.removeEventListener("change",changed);
       controls.dispose();renderer.forceContextLoss();renderer.dispose();renderer.domElement.remove();
       if(object)object.traverse(n=>{if(n instanceof THREE.Mesh){n.geometry.dispose();const mats=Array.isArray(n.material)?n.material:[n.material];mats.forEach(mat=>mat.dispose());}});
-      cameraRef.current=null;rendererRef.current=null;controlsRef.current=null;modelBoundsRef.current=null;};
+      cameraRef.current=null;rendererRef.current=null;controlsRef.current=null;modelBoundsRef.current=null;
+      pointerPreviewRef.current=null;};
   },[geo?.canonicalModel?.url,geo?.canonicalModel?.sha256,geo?.model.url,geo?.model.sha256]);
-  const project=(p:Point):Point=>{
+  const project=(p:readonly [number,number]):Point=>{
     const camera=cameraRef.current;if(!camera)return [0,0];
     const vec=new THREE.Vector3(p[0],groundY+0.02,p[1]).project(camera);
     return [(vec.x+1)*viewport.w/2,(1-vec.y)*viewport.h/2];
   };
   const unproject=(clientX:number,clientY:number):Point|null=>{
     const host=hostRef.current,camera=cameraRef.current;if(!host||!camera)return null;
-    const rect=host.getBoundingClientRect();
+    const rect=host.getBoundingClientRect();if(!rect.width||!rect.height)return null;
     const x=(clientX-rect.left)/rect.width*2-1,y=1-(clientY-rect.top)/rect.height*2;
     const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2(x,y),camera);
     const hit=ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-groundY),new THREE.Vector3());
-    if(!hit)return null;let point:Point=[Number(hit.x.toFixed(5)),Number(hit.z.toFixed(5))];
-    if(snap){const all=plots.flatMap(p=>p.corners).concat(workingRef.current?.corners||[]);
-      const near=all.find(p=>{const [a,b]=project(p);return Math.hypot(a-(clientX-rect.left),b-(clientY-rect.top))<9;});
-      if(near)point=near;
-    }
-    return point;
+    return hit?[Number(hit.x.toFixed(6)),Number(hit.z.toFixed(6))]:null;
   };
+  const precisionPointer=(clientX:number,clientY:number,skipIndex=-1)=>{
+    const host=hostRef.current,raw=unproject(clientX,clientY);
+    if(!host||!raw)return null;
+    const rect=host.getBoundingClientRect();
+    const screen:Point=[clientX-rect.left,clientY-rect.top];
+    const rings:Array<{points:Point[];skipIndex?:number}>=
+      plots.filter(p=>p.id!==originalId).map(p=>({points:p.corners}));
+    // Platform parity: new drawing snaps to SAVED boundaries, never back onto
+    // its own incomplete polygon (which could silently create zero-length edges).
+    if(mode==="edit"&&workingRef.current?.corners.length)
+      rings.push({points:workingRef.current.corners,...(skipIndex>=0?{skipIndex}:{})});
+    const target=precisionSnap(raw,screen,rings,project,{enabled:snap,thresholdPx:6});
+    return {point:target.point as Point,screen:target.screen as Point,
+      rawScreen:screen,kind:target.kind};
+  };
+  const clearPointer=()=>{pointerPendingRef.current=null;pointerPreviewRef.current=null;setPointerPreview(null);};
+  const updatePointer=(clientX:number,clientY:number,pointerType:string,skipIndex=-1)=>{
+    const host=hostRef.current;if(!host||mode==="pan"||!geo)return;
+    const rect=host.getBoundingClientRect();
+    if(clientX<rect.left||clientY<rect.top||clientX>rect.right||clientY>rect.bottom){clearPointer();return;}
+    const location=precisionPointer(clientX,clientY,skipIndex);
+    if(!location)return;
+    const next:PointerPreview={clientX,clientY,pointerType,...location};
+    pointerPreviewRef.current=next;setPointerPreview(next);
+  };
+  const queuePointer=(clientX:number,clientY:number,pointerType:string,skipIndex=-1)=>{
+    pointerPendingRef.current={x:clientX,y:clientY,kind:pointerType,skip:skipIndex};
+    if(pointerRafRef.current)return;
+    pointerRafRef.current=requestAnimationFrame(()=>{
+      pointerRafRef.current=0;
+      const pending=pointerPendingRef.current;
+      if(pending)updatePointer(pending.x,pending.y,pending.kind,pending.skip);
+    });
+  };
+  useEffect(()=>()=>{if(pointerRafRef.current)cancelAnimationFrame(pointerRafRef.current);},[]);
   const confirmUnapplied=()=>!hasUnapplied||window.confirm(
     "This plot has unapplied changes. Leave this plot without applying them?");
   const choose=(plot:Plot)=>{
@@ -285,13 +355,41 @@ export default function GeoPlotMapper(){
     controls.target.copy(bounds.center);controls.update();
     setZoomPercent(100);setViewTick(v=>v+1);
   };
-  const setZoom=(value:number)=>{
-    const camera=cameraRef.current;if(!camera)return;
+  const setZoom=(value:number,clientX?:number,clientY?:number)=>{
+    const camera=cameraRef.current,controls=controlsRef.current,host=hostRef.current;
+    if(!camera||!controls||!host)return;
+    const rect=host.getBoundingClientRect();
+    const x=clientX??rect.left+rect.width/2,y=clientY??rect.top+rect.height/2;
+    const before=unproject(x,y);
     camera.zoom=boundedZoom(1,value/100);
-    camera.updateProjectionMatrix();controlsRef.current?.update();
+    camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
+    const after=unproject(x,y),delta=zoomAnchorDelta(before,after);
+    if(delta){camera.position.x+=delta[0];camera.position.z+=delta[1];
+      controls.target.x+=delta[0];controls.target.z+=delta[1];}
+    controls.update();camera.updateMatrixWorld(true);
     setZoomPercent(Math.round(camera.zoom*100));setViewTick(v=>v+1);
+    if(pointerPreviewRef.current)queuePointer(
+      pointerPreviewRef.current.clientX,pointerPreviewRef.current.clientY,
+      pointerPreviewRef.current.pointerType,dragRef.current??-1);
   };
-  const zoomBy=(factor:number)=>setZoom(boundedZoom(zoomPercent/100,factor)*100);
+  const zoomBy=(factor:number)=>setZoom(boundedZoom((cameraRef.current?.zoom||1),factor)*100);
+  const wheelZoomRef=useRef<(value:number,x:number,y:number)=>void>(()=>{});
+  wheelZoomRef.current=(value,x,y)=>setZoom(value,x,y);
+  useEffect(()=>{
+    const overlay=overlayRef.current;
+    if(!overlay)return;
+    const handleWheel=(event:WheelEvent)=>{
+      event.preventDefault();
+      const current=cameraRef.current?.zoom||1;
+      wheelZoomRef.current(boundedZoom(current,Math.exp(-event.deltaY*0.0016))*100,
+        event.clientX,event.clientY);
+    };
+    // React's wheel listener can be passive. We must prevent scroll on mapping
+    // canvas and zoom about the exact cursor, including when SVG masks WebGL.
+    overlay.addEventListener("wheel",handleWheel,{passive:false});
+    return()=>overlay.removeEventListener("wheel",handleWheel);
+  },[geo]);
+  useEffect(()=>{if(mode==="pan"){pointerPreviewRef.current=null;setPointerPreview(null);}},[mode]);
   const toggleFullscreen=async()=>{
     try{
       if(document.fullscreenElement===editorRef.current)await document.exitFullscreen();
@@ -310,22 +408,52 @@ export default function GeoPlotMapper(){
     window.addEventListener("beforeunload",beforeUnload);
     return()=>window.removeEventListener("beforeunload",beforeUnload);
   },[dirty,hasUnapplied]);
-  const onDraw=(event:React.PointerEvent<SVGSVGElement>)=>{
-    if(mode!=="draw"||dragRef.current!==null)return;
-    const p=unproject(event.clientX,event.clientY);if(!p)return;
+  const commitCorner=(clientX:number,clientY:number)=>{
+    const target=precisionPointer(clientX,clientY);if(!target)return;
     setWorking(prev=>{
       if(!prev||prev.corners.length>=80||(shape==="four"&&prev.corners.length>=4))return prev;
-      const points=[...prev.corners,p];
-      const sourceRow=inventoryRows.find(r=>r.id.toLowerCase()===prev.id.toLowerCase());
-      return {...prev,corners:points,layout:points.length===3?"three":"four",
-        sides:sidesWithInventory(points,sourceRow)};
+      const corners=[...prev.corners,target.point];
+      const sourceRow=inventoryRows.find(row=>row.id.toLowerCase()===prev.id.toLowerCase());
+      return {...prev,corners,layout:corners.length===3?"three":"four",
+        sides:sidesWithInventory(corners,sourceRow),
+        area:{...prev.area,verified:false},facingVerified:false};
     });
   };
   const editPoint=(index:number,clientX:number,clientY:number)=>{
-    const p=unproject(clientX,clientY);if(!p)return;
-    setWorking(prev=>{if(!prev)return prev;const corners=prev.corners.map((q,i)=>i===index?p:q);
+    const target=precisionPointer(clientX,clientY,index);if(!target)return;
+    setWorking(prev=>{if(!prev)return prev;
+      const corners=prev.corners.map((point,i)=>i===index?target.point:point);
       return {...prev,corners,area:{...prev.area,verified:false},facingVerified:false,
-        sides:Object.fromEntries(Object.entries(prev.sides).map(([k,v])=>[k,{...v,verified:false}]))};});
+        sides:Object.fromEntries(Object.entries(prev.sides).map(([k,v])=>[k,{...v,verified:false}]))};
+    });
+  };
+  const onOverlayPointerDown=(e:React.PointerEvent<SVGSVGElement>)=>{
+    if(mode!=="draw"||dragRef.current!==null||(e.pointerType==="mouse"&&e.button!==0))return;
+    pointerStartRef.current={id:e.pointerId,x:e.clientX,y:e.clientY};
+    e.currentTarget.setPointerCapture(e.pointerId);
+    queuePointer(e.clientX,e.clientY,e.pointerType);
+  };
+  const onOverlayPointerMove=(e:React.PointerEvent<SVGSVGElement>)=>{
+    const dragging=dragRef.current;
+    if(dragging!==null)editPoint(dragging,e.clientX,e.clientY);
+    queuePointer(e.clientX,e.clientY,e.pointerType,dragging??-1);
+    const start=pointerStartRef.current;
+    if(start&&start.id===e.pointerId&&
+      Math.hypot(e.clientX-start.x,e.clientY-start.y)>9)start.cancelled=true;
+  };
+  const onOverlayPointerUp=(e:React.PointerEvent<SVGSVGElement>)=>{
+    const start=pointerStartRef.current;
+    if(mode==="draw"&&start&&!start.cancelled&&
+      isMappingTap(start,{id:e.pointerId,x:e.clientX,y:e.clientY}))
+      commitCorner(e.clientX,e.clientY);
+    if(start?.id===e.pointerId)pointerStartRef.current=null;
+    if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+    dragRef.current=null;
+    queuePointer(e.clientX,e.clientY,e.pointerType);
+  };
+  const onOverlayPointerCancel=(e:React.PointerEvent<SVGSVGElement>)=>{
+    if(pointerStartRef.current?.id===e.pointerId)pointerStartRef.current=null;
+    dragRef.current=null;clearPointer();
   };
   const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>p?{...p,sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...patch}}}:p);
   const applyPlot=(openNext=false)=>{
@@ -552,7 +680,7 @@ export default function GeoPlotMapper(){
         </div>
         <div className="geo-plot-tool-group geo-plot-zoom-tools" aria-label="Precision viewport zoom">
           <button type="button" disabled={!geo} aria-label="Zoom out" onClick={()=>zoomBy(.8)}>−</button>
-          <input type="range" min="100" max="3200" step="25"
+          <input type="range" min="100" max="5000" step="1"
             value={zoomPercent} onChange={e=>setZoom(Number(e.target.value))}
             aria-label="Zoom percent" aria-valuetext={zoomPercent+" percent"}/>
           <output>{zoomPercent}%</output>
@@ -573,11 +701,15 @@ export default function GeoPlotMapper(){
       <div className="geo-plot-workspace">
       <div className="geo-plot-scene">
         <div className="geo-plot-canvas" ref={hostRef} aria-label="Top-down 3D masterplan plot mapping canvas"/>
-        {geo&&<svg className="geo-plot-overlay" viewBox={`0 0 ${viewport.w} ${viewport.h}`}
+        {geo&&<svg ref={overlayRef} className="geo-plot-overlay" viewBox={`0 0 ${viewport.w} ${viewport.h}`}
+           preserveAspectRatio="none"
+           data-tool-mode={mode} data-snap={snap?"on":"off"}
            style={{pointerEvents:mode==="pan"?"none":"auto"}}
-           onPointerDown={onDraw}
-           onPointerMove={e=>{if(dragRef.current!==null)editPoint(dragRef.current,e.clientX,e.clientY);}}
-           onPointerUp={()=>dragRef.current=null} onPointerCancel={()=>dragRef.current=null}>
+           onPointerDown={onOverlayPointerDown}
+           onPointerMove={onOverlayPointerMove}
+           onPointerUp={onOverlayPointerUp}
+           onPointerCancel={onOverlayPointerCancel}
+           onPointerLeave={()=>{if(dragRef.current===null&&!pointerStartRef.current)clearPointer();}}>
           {plots.map(p=>{
              const x=p.corners.reduce((n,q)=>n+q[0],0)/p.corners.length;
              const y=p.corners.reduce((n,q)=>n+q[1],0)/p.corners.length;
@@ -590,7 +722,14 @@ export default function GeoPlotMapper(){
                  textAnchor="middle" dominantBaseline="middle">{p.id}</text>}
              </g>;
            })}
-           {working&&working.corners.length>0&&<>
+           {working&&mode==="draw"&&working.corners.length>0&&pointerPreview&&
+            <line className="geo-plot-precision-rubberband"
+              x1={project(working.corners[working.corners.length-1])[0]}
+              y1={project(working.corners[working.corners.length-1])[1]}
+              x2={pointerPreview.screen[0]} y2={pointerPreview.screen[1]}
+              stroke="#ffe78c" strokeWidth="1.5" strokeDasharray="5 4"
+              pointerEvents="none"/>}
+          {working&&working.corners.length>0&&<>
             <polyline points={path(working.corners)} fill={working.corners.length>=3?"rgba(250,204,21,.22)":"none"}
               stroke="#ffd965" strokeWidth="2.5" strokeDasharray="7 4"/>
             {showGuides&&ROLES.filter(role=>working.layout==="four"||role!=="depthB")
@@ -606,20 +745,52 @@ export default function GeoPlotMapper(){
                    x={x} y={y-14} textAnchor="middle">{label+value}</text>;
                })}
              {working.corners.map((point,i)=>{const [x,y]=project(point);
-              return <g key={i}><circle cx={x} cy={y} r="9" fill="#ffe49d" stroke="#182a3e" strokeWidth="2"
-                onPointerDown={e=>{if(mode!=="edit")return;e.stopPropagation();dragRef.current=i;e.currentTarget.setPointerCapture(e.pointerId);}}
-                onPointerUp={e=>{dragRef.current=null;if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}/>
-                <text x={x+10} y={y-8} fill="#fff" fontSize="13" stroke="#111" paintOrder="stroke">{i+1}</text></g>;
+              return <g key={i} className="geo-plot-precision-handle">
+                <circle className="geo-plot-handle-hit" cx={x} cy={y} r="17" fill="transparent"
+                  onPointerDown={e=>{
+                    e.stopPropagation();
+                    if(mode!=="edit")return;
+                    dragRef.current=i;pointerStartRef.current=null;
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    updatePointer(e.clientX,e.clientY,e.pointerType,i);
+                  }}
+                  onPointerUp={e=>{
+                    dragRef.current=null;
+                    if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+                    queuePointer(e.clientX,e.clientY,e.pointerType);
+                  }}
+                  onPointerCancel={()=>{dragRef.current=null;clearPointer();}}/>
+                <circle className="geo-plot-handle-visible" cx={x} cy={y}
+                  r={Math.max(4.5,10-Math.min((zoomPercent-100)/4900,1)*4)}
+                  fill="#ffe49d" stroke="#182a3e" strokeWidth="2.5" pointerEvents="none"/>
+                <text x={x+12} y={y-10} fill="#fff" fontSize="13" stroke="#111"
+                  paintOrder="stroke" pointerEvents="none">{i+1}</text></g>;
             })}
           </>}
         </svg>}
+        {pointerPreview&&mode!=="pan"&&geo&&<>
+          <div className="geo-plot-precision-crosshair" data-snap-kind={pointerPreview.kind}
+            style={{left:pointerPreview.screen[0],top:pointerPreview.screen[1]}}
+            aria-hidden="true"><i/><b/></div>
+          {pointerPreview.kind!=="none"&&
+            <div className="geo-plot-precision-pointer-origin" aria-hidden="true"
+              style={{left:pointerPreview.rawScreen[0],top:pointerPreview.rawScreen[1]}}/>}
+          <div className="geo-plot-precision-loupe" role="img"
+            aria-label="Magnified view centered on the exact mapping target">
+            <canvas ref={loupeCanvasRef} width={144} height={144} aria-hidden="true"/>
+            <div className="geo-plot-loupe-reticle" aria-hidden="true"/>
+            <strong>{pointerPreview.kind==="vertex"?"● Vertex snap":
+              pointerPreview.kind==="edge"?"━ Edge snap":"✚ Exact point"}</strong>
+            <span>Model X {pointerPreview.point[0].toFixed(4)} · Z {pointerPreview.point[1].toFixed(4)} m</span>
+          </div>
+        </>}
         {working&&<div className="geo-plot-scene-status" aria-live="polite">
            <b>Plot {working.id}</b>
            <span>{shape==="four"?working.corners.length+"/4":working.corners.length+" (irregular)"} corners</span>
            <span>{mode==="draw"?"Mark Front edge first":mode==="edit"?"Drag numbered corner handles":"Pan / pinch to inspect"}</span>
          </div>}
          <div className="geo-plot-scene-info">{modelStatus||("Top view · model coordinates in metres · "+
-           (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Tap corners clockwise":"Drag corner handles"))}</div>
+           (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Click corners clockwise · wheel zoom at cursor":"Drag numbered handles · wheel zoom at cursor"))}</div>
       </div>
       <aside className="geo-plot-dock">
         <GeoPlotInventoryPanel key={slug} slug={slug} mappedIds={plots.map(p=>p.id)}

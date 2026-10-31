@@ -30,7 +30,7 @@ export function isTextEditingTarget(target) {
 export function boundedZoom(current,multiplier) {
   if(!Number.isFinite(current)||!Number.isFinite(multiplier)||multiplier<=0)
     return 1;
-  return Math.min(32,Math.max(1,Math.round(current*multiplier*1000)/1000));
+  return Math.min(50,Math.max(1,Math.round(current*multiplier*1000)/1000));
 }
 export function sideLabelAnchor(corners,edges) {
   if(!Array.isArray(corners)||corners.length<3||!Array.isArray(edges)||!edges.length)return null;
