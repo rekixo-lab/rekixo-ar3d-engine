@@ -8,6 +8,7 @@ import {adjacentPlot,boundedZoom,hasPendingPlotEdits,isTextEditingTarget,
   nextFreePlotId,sideLabelAnchor} from "../../../../shared/geo-plot-editor.js";
 import GeoPlotInventoryPanel from "./GeoPlotInventoryPanel";
 import {nextUnmappedInventory,type GeoInventoryRow} from "../../../../shared/geo-plot-inventory.js";
+import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
 import "./geo-plot-mapper.css";
 
 type Point = [number, number]; // Immutable Building-local X/Z metres.
@@ -23,6 +24,9 @@ type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | n
 type GeoPublic = { geoRelease:{id:string}; buildingRelease:{id:string};
   model:{url:string;sha256?:string;byteSize?:number}; canonicalModel?:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number;scale:number} };
 type ToolMode = "pan" | "draw" | "edit";
+type PointerPreview = {clientX:number;clientY:number;rawScreen:Point;screen:Point;
+  point:Point;kind:"none"|"vertex"|"edge";pointerType:string};
+type PointerStart = {id:number;x:number;y:number;cancelled?:boolean};
 const ROLES: Role[] = ["front", "back", "depthA", "depthB"];
 const directions=["north","north-east","east","south-east","south","south-west","west","north-west"];
 const emptySide = (edges:number[]=[]):Side => ({edges,length:0,unit:"ft",roadFacing:false,source:"",verified:false});
@@ -149,12 +153,14 @@ export default function GeoPlotMapper(){
   const [viewport,setViewport]=useState({w:800,h:520});
   const [modelStatus,setModelStatus]=useState("Choose a published Geo project.");
   const [groundY,setGroundY]=useState(0);
-  const [snap,setSnap]=useState(true);
+  // Like the Platform mapper, snapping is opt-in: don't silently move approved corners.
+  const [snap,setSnap]=useState(false);
   const [selectedRole,setSelectedRole]=useState<Role>("front");
   const [inventoryQuery,setInventoryQuery]=useState("");
   const [focused,setFocused]=useState(false);
   const [zoomPercent,setZoomPercent]=useState(100);
   const [showGuides,setShowGuides]=useState(true);
+  const [pointerPreview,setPointerPreview]=useState<PointerPreview|null>(null);
   const activeProjectRef=useRef(slug);
   activeProjectRef.current=slug;
   const editorRef=useRef<HTMLDivElement>(null);
@@ -164,6 +170,13 @@ export default function GeoPlotMapper(){
   const cameraRef=useRef<THREE.OrthographicCamera|null>(null);
   const controlsRef=useRef<OrbitControls|null>(null);
   const dragRef=useRef<number|null>(null);
+  const pointerStartRef=useRef<PointerStart|null>(null);
+  const pointerPreviewRef=useRef<PointerPreview|null>(null);
+  const pointerRafRef=useRef(0);
+  const pointerPendingRef=useRef<{x:number;y:number;kind:string;skip?:number}|null>(null);
+  const overlayRef=useRef<SVGSVGElement>(null);
+  const loupeCanvasRef=useRef<HTMLCanvasElement>(null);
+  const renderFramesRef=useRef(0);
   const workingRef=useRef(working);
   workingRef.current=working;
   const displayedPlots=useMemo(()=>plots.filter(p=>p.id.toLowerCase().includes(inventoryQuery.trim().toLowerCase())),
@@ -206,10 +219,27 @@ export default function GeoPlotMapper(){
     renderer.outputColorSpace=THREE.SRGBColorSpace;host.appendChild(renderer.domElement);
     const controls=new OrbitControls(camera,renderer.domElement);
     controlsRef.current=controls;controls.enableRotate=false;controls.enableDamping=true;
-    controls.minZoom=1;controls.maxZoom=32;
+    controls.minZoom=1;controls.maxZoom=50;controls.zoomToCursor=true;
     controls.mouseButtons.LEFT=THREE.MOUSE.PAN;controls.touches.ONE=THREE.TOUCH.PAN;
     controls.touches.TWO=THREE.TOUCH.DOLLY_PAN;controls.screenSpacePanning=true;
-    const render=()=>{frame=requestAnimationFrame(render);controls.update();renderer.render(scene,camera);};
+    const render=()=>{
+      frame=requestAnimationFrame(render);
+      controls.update();renderer.render(scene,camera);
+      // The loupe samples this exact frame of the canonical model, not a guessed image.
+      // WebGL capture must happen immediately after render (drawing buffer may be transient).
+      const pointer=pointerPreviewRef.current,loupe=loupeCanvasRef.current;
+      if(pointer&&loupe&&++renderFramesRef.current%3===0){
+        const source=renderer.domElement,ctx=loupe.getContext("2d");
+        if(ctx&&host.clientWidth&&host.clientHeight){
+          const scaleX=source.width/host.clientWidth,scaleY=source.height/host.clientHeight;
+          const sourceW=Math.min(42*scaleX,source.width),sourceH=Math.min(42*scaleY,source.height);
+          const sx=Math.max(0,Math.min(source.width-sourceW,pointer.screen[0]*scaleX-sourceW/2));
+          const sy=Math.max(0,Math.min(source.height-sourceH,pointer.screen[1]*scaleY-sourceH/2));
+          try{ctx.imageSmoothingEnabled=false;ctx.drawImage(source,sx,sy,sourceW,sourceH,0,0,loupe.width,loupe.height);}
+          catch{/* A temporarily unavailable WebGL capture never changes mapping coordinates. */}
+        }
+      }
+    };
     const resize=()=>{const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;
       renderer.setSize(w,h,false);setViewport({w,h});
       const mid=Math.max(camera.right,-camera.left);
@@ -239,7 +269,8 @@ export default function GeoPlotMapper(){
     return()=>{alive=false;cancelAnimationFrame(frame);obs.disconnect();controls.removeEventListener("change",changed);
       controls.dispose();renderer.forceContextLoss();renderer.dispose();renderer.domElement.remove();
       if(object)object.traverse(n=>{if(n instanceof THREE.Mesh){n.geometry.dispose();const mats=Array.isArray(n.material)?n.material:[n.material];mats.forEach(mat=>mat.dispose());}});
-      cameraRef.current=null;rendererRef.current=null;controlsRef.current=null;modelBoundsRef.current=null;};
+      cameraRef.current=null;rendererRef.current=null;controlsRef.current=null;modelBoundsRef.current=null;
+      pointerPreviewRef.current=null;};
   },[geo?.canonicalModel?.url,geo?.canonicalModel?.sha256,geo?.model.url,geo?.model.sha256]);
   const project=(p:Point):Point=>{
     const camera=cameraRef.current;if(!camera)return [0,0];
@@ -248,17 +279,44 @@ export default function GeoPlotMapper(){
   };
   const unproject=(clientX:number,clientY:number):Point|null=>{
     const host=hostRef.current,camera=cameraRef.current;if(!host||!camera)return null;
-    const rect=host.getBoundingClientRect();
+    const rect=host.getBoundingClientRect();if(!rect.width||!rect.height)return null;
     const x=(clientX-rect.left)/rect.width*2-1,y=1-(clientY-rect.top)/rect.height*2;
     const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2(x,y),camera);
     const hit=ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-groundY),new THREE.Vector3());
-    if(!hit)return null;let point:Point=[Number(hit.x.toFixed(5)),Number(hit.z.toFixed(5))];
-    if(snap){const all=plots.flatMap(p=>p.corners).concat(workingRef.current?.corners||[]);
-      const near=all.find(p=>{const [a,b]=project(p);return Math.hypot(a-(clientX-rect.left),b-(clientY-rect.top))<9;});
-      if(near)point=near;
-    }
-    return point;
+    return hit?[Number(hit.x.toFixed(6)),Number(hit.z.toFixed(6))]:null;
   };
+  const precisionPointer=(clientX:number,clientY:number,skipIndex=-1)=>{
+    const host=hostRef.current,raw=unproject(clientX,clientY);
+    if(!host||!raw)return null;
+    const rect=host.getBoundingClientRect();
+    const screen:Point=[clientX-rect.left,clientY-rect.top];
+    const rings=plots.filter(p=>p.id!==originalId).map(p=>({points:p.corners}));
+    if(workingRef.current?.corners.length)
+      rings.push({points:workingRef.current.corners,...(skipIndex>=0?{skipIndex}:{})});
+    const target=precisionSnap(raw,screen,rings,project,{enabled:snap,thresholdPx:6});
+    return {point:target.point as Point,screen:target.screen as Point,
+      rawScreen:screen,kind:target.kind};
+  };
+  const clearPointer=()=>{pointerPendingRef.current=null;pointerPreviewRef.current=null;setPointerPreview(null);};
+  const updatePointer=(clientX:number,clientY:number,pointerType:string,skipIndex=-1)=>{
+    const host=hostRef.current;if(!host||mode==="pan"||!geo)return;
+    const rect=host.getBoundingClientRect();
+    if(clientX<rect.left||clientY<rect.top||clientX>rect.right||clientY>rect.bottom){clearPointer();return;}
+    const location=precisionPointer(clientX,clientY,skipIndex);
+    if(!location)return;
+    const next:PointerPreview={clientX,clientY,pointerType,...location};
+    pointerPreviewRef.current=next;setPointerPreview(next);
+  };
+  const queuePointer=(clientX:number,clientY:number,pointerType:string,skipIndex=-1)=>{
+    pointerPendingRef.current={x:clientX,y:clientY,kind:pointerType,skip:skipIndex};
+    if(pointerRafRef.current)return;
+    pointerRafRef.current=requestAnimationFrame(()=>{
+      pointerRafRef.current=0;
+      const pending=pointerPendingRef.current;
+      if(pending)updatePointer(pending.x,pending.y,pending.kind,pending.skip);
+    });
+  };
+  useEffect(()=>()=>{if(pointerRafRef.current)cancelAnimationFrame(pointerRafRef.current);},[]);
   const confirmUnapplied=()=>!hasUnapplied||window.confirm(
     "This plot has unapplied changes. Leave this plot without applying them?");
   const choose=(plot:Plot)=>{
@@ -285,13 +343,24 @@ export default function GeoPlotMapper(){
     controls.target.copy(bounds.center);controls.update();
     setZoomPercent(100);setViewTick(v=>v+1);
   };
-  const setZoom=(value:number)=>{
-    const camera=cameraRef.current;if(!camera)return;
+  const setZoom=(value:number,clientX?:number,clientY?:number)=>{
+    const camera=cameraRef.current,controls=controlsRef.current,host=hostRef.current;
+    if(!camera||!controls||!host)return;
+    const rect=host.getBoundingClientRect();
+    const x=clientX??rect.left+rect.width/2,y=clientY??rect.top+rect.height/2;
+    const before=unproject(x,y);
     camera.zoom=boundedZoom(1,value/100);
-    camera.updateProjectionMatrix();controlsRef.current?.update();
+    camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
+    const after=unproject(x,y),delta=zoomAnchorDelta(before,after);
+    if(delta){camera.position.x+=delta[0];camera.position.z+=delta[1];
+      controls.target.x+=delta[0];controls.target.z+=delta[1];}
+    controls.update();camera.updateMatrixWorld(true);
     setZoomPercent(Math.round(camera.zoom*100));setViewTick(v=>v+1);
+    if(pointerPreviewRef.current)queuePointer(
+      pointerPreviewRef.current.clientX,pointerPreviewRef.current.clientY,
+      pointerPreviewRef.current.pointerType,dragRef.current??-1);
   };
-  const zoomBy=(factor:number)=>setZoom(boundedZoom(zoomPercent/100,factor)*100);
+  const zoomBy=(factor:number)=>setZoom(boundedZoom((cameraRef.current?.zoom||1),factor)*100);
   const toggleFullscreen=async()=>{
     try{
       if(document.fullscreenElement===editorRef.current)await document.exitFullscreen();
