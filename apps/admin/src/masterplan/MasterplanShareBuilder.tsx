@@ -4,7 +4,7 @@ import type {Asset} from "../studio/domain";
 import "../management/project-management.css";
 type Version={id:string;version:number};
 type ShareState={draft:{revision:number;title:string;description:string;cardAssetId:string|null};
-  active:{id:string;version:number;title:string;description:string;cardAssetId:string}|null;
+  active:{id:string;version:number;revision:number;title:string;description:string;cardAssetId:string}|null;
   history:Version[];shareUrl:string};
 async function call<T>(url:string,method="GET",body?:object):Promise<T>{
   const r=await fetch(url,{cache:"no-store",method,headers:{"Accept":"application/json",...(body?{"Content-Type":"application/json"}:{})},
@@ -99,10 +99,10 @@ export default function MasterplanShareBuilder(){
         <button disabled={busy||!cardId||title.trim().length<3||description.trim().length<10}
           onClick={()=>void exec("PUT",{expectedRevision:state?.draft.revision||0,title,description,cardAssetId:cardId})}>
           Save Share Draft</button>
-        <button disabled={busy||!state?.draft.cardAssetId||state?.draft.title!==title||state?.draft.description!==description||
+        <button disabled={busy||!state?.draft.cardAssetId||state?.active?.revision===state?.draft.revision||state?.draft.title!==title||state?.draft.description!==description||
             state?.draft.cardAssetId!==cardId}
           onClick={()=>void exec("POST",{action:"publish",expectedRevision:state?.draft.revision||0})}>
-          Publish WhatsApp Preview</button>
+          {state?.active?.revision===state?.draft.revision?"Published · Current Draft":"Publish WhatsApp Preview"}</button>
       </div>
       <h2>Published Preview</h2>
       {state?.active?<><p>Live Share v{state.active.version}</p>
