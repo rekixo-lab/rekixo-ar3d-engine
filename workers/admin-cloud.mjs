@@ -6,7 +6,7 @@ import {
 import { assertDraftAssetKey } from "./storage-boundary.mjs";
 import { validateStudioDraft } from "./studio-draft-validation.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
-import { isEngineProjectKind } from "../shared/engine-project-kinds.js";
+import { isEngineProjectKind, projectKindAllowsCloudRoute } from "../shared/engine-project-kinds.js";
 import { listGeoReleases } from "./geo-release-admin.mjs";
 import { verifyGeoDraftPreview } from "./geo-release-verify.mjs";
 import { publishGeoRelease } from "./geo-release-publish.mjs";
@@ -2312,6 +2312,8 @@ async function routeProjects(request, env, actor, url) {
     return json({ error: "Valid project slug is required." }, { status: 400 });
   const project = await projectBySlug(env, slug);
   if (!project) return json({ error: "Cloud project not found." }, { status: 404 });
+  if (parts.length>1 && !projectKindAllowsCloudRoute(project.project_kind,parts[1]))
+    return json({error:"This module is not enabled for this project type."},{status:403});
 
   if (request.method !== "GET") {
     const deletionJob = await activeDeletionJob(env);
