@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { listAssets, uploadAsset, type CloudAssetSummary } from "../studio/cloud";
 import type { Asset } from "../studio/domain";
 import {fitImageFrame,imageWorldAt,panImageFrame,pinchImageFrame,zoomImageFrame} from "../../../../shared/masterplan-image-gestures.js";
+import {assignFourCornerRoadFront} from "../../../../shared/geo-plot-source-operations.js";
 import "./masterplan-workspace.css";
 
 type Point=[number,number];type Role="front"|"back"|"depthA"|"depthB";
@@ -52,6 +53,14 @@ function csv(plots:Plot[]):string{
       plot.sides[role]?.unit,plot.sides[role]?.source,plot.sides[role]?.roadFacing])
   ].map(cell).join(","))].join("\n");
 }
+function exportMasterplanDraftReview(slug:string,draft:MasterplanDraft){
+  // Owner-private local review snapshot, NOT a complete D1+R2 recovery package.
+  const body=JSON.stringify({schema:"rekixo-masterplan-source-review-v1",projectSlug:slug,
+    createdAt:new Date().toISOString(),draft},null,2);
+  const url=URL.createObjectURL(new Blob([body],{type:"application/json;charset=utf-8"}));
+  const a=document.createElement("a");a.href=url;a.download=slug+"-source-change-review.json";a.click();
+  window.setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
 export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const slug=new URLSearchParams(location.search).get("project")||"";
   const endpoint=`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/masterplan-geo`;
@@ -91,6 +100,13 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     setDraft(d=>d?{...d,...patch}:d);setDirty(true);
   }
   async function upload(file:File){
+    if(dirty||working)throw Error("Apply any open plot and Save the current mapping draft before replacing its source image.");
+    if(draft?.imageAssetId&&(draft.plots.length>0||draft.controlPoints.length>0)){
+      if(!window.confirm("Replacing this masterplan image clears the CURRENT DRAFT's "+
+        draft.plots.length+" polygons and "+draft.controlPoints.length+
+        " GPS controls. Published releases remain immutable. A private review JSON will download now. Continue?"))return;
+      exportMasterplanDraftReview(slug,draft);
+    }
     if(!["image/png","image/jpeg","image/webp"].includes(file.type))
       throw Error("Use original PNG, JPG or WebP masterplan.");
     if(file.size>16*1024*1024)throw Error("Choose an optimized masterplan image under 16 MB.");
@@ -155,8 +171,18 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     if(!draft)return;
     setFrame(previous=>zoomImageFrame(previous,{width:draft.width,height:draft.height},factor,uv));
   }
-  const setSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>p?
-    {...p,sides:{...p.sides,[role]:{...(p.sides[role]||blankSide()),...patch}}}:p);
+  const setSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>{
+    if(!p)return p;
+    const changed=["edges","length","unit","source","roadFacing"].some(k=>Object.hasOwn(patch,k));
+    return {...p,...((Object.hasOwn(patch,"roadFacing") || (role==="front"&&Object.hasOwn(patch,"edges")))?{facingVerified:false}:{}),
+      sides:{...p.sides,[role]:{...(p.sides[role]||blankSide()),...(Object.hasOwn(patch,"edges")?{roadFacing:false}:{}),...patch,
+        ...(changed?{verified:false}:{})}}};
+  });
+  const setRoadFront=(edge:number)=>{
+    if(!working)return;
+    if(!window.confirm("Make edge "+edge+" the road-facing Front? All side/facing approvals will be reset."))return;
+    setWorking(p=>p?assignFourCornerRoadFront(p,edge):p);
+  };
   function down(e:ReactPointerEvent<SVGSVGElement>){
     const svg=svgRef.current;if(!svg||!draft)return;
     const p=normalizedSvgPoint(e,svg,draft.width,draft.height);
@@ -206,6 +232,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     if(tool==="edit"&&dragRef.current!==null&&workingRef.current){
       const point=normalizedSvgPoint(e,svg,draft.width,draft.height);if(!point)return;
       setWorking(prev=>prev?{...prev,corners:prev.corners.map((v,i)=>i===dragRef.current?point:v),
+        area:{...prev.area,verified:false},facingVerified:false,
         sides:Object.fromEntries(Object.entries(prev.sides).map(([k,v])=>[k,{...v,verified:false}]))}:prev);
     }
   }
@@ -281,6 +308,10 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       <aside className="masterplan-dock">
         {mode==="source"?<>
           <h2>Original Masterplan</h2>
+          {draft?.imageAssetId&&<button type="button" disabled={!draft}
+            onClick={()=>draft&&exportMasterplanDraftReview(slug,draft)}>
+            Download source-change review snapshot (JSON · not a full backup)
+          </button>}
           <label>Upload image (PNG, JPG, WebP · max 16 MB)
             <input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy}
               onChange={e=>{const file=e.target.files?.[0];e.target.value="";
@@ -314,7 +345,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               onChange={e=>updatePlot("id",e.target.value)}/></label>
             <small>{working.corners.length} polygon corners</small>
             <button disabled={!working.corners.length} onClick={()=>setWorking(p=>p?{...p,
-              corners:p.corners.slice(0,-1),sides:assignSides(p.corners.slice(0,-1))}:p)}>Undo Corner</button>
+              corners:p.corners.slice(0,-1),sides:assignSides(p.corners.slice(0,-1)),
+               area:{...p.area,verified:false},facingVerified:false}:p)}>Undo Corner</button>
             <button disabled={working.corners.length<3} onClick={()=>setTool("edit")}>Drag Corners</button>
             <label>Approved Area<input type="number" step="any" min="0" value={working.area.value||""}
               onChange={e=>updatePlot("area",{...working.area,value:Number(e.target.value),verified:false})}/></label>
@@ -333,7 +365,13 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               setWorking({...working,facingSource:e.target.value,facingVerified:false})}/></label>
             <label className="masterplan-check"><input type="checkbox" checked={working.facingVerified}
               onChange={e=>updatePlot("facingVerified",e.target.checked)}/> Facing reviewed</label>
-            <label>Road<input value={working.road} onChange={e=>updatePlot("road",e.target.value)}/></label>
+            <label>Road<input value={working.road} onChange={e=>setWorking(p=>p?{...p,road:e.target.value,facingVerified:false}:p)}/></label>
+            {working.corners.length===4&&working.layout==="four"&&<label>Road-facing FRONT edge
+              <select value={working.sides.front?.edges[0]??0} onChange={e=>setRoadFront(Number(e.target.value))}>
+                {working.corners.map((_,i)=><option key={i} value={i}>Edge {i} · Corner {i+1} → {i===3?1:i+2}</option>)}
+              </select></label>}
+            {working.road&&working.sides.front?.roadFacing!==true&&
+              <p className="masterplan-guidance">Review the Front boundary against the road on the approved image. Mark its Road-facing checkbox.</p>}
             {roles.filter(role=>working.layout!=="three"||role!=="depthB").map(role=>{
               const side=working.sides[role]||blankSide();return <fieldset key={role}><legend>{role}</legend>
                 <label>Edge indices (0 to {Math.max(0,working.corners.length-1)})

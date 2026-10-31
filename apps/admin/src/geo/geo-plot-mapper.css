@@ -227,3 +227,17 @@
   .geo-plot-precision-loupe canvas{width:104px;height:104px}
   .geo-plot-loupe-reticle{top:57px}
 }
+
+
+/* Project-owned source reconciliation is visible in normal/fullscreen inspector.
+   Informational until an operator explicitly applies and verifies approved CSV. */
+.geo-plot-source-review{display:grid;gap:6px;background:#102e37;border:1px solid #5a867c;
+  color:#e1fff2;border-radius:10px;padding:10px;margin:9px 0;font-size:12px;
+  overflow-wrap:anywhere}
+.geo-plot-source-review strong{color:#96ffcf;font-weight:800}
+.geo-plot-source-review small{color:#b4cfce;font-size:11px;line-height:1.5}
+.geo-plot-source-review p{margin:0;color:#e2eaf0;line-height:1.5}
+.geo-plot-source-review button{margin-top:3px;max-width:100%;white-space:normal;
+  line-height:1.4;text-align:center;border-color:#5cbda3}
+.geo-plot-source-review select{max-width:100%}
+.geo-plot-editor-shell:fullscreen .geo-plot-source-review{flex-shrink:0}

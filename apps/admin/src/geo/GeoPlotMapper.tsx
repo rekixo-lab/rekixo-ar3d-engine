@@ -9,6 +9,8 @@ import {adjacentPlot,boundedZoom,hasPendingPlotEdits,isTextEditingTarget,
 import GeoPlotInventoryPanel from "./GeoPlotInventoryPanel";
 import {nextUnmappedInventory,type GeoInventoryRow} from "../../../../shared/geo-plot-inventory.js";
 import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
+import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
+import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import "./geo-plot-mapper.css";
 
 type Point = [number, number]; // Immutable Building-local X/Z metres.
@@ -18,7 +20,9 @@ type Plot = { id: string; corners: Point[]; layout: "three" | "four";
   sides: Partial<Record<Role, Side>>; area: { value: number; unit: "sqft" | "sqm" | "sqyd"; source: string; verified: boolean };
   facing: string; facingSource:string; facingVerified:boolean; planeY?:number;planeSource?:string;planeVerified?:boolean;road: string; notes: string };
 type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | null;
-  draft: {revision:number;verifiedRevision:number|null;stale:boolean;plots:Plot[]};
+  inventoryRevision:number;
+  draft: {revision:number;verifiedRevision:number|null;verifiedInventoryRevision:number|null;
+    stale:boolean;plots:Plot[]};
   activeMapping:{id:string;version:number;current:boolean}|null;
   releases:Array<{id:string;version:number;geoReleaseId:string}> };
 type GeoPublic = { geoRelease:{id:string}; buildingRelease:{id:string};
@@ -181,6 +185,13 @@ export default function GeoPlotMapper(){
   workingRef.current=working;
   const displayedPlots=useMemo(()=>plots.filter(p=>p.id.toLowerCase().includes(inventoryQuery.trim().toLowerCase())),
     [plots,inventoryQuery]);
+  const inventoryIssues=useMemo(()=>geoInventoryReviewIssues(plots,inventoryRows),
+    [plots,inventoryRows]);
+  const selectedInventory=useMemo(()=>inventoryRows.find(p=>
+    p.id.toLowerCase()===working?.id.toLowerCase()),[inventoryRows,working?.id]);
+  const onInventoryRowsChange=useCallback((rows:GeoInventoryRow[],revision:number)=>{
+    setInventoryRows(rows);setState(prev=>prev?{...prev,inventoryRevision:revision}:prev);
+  },[]);
   const hasUnapplied=hasPendingPlotEdits(working,originalId?plots.find(p=>p.id===originalId):null);
   const api=slug?`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/geo-plots`:"";
   const refresh=useCallback(async(isCurrent:()=>boolean)=>{
@@ -455,7 +466,26 @@ export default function GeoPlotMapper(){
     if(pointerStartRef.current?.id===e.pointerId)pointerStartRef.current=null;
     dragRef.current=null;clearPointer();
   };
-  const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>p?{...p,sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...patch}}}:p);
+  const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>{
+    if(!p)return p;
+    const changesReference=["edges","length","unit","source","roadFacing"].some(k=>Object.hasOwn(patch,k));
+    return {...p,...((Object.hasOwn(patch,"roadFacing") || (role==="front"&&Object.hasOwn(patch,"edges")))?{facingVerified:false}:{}),
+      sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...(Object.hasOwn(patch,"edges")?{roadFacing:false}:{}),...patch,
+        ...(changesReference?{verified:false}:{})}}};
+  });
+  const selectRoadFront=(edge:number)=>{
+    if(!working)return;
+    if(!window.confirm("Make polygon edge "+edge+" the road-facing FRONT? All side and facing approvals will reset. No published plot is changed."))return;
+    setWorking(p=>p?assignFourCornerRoadFront(p,edge):p);
+    setMessage("Road-facing Front changed to edge "+edge+". Review Front/Back/Depth lengths and sources, then reverify.");
+  };
+  const applyCurrentSource=()=>{
+    if(!working||!selectedInventory)return;
+    if(!window.confirm("Replace approved values and sources for Plot "+working.id+
+      " with current CSV inventory? Existing polygon corners, site plane and published release remain unchanged. Modified approvals reset."))return;
+    setWorking(p=>p?applyApprovedInventoryRow(p,selectedInventory):p);
+    setMessage("Plot "+working.id+": approved CSV values staged. Recheck road-facing edge, measurements and sources before applying.");
+  };
   const applyPlot=(openNext=false)=>{
     if(!working)return;const id=working.id.trim();if(!id||working.corners.length<3)throw Error("Plot number and at least 3 mapped corners required.");
     if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId))throw Error("Duplicate plot ID.");
@@ -622,7 +652,8 @@ export default function GeoPlotMapper(){
           (message.startsWith("ERROR:")?"Load failed":"Checking…")}</b></span>
       <span>Draft <b>r{state?.draft.revision||0}</b></span>
       <span>Mapped <b>{plots.length}</b></span>
-      <span>Verified <b>{state?.draft.verifiedRevision===state?.draft.revision&&state?.draft.revision?"Yes":"No"}</b></span>
+      <span>Verified <b>{state?.draft.revision&&state.draft.verifiedRevision===state.draft.revision&&
+          state.draft.verifiedInventoryRevision===state.inventoryRevision?"Yes":"Needs review"}</b></span>
       <span>Live mapping <b>{state?.activeMapping?.current?"v"+state.activeMapping.version:"None / stale"}</b></span>
     </section>
     {state?.draft.stale&&<div className="geo-plot-warning">
@@ -693,7 +724,9 @@ export default function GeoPlotMapper(){
         <div className="geo-plot-tool-group geo-plot-tool-group--publish">
           <button type="button" className="geo-plot-publish-button"
             disabled={!editable||busy||dirty||Boolean(working)||!state||
-              state.draft.verifiedRevision!==state.draft.revision}
+              state.draft.verifiedRevision!==state.draft.revision||
+              state.draft.verifiedInventoryRevision!==state.inventoryRevision||
+              inventoryIssues.length>0}
             onClick={()=>void execute("publish")}>Publish Mapping</button>
         </div>
       </section>
@@ -795,7 +828,7 @@ export default function GeoPlotMapper(){
       <aside className="geo-plot-dock">
         <GeoPlotInventoryPanel key={slug} slug={slug} mappedIds={plots.map(p=>p.id)}
           workingId={working?.id} blocked={!editable||busy||dirty||hasUnapplied}
-          onRowsChange={setInventoryRows}
+          onRowsChange={onInventoryRowsChange}
           onStart={row=>{
             if(!confirmUnapplied())return;
             if(plots.some(p=>p.id.toLowerCase()===row.id.toLowerCase())){
@@ -809,7 +842,20 @@ export default function GeoPlotMapper(){
            <div><small>PROJECT PLOT INVENTORY</small><h3>Plot Editor</h3></div>
            <span>{displayedPlots.length}/{plots.length}</span>
          </div>
-         <label className="geo-plot-inventory-search">Find plot
+         {state&&state.draft.revision>0&&state.draft.verifiedInventoryRevision!==state.inventoryRevision&&
+          state.draft.verifiedRevision===state.draft.revision&&
+          <p className="geo-plot-warning" role="status">Source inventory was updated after verification.
+            Review current CSV evidence, then Save/Verify before any new Publish.</p>}
+        {inventoryRows.length>0&&<div className="geo-plot-source-review" aria-live="polite">
+          <strong>Source Reconciliation · {inventoryIssues.length} issue(s)</strong>
+          <small>Inventory revision {state?.inventoryRevision??0} ·
+            Verified revision {state?.draft.verifiedInventoryRevision??"not yet"}</small>
+          {inventoryIssues.slice(0,7).map((issue,i)=><p key={issue.plotId+issue.field+i}>
+            Plot {issue.plotId} · {issue.field}: {issue.reason}</p>)}
+          {inventoryIssues.length>7&&<small>+ {inventoryIssues.length-7} more issues. Review each mapped plot.</small>}
+          {!inventoryIssues.length&&<small>All mapped plots match the approved CSV values and source references.</small>}
+        </div>}
+        <label className="geo-plot-inventory-search">Find plot
            <input type="search" placeholder="Search plot number" value={inventoryQuery}
              onChange={e=>setInventoryQuery(e.target.value)}/>
          </label>
@@ -832,6 +878,14 @@ export default function GeoPlotMapper(){
              <small>{working.corners.length} corners · {hasUnapplied?"Not applied to draft":"Up to date"}</small>
            </div>
           <label>Plot Number<input readOnly={Boolean(originalId)} value={working.id} onChange={e=>setWorking({...working,id:e.target.value})}/></label>
+          {selectedInventory&&<div className="geo-plot-source-review">
+            <strong>Approved CSV · Plot {selectedInventory.id}</strong>
+            <p>Area {selectedInventory.area||"not supplied"} {selectedInventory.areaUnit} ·
+              Front {selectedInventory.front||"—"} · Back {selectedInventory.back||"—"} ·
+              Depth A {selectedInventory.depthA||"—"} · Depth B {selectedInventory.depthB||"—"} {selectedInventory.lengthUnit}</p>
+            <button type="button" disabled={!editable||busy} onClick={applyCurrentSource}>
+              Apply Latest Approved CSV to Selected Plot (unverified)</button>
+          </div>}
           <details open className="geo-plot-inspector-section">
             <summary>01 · Geometry & site plane</summary>
           <p className="geo-plot-hint">Corners: {working.corners.length} · Model area (unverified): {areaSqm(working.corners).toFixed(2)} m²
@@ -856,7 +910,7 @@ export default function GeoPlotMapper(){
             <summary>02 · Approved area & source</summary>
           <label>Approved Area<input inputMode="decimal" type="number" min="0.001" value={working.area.value||""}
             onChange={e=>setWorking({...working,area:{...working.area,value:Number(e.target.value),verified:false}})}/></label>
-          <label>Area Unit<select value={working.area.unit} onChange={e=>setWorking({...working,area:{...working.area,unit:e.target.value as Plot["area"]["unit"]}})}>
+          <label>Area Unit<select value={working.area.unit} onChange={e=>setWorking({...working,area:{...working.area,unit:e.target.value as Plot["area"]["unit"],verified:false}})}>
             <option value="sqft">sqft</option><option value="sqm">sqm</option><option value="sqyd">sqyd</option></select></label>
           <label>Area Source<input value={working.area.source} placeholder="Approved plan / survey reference"
             onChange={e=>setWorking({...working,area:{...working.area,source:e.target.value,verified:false}})}/></label>
@@ -865,7 +919,7 @@ export default function GeoPlotMapper(){
           </details>
           <details open className="geo-plot-inspector-section">
             <summary>03 · Road, facing & north</summary>
-          <label>Road / Access<input value={working.road} onChange={e=>setWorking({...working,road:e.target.value})}/></label>
+          <label>Road / Access<input value={working.road} onChange={e=>setWorking({...working,road:e.target.value,facingVerified:false})}/></label>
           <label>Facing <select value={working.facing} onChange={e=>setWorking({...working,facing:e.target.value,facingVerified:false})}>
             {directions.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
           <button type="button" disabled={working.corners.length<3} onClick={()=>setWorking(p=>p?{...p,facing:facingFromGeo(p.corners,p.sides.front?.edges||[],geo?.placement.headingDeg||0),facingVerified:false}:p)}>Suggest Facing From Geo North</button>
@@ -876,7 +930,15 @@ export default function GeoPlotMapper(){
           </details>
           <details open className="geo-plot-inspector-section">
             <summary>04 · Front, Back & Depth sizes</summary>
-          <p className="geo-plot-hint">Side edge numbers are zero-based; one side may contain multiple consecutive edges. The first boundary edge is Front by convention—verify against the approved drawing.</p>
+          <p className="geo-plot-hint">Front must face the actual road, not the top of the screen. For four-corner plots select the road-touching edge. Corner plots may have multiple road-facing sides.</p>
+          {working.corners.length===4&&working.layout==="four"&&<label>Road-facing FRONT boundary
+            <select value={working.sides.front?.edges[0]??0}
+              onChange={e=>selectRoadFront(Number(e.target.value))}>
+              {working.corners.map((_,i)=><option key={i} value={i}>Edge {i} · Corner {i+1} → {i===3?1:i+2}</option>)}
+            </select>
+          </label>}
+          {working.road&&working.sides.front?.roadFacing!==true&&
+            <p className="geo-plot-warning">Road/access is entered but Front has not been marked Road side. Publishing requires explicit road-front confirmation.</p>}
           {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{const side=working.sides[role]||emptySide();
             const referenceM=geometrySideLengthMetres(working.corners,side.edges,geo?.placement.scale||1);
             const reference=side.unit==="ft"?referenceM*3.280839895:referenceM;
@@ -915,14 +977,18 @@ export default function GeoPlotMapper(){
         </>}
         <div className="geo-plot-draft-actions">
           <h3>Save, review & publish</h3>
-          <p className="geo-plot-hint">Apply individual plots, save the complete mapping draft, then verify every source-backed measurement before publishing.</p>
+          <p className="geo-plot-hint">Apply each plot, save the draft, reconcile the approved CSV, then verify. A new inventory revision blocks Publish until re-reviewed.</p>
         <button disabled={!editable||busy||!dirty} onClick={()=>void execute("save")}>{busy?"Saving…":"Save Mapping Draft"}</button>
-        <button disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision} onClick={()=>void execute("verify")}>Verify All Plots</button>
+        <button disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision||inventoryIssues.length>0} onClick={()=>void execute("verify")}>Verify All Plots</button>
         <label className="geo-plot-import">Import Measurements CSV<input type="file" accept=".csv,text/csv" onChange={e=>{
           const file=e.target.files?.[0];e.target.value="";if(file)void importCsv(file).catch(x=>setMessage("ERROR: "+String(x)));
         }}/></label>
         <button disabled={!plots.length} onClick={exportCsv}>Export Measurement CSV</button>
-        {state?.releases.map(r=><button key={r.id} disabled={!editable||busy||r.geoReleaseId!==state.geoReleaseId} onClick={()=>void execute("activate",r.id)}>Activate Mapping v{r.version}</button>)}
+        {state?.releases.map(r=><button key={r.id} disabled={!editable||busy||r.geoReleaseId!==state.geoReleaseId}
+          onClick={()=>{
+            if(window.confirm("Activate historic Mapping v"+r.version+"? This restores its sealed plot data, which may predate the current approved CSV inventory. Current draft and immutable history remain intact."))
+              void execute("activate",r.id);
+          }}>Activate Mapping v{r.version}</button>)}
         </div>
         <div className="geo-plot-shortcuts">
           <strong>Keyboard shortcuts</strong>
