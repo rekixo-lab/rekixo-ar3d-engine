@@ -41,7 +41,8 @@ export async function handleGeoPlotInventory(request,env,ctx,actor) {
   try{normalized=normalizeGeoInventoryRows(body.rows);}
   catch(error){return reply({error:error instanceof Error?error.message:"Invalid inventory rows."},400);}
   const text=JSON.stringify(normalized);
-  if(text.length>1_900_000)return reply({error:"Normalized inventory exceeds storage limit."},413);
+  if(new TextEncoder().encode(text).byteLength>1_900_000)
+    return reply({error:"Normalized inventory exceeds storage limit."},413);
   const mappedIds=await mappedPlotIds(env,ctx);
   const diff=geoInventoryDiff(current.rows,normalized,mappedIds);
   const summary={...diff,rowCount:normalized.length,expectedRevision:current.revision,
