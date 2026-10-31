@@ -11,7 +11,7 @@ type PublicData={schema:string;project:{name:string;slug:string;location:string}
   plots:Plot[];maps:{apiKey:string|null;mapId:string|null;configured:boolean}};
 type GLatLng={};
 type GPixel={x:number;y:number};
-type GPolygon={setMap:(map:GMap|null)=>void;addListener:(event:string,cb:()=>void)=>{remove:()=>void}};
+type GPolygon={setMap:(map:GMap|null)=>void;setVisible:(value:boolean)=>void;addListener:(event:string,cb:()=>void)=>{remove:()=>void}};
 type GMap={fitBounds:(bounds:GBounds,padding?:number)=>void};
 type GBounds={extend:(point:GeoPoint)=>void};
 type GOverlay={setMap:(map:GMap|null)=>void;onAdd:()=>void;onRemove:()=>void;draw:()=>void;
@@ -96,7 +96,8 @@ export default function MasterplanPublic(){
       overlay.onRemove=()=>{layer.remove();if(imageRef.current===image)imageRef.current=null;};
       overlay.draw=()=>{
         const projection=overlay?.getProjection();if(!projection)return;
-        const a=projection.fromLatLngToDivPixel(new LatLng(...Object.values(locationOf(t,[0,0])) as [number,number]));
+        const origin=locationOf(t,[0,0]);
+        const a=projection.fromLatLngToDivPixel(new LatLng(origin.lat,origin.lng));
         const bb=locationOf(t,[1,0]),cc=locationOf(t,[0,1]);
         const x=projection.fromLatLngToDivPixel(new LatLng(bb.lat,bb.lng));
         const y=projection.fromLatLngToDivPixel(new LatLng(cc.lat,cc.lng));
@@ -120,7 +121,7 @@ export default function MasterplanPublic(){
     };
   },[data?.release.id,data?.maps.apiKey,data?.maps.mapId]);
   useEffect(()=>{if(imageRef.current)imageRef.current.style.opacity=String(opacity);},[opacity,mapReady]);
-  useEffect(()=>{for(const p of polygonsRef.current)(p as unknown as {setVisible:(visible:boolean)=>void}).setVisible(showPlots);
+  useEffect(()=>{for(const p of polygonsRef.current)p.setVisible(showPlots);
     if(!showPlots)setSelected(null);},[showPlots,mapReady]);
   const sizes=useMemo(()=>data?.calibration.sizeM||null,[data]);
   return <main className="masterplan-public">
