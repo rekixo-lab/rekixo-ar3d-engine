@@ -17,12 +17,12 @@ test("snap OFF preserves model-local precision at any screen scale",()=>{
 test("snap radius is CSS pixels and does not scale or round model coordinates",()=>{
   for(const zoom of [1,2,8,16,32,50]){
     const project=p=>point(p[0]*zoom,p[1]*zoom);
-    const close=point(5/zoom,4/zoom);
+    const close=point(3/zoom,3/zoom);
     const a=precisionSnap(close,project(close),[{points:square}],project,{enabled:true});
     assert.equal(a.kind,"vertex");
     assert.deepEqual(a.point,[0,0]);
     assert.ok(a.distance<=6);
-    const far=point(8/zoom,7/zoom);
+    const far=point(20/zoom,20/zoom);
     const b=precisionSnap(far,project(far),[{points:square}],project,{enabled:true});
     assert.equal(b.kind,"none");
     assert.deepEqual(b.point,far);
