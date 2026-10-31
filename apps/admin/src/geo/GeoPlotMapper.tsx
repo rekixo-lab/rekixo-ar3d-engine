@@ -551,13 +551,34 @@ export default function GeoPlotMapper(){
            onPointerDown={onDraw}
            onPointerMove={e=>{if(dragRef.current!==null)editPoint(dragRef.current,e.clientX,e.clientY);}}
            onPointerUp={()=>dragRef.current=null} onPointerCancel={()=>dragRef.current=null}>
-          {plots.map(p=><polygon key={p.id} points={path(p.corners)} fill="rgba(16,185,129,.16)"
-            stroke={working?.id===p.id?"#f5dd6d":"#3fe3b1"} strokeWidth="2"
-            onPointerDown={e=>{if(mode==="draw")return;e.stopPropagation();choose(p);}}/>)}
-          {working&&working.corners.length>0&&<>
+          {plots.map(p=>{
+             const x=p.corners.reduce((n,q)=>n+q[0],0)/p.corners.length;
+             const y=p.corners.reduce((n,q)=>n+q[1],0)/p.corners.length;
+             const [cx,cy]=project([x,y]);
+             return <g key={p.id} className="geo-plot-mapped-outline">
+               <polygon points={path(p.corners)} fill="rgba(16,185,129,.16)"
+                 stroke={working?.id===p.id?"#f5dd6d":"#3fe3b1"} strokeWidth="2"
+                 onPointerDown={e=>{if(mode==="draw")return;e.stopPropagation();choose(p);}}/>
+               {showGuides&&<text className="geo-plot-map-number" x={cx} y={cy}
+                 textAnchor="middle" dominantBaseline="middle">{p.id}</text>}
+             </g>;
+           })}
+           {working&&working.corners.length>0&&<>
             <polyline points={path(working.corners)} fill={working.corners.length>=3?"rgba(250,204,21,.22)":"none"}
               stroke="#ffd965" strokeWidth="2.5" strokeDasharray="7 4"/>
-            {working.corners.map((point,i)=>{const [x,y]=project(point);
+            {showGuides&&ROLES.filter(role=>working.layout==="four"||role!=="depthB")
+               .map(role=>{
+                 const side=working.sides[role],anchor=sideLabelAnchor(working.corners,side?.edges||[]);
+                 if(!side||!anchor)return null;
+                 const [x,y]=project(anchor);
+                 const label=role==="depthA"?"Depth A":role==="depthB"?"Depth B":
+                   role==="front"?"Front":"Back";
+                 const value=side.verified&&side.length>0
+                   ? " · "+side.length.toFixed(2)+" "+side.unit+" ✓" : " · verify";
+                 return <text key={role} className="geo-plot-map-side-label"
+                   x={x} y={y-14} textAnchor="middle">{label+value}</text>;
+               })}
+             {working.corners.map((point,i)=>{const [x,y]=project(point);
               return <g key={i}><circle cx={x} cy={y} r="9" fill="#ffe49d" stroke="#182a3e" strokeWidth="2"
                 onPointerDown={e=>{if(mode!=="edit")return;e.stopPropagation();dragRef.current=i;e.currentTarget.setPointerCapture(e.pointerId);}}
                 onPointerUp={e=>{dragRef.current=null;if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}/>
@@ -565,7 +586,13 @@ export default function GeoPlotMapper(){
             })}
           </>}
         </svg>}
-        <div className="geo-plot-scene-info">{modelStatus||("Top view · Model coordinates in metres · "+(mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Tap corners":"Drag corner handles"))}</div>
+        {working&&<div className="geo-plot-scene-status" aria-live="polite">
+           <b>Plot {working.id}</b>
+           <span>{shape==="four"?working.corners.length+"/4":working.corners.length+" (irregular)"} corners</span>
+           <span>{mode==="draw"?"Mark Front edge first":mode==="edit"?"Drag numbered corner handles":"Pan / pinch to inspect"}</span>
+         </div>}
+         <div className="geo-plot-scene-info">{modelStatus||("Top view · model coordinates in metres · "+
+           (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Tap corners clockwise":"Drag corner handles"))}</div>
       </div>
       <aside className="geo-plot-dock">
         <div className="geo-plot-inspector-head">
