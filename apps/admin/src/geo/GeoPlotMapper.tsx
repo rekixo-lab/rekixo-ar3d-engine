@@ -301,7 +301,9 @@ export default function GeoPlotMapper(){
     const screen:Point=[clientX-rect.left,clientY-rect.top];
     const rings:Array<{points:Point[];skipIndex?:number}>=
       plots.filter(p=>p.id!==originalId).map(p=>({points:p.corners}));
-    if(workingRef.current?.corners.length)
+    // Platform parity: new drawing snaps to SAVED boundaries, never back onto
+    // its own incomplete polygon (which could silently create zero-length edges).
+    if(mode==="edit"&&workingRef.current?.corners.length)
       rings.push({points:workingRef.current.corners,...(skipIndex>=0?{skipIndex}:{})});
     const target=precisionSnap(raw,screen,rings,project,{enabled:snap,thresholdPx:6});
     return {point:target.point as Point,screen:target.screen as Point,
