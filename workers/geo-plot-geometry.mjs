@@ -183,6 +183,10 @@ export function validateGeoPlotCollection(value, { forPublish = false } = {}) {
     if (forPublish && (!p.area.verified || !p.area.source || !p.facingVerified || !p.facingSource ||
       Object.values(p.sides).some(s => !s.verified || !s.source)))
       throw Error("Plot "+p.id+": verify authoritative measurements and source before publish.");
+    // Front means the actual road-facing edge, not merely edge 0 or screen top.
+    // Existing sealed releases remain readable because this is publish-only.
+    if (forPublish && p.road && p.sides.front?.roadFacing!==true)
+      throw Error("Plot "+p.id+": select and verify a road-facing Front boundary before publish.");
     return p;
   });
   assertDisjointPlotInteriors(plots);
