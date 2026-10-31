@@ -7,7 +7,7 @@ type Snapshot={revision:number;rows:GeoInventoryRow[];updatedBy?:string|null;upd
 type Preview=GeoInventoryDiff&{rowCount:number;expectedRevision:number;
   geometryChanged:boolean;publishedDataChanged:boolean;approvalsReset:boolean};
 type Props={slug:string;mappedIds:string[];workingId?:string;blocked:boolean;
-  onRowsChange:(rows:GeoInventoryRow[])=>void;onStart:(row:GeoInventoryRow)=>void};
+  onRowsChange:(rows:GeoInventoryRow[],revision:number)=>void;onStart:(row:GeoInventoryRow)=>void};
 const url=(slug:string)=>`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/geo-plots/inventory`;
 async function request<T>(path:string,init?:RequestInit):Promise<T>{
   const r=await fetch(path,{cache:"no-store",...init,headers:{"Accept":"application/json",...init?.headers}});
@@ -36,7 +36,7 @@ export default function GeoPlotInventoryPanel({slug,mappedIds,workingId,blocked,
     void Promise.all([request<Snapshot>(url(slug)),
       listAssets(slug).catch(()=>({assets:[] as CloudAssetSummary[]}))]).then(([result,assetList])=>{
       if(!mounted)return;
-      setInventory(result);onRowsChange(result.rows);
+      setInventory(result);onRowsChange(result.rows,result.revision);
       setReferenceAssets(assetList.assets.filter(a=>a.kind==="reference"&&a.mimeType.startsWith("image/")));
     }).catch(e=>{if(mounted)setError(e instanceof Error?e.message:"Inventory unavailable.");});
     return()=>{mounted=false;};
@@ -66,8 +66,8 @@ export default function GeoPlotInventoryPanel({slug,mappedIds,workingId,blocked,
     try{
       const result=await send("import",preview.rows,inventory.revision);
       if(!result.inventory)throw Error("Inventory read-back missing.");
-      setInventory(result.inventory);onRowsChange(result.inventory.rows);setPreview(null);
-      setSuccess("Plot inventory saved and read back. Mapping and published website unchanged.");
+      setInventory(result.inventory);onRowsChange(result.inventory.rows,result.inventory.revision);setPreview(null);
+      setSuccess("Plot inventory saved. The Publish/Verify gate now requires reconciliation with current approved CSV facts; existing live releases are untouched.");
     }catch(e){setError(e instanceof Error?e.message:"Inventory import failed.");}
     finally{setBusy("");}
   };
