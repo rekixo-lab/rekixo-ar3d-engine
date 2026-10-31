@@ -18,8 +18,12 @@ function urlValue(value, kind="external") {
   try{url=new URL(v);}catch{throw Error("Provide a complete https:// URL.");}
   if(url.protocol!=="https:" || url.username || url.password || !url.hostname || /[\s<>]/.test(v))
     throw Error("Only secure HTTPS URLs without embedded credentials are allowed.");
-  if(kind==="maps" && !/(^|\.)google\.[a-z.]+$|(^|\.)goo\.gl$/.test(url.hostname))
-    throw Error("Map link must be a Google Maps HTTPS URL.");
+  // Never accept google.evil.com or a lookalike host as Google Maps.
+  // Support Google's country-code domains and official goo.gl short links.
+  const googleHost=/(^|\.)google\.(?:com|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2})$/.test(url.hostname);
+  const googleShort=url.hostname==="goo.gl" || url.hostname.endsWith(".goo.gl");
+  if(kind==="maps" && !(googleHost || googleShort))
+    throw Error("Map link must be an official Google Maps HTTPS URL.");
   return url.href;
 }
 const fields={
