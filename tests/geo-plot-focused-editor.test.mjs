@@ -60,7 +60,7 @@ test("normal and fullscreen authoring use the same toolbar, inspector and publis
   assert.match(editor,/beforeunload/);
   assert.match(editor,/sideLabelAnchor/);
   assert.match(editor,/area:\{\.\.\.prev\.area,verified:false\}/);
-  assert.match(editor,/controls\.minZoom=1;controls\.maxZoom=32/);
+  assert.match(editor,/controls\.minZoom=1;controls\.maxZoom=50/);
   assert.match(css,/\.geo-plot-editor-shell:fullscreen/);
   assert.match(css,/\.geo-plot-editor-shell:fullscreen \.geo-plot-workspace/);
   assert.match(css,/\.geo-plot-editor-shell:fullscreen \.geo-plot-dock/);
