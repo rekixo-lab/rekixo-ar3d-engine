@@ -70,7 +70,11 @@ export default function MasterplanPublic(){
     return()=>controller.abort();
   },[slug,attempt]);
   useEffect(()=>{
-    if(!data?.maps.configured||!data.maps.apiKey||!mapHost.current){setFallback(true);return;}
+    // Do not enter fallback while the released document is still loading.
+    // That used to hide the map while Google constructed it at 0×0 pixels.
+    if(!data)return;
+    if(!data.maps.configured||!data.maps.apiKey||!mapHost.current){setFallback(true);return;}
+    setFallback(false);
     let live=true,overlay:GOverlay|null=null;
     const polygons:GPolygon[]=[];polygonsRef.current=polygons;
     void loadMaps(data.maps.apiKey).then(google=>{
@@ -114,6 +118,7 @@ export default function MasterplanPublic(){
         polygon.addListener("click",()=>setSelected(plot));
         polygons.push(polygon);
       }
+      setFallback(false);
       setMapReady(true);
     }).catch(e=>{if(live){setError(String(e));setFallback(true);}});
     return()=>{live=false;overlay?.setMap(null);for(const p of polygons)p.setMap(null);
@@ -135,7 +140,7 @@ export default function MasterplanPublic(){
     {error&&<div role="alert" className="masterplan-public-error">{error}
       <button onClick={()=>setAttempt(x=>x+1)}>Retry</button></div>}
     <section className="masterplan-public-map">
-      <div className="masterplan-public-mapcanvas" ref={mapHost} style={{display:fallback?"none":"block"}}/>
+      <div className="masterplan-public-mapcanvas" ref={mapHost} style={{visibility:fallback?"hidden":"visible"}}/>
       {fallback&&data&&<div className="masterplan-public-fallback">
         <p>Google Map is unavailable. Showing the approved image only—not verified satellite placement.</p>
         <svg viewBox={`0 0 ${data.image.width} ${data.image.height}`} preserveAspectRatio="xMidYMid meet">
