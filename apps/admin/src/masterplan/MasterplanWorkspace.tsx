@@ -174,7 +174,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const setSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>{
     if(!p)return p;
     const changed=["edges","length","unit","source","roadFacing"].some(k=>Object.hasOwn(patch,k));
-    return {...p,...(Object.hasOwn(patch,"roadFacing")?{facingVerified:false}:{}),
+    return {...p,...((Object.hasOwn(patch,"roadFacing") || (role==="front"&&Object.hasOwn(patch,"edges")))?{facingVerified:false}:{}),
       sides:{...p.sides,[role]:{...(p.sides[role]||blankSide()),...patch,
         ...(changed?{verified:false}:{})}}};
   });
