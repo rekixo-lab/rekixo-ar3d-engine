@@ -84,7 +84,7 @@ test("project creation starts the Source Pack workflow, preserves Building-first
   assert.match(dashboard, /immutable Building release publish karein/);
   assert.match(dashboard, /Customer ko map-based experience chahiye to Geo add karein; otherwise Building complete hai/);
   assert.match(dashboard, /Exact real-world Building placement\. Optional unless the customer needs map context/);
-  assert.match(dashboard, /Create & Open Source Pack/);
+  assert.match(dashboard, /newProjectStartPath\(createKind\)/);
 });
 
 test("new projects offer three isolated types without breaking Building-first legacy path",()=>{
