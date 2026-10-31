@@ -3,6 +3,7 @@ import { validateGeoPlotCollection } from "./geo-plot-geometry.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
 import { activeGeoReleaseState,publicGeoExperienceFromState } from "./geo-release-runtime.mjs";
 import { handleGeoPlotInventory } from "./geo-plot-inventory.mjs";
+import { requireGeoInventoryReview } from "../shared/geo-plot-source-review.js";
 
 const json = (value, init = {}) => Response.json(value, {headers: {"Cache-Control":"no-store"}, ...init});
 const fail = (message, status = 400) => json({error:message}, {status});
@@ -24,10 +25,16 @@ async function context(env, slug) {
   ).bind(project.id).first();
   return {project, active};
 }
+async function inventoryState(env,projectId){
+  const row=await env.DB.prepare("SELECT revision,rows_json FROM geo_plot_inventory_3d WHERE project_id=?")
+    .bind(projectId).first();
+  return {revision:Number(row?.revision||0),rows:row?JSON.parse(row.rows_json):[]};
+}
 async function state(env, ctx) {
   const draft = await env.DB.prepare(
-    "SELECT revision,verified_revision,plots_json,geo_release_id,building_release_id FROM geo_plot_mapping_drafts_3d WHERE project_id=?"
+    "SELECT revision,verified_revision,verified_inventory_revision,plots_json,geo_release_id,building_release_id FROM geo_plot_mapping_drafts_3d WHERE project_id=?"
   ).bind(ctx.project.id).first();
+  const inventory=await inventoryState(env,ctx.project.id);
   const active = await env.DB.prepare(
     `SELECT r.id,r.version,r.geo_release_id,r.building_release_id,r.sha256
        FROM geo_plot_mapping_active_3d a JOIN geo_plot_mapping_releases_3d r
@@ -37,12 +44,15 @@ async function state(env, ctx) {
   const versions = await env.DB.prepare(
     "SELECT id,version,geo_release_id AS geoReleaseId,created_at AS createdAt FROM geo_plot_mapping_releases_3d WHERE project_id=? ORDER BY version DESC LIMIT 20"
   ).bind(ctx.project.id).all();
-  return {project:ctx.project, geoReleaseId:ctx.active?.geo_release_id || null,
+  return {project:ctx.project,inventoryRevision:inventory.revision,
+    geoReleaseId:ctx.active?.geo_release_id || null,
     buildingReleaseId:ctx.active?.source_building_release_id || null,
-    draft:draft ? {revision:draft.revision,verifiedRevision:draft.verified_revision,geoReleaseId:draft.geo_release_id,
+    draft:draft ? {revision:draft.revision,verifiedRevision:draft.verified_revision,
+      verifiedInventoryRevision:draft.verified_inventory_revision,geoReleaseId:draft.geo_release_id,
       buildingReleaseId:draft.building_release_id,stale:draft.geo_release_id!==ctx.active?.geo_release_id ||
       draft.building_release_id!==ctx.active?.source_building_release_id,
-      plots:JSON.parse(draft.plots_json)} : {revision:0,verifiedRevision:null,stale:false,plots:[]},
+      plots:JSON.parse(draft.plots_json)} : {revision:0,verifiedRevision:null,
+      verifiedInventoryRevision:null,stale:false,plots:[]},
     activeMapping:active ? {id:active.id,version:active.version,geoReleaseId:active.geo_release_id,
       current:active.geo_release_id===ctx.active?.geo_release_id && active.building_release_id===ctx.active?.source_building_release_id} : null,
     releases:versions.results || []};
@@ -53,7 +63,8 @@ async function writeDraft(env, ctx, actor, body) {
   if (body.geoReleaseId!==ctx.active.geo_release_id) throw Error("Geo release changed. Reload before saving.");
   const plots=validateGeoPlotCollection(body.plots);
   const text=JSON.stringify(plots),now=currentIso();
-  if (text.length>4_000_000) throw Error("Mapping exceeds the permitted storage size.");
+  if (new TextEncoder().encode(text).byteLength>4_000_000)
+    throw Error("Mapping exceeds the permitted storage size.");
   let result;
   if (expected===0) result=await env.DB.prepare(
     `INSERT INTO geo_plot_mapping_drafts_3d
@@ -61,7 +72,8 @@ async function writeDraft(env, ctx, actor, body) {
       VALUES (?,?,?,?,1,NULL,?,?,?) ON CONFLICT(project_id) DO NOTHING`
   ).bind(ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,ctx.active.source_building_release_id,text,actor.email,now).run();
   else result=await env.DB.prepare(
-    `UPDATE geo_plot_mapping_drafts_3d SET revision=revision+1,verified_revision=NULL,plots_json=?,updated_by=?,updated_at=?
+    `UPDATE geo_plot_mapping_drafts_3d SET revision=revision+1,verified_revision=NULL,
+        verified_inventory_revision=NULL,plots_json=?,updated_by=?,updated_at=?
       WHERE project_id=? AND experience_id=? AND geo_release_id=? AND building_release_id=? AND revision=?`
   ).bind(text,actor.email,now,ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,ctx.active.source_building_release_id,expected).run();
   if (result.meta?.changes!==1) throw Error("Concurrent change or Geo release switch. Reload mapping; no data overwritten.");
@@ -79,7 +91,7 @@ async function resetForNewGeo(env,ctx,actor,body) {
   const now=currentIso();
   const res=await env.DB.prepare(`UPDATE geo_plot_mapping_drafts_3d
     SET geo_release_id=?,building_release_id=?,revision=revision+1,verified_revision=NULL,
-        plots_json='[]',updated_by=?,updated_at=?
+        verified_inventory_revision=NULL,plots_json='[]',updated_by=?,updated_at=?
     WHERE project_id=? AND revision=?`).bind(ctx.active.geo_release_id,
     ctx.active.source_building_release_id,actor.email,now,ctx.project.id,draft.revision).run();
   if(res.meta?.changes!==1)throw Error("Concurrent mapping change.");
@@ -94,18 +106,23 @@ async function verify(env,ctx,actor,body) {
   if (!draft || draft.revision!==body.expectedRevision || draft.geo_release_id!==ctx.active.geo_release_id ||
       draft.building_release_id!==ctx.active.source_building_release_id)
     throw Error("Save the latest mapping against the current Geo/Building release before verification.");
-  validateGeoPlotCollection(JSON.parse(draft.plots_json),{forPublish:true});
+  const plots=validateGeoPlotCollection(JSON.parse(draft.plots_json),{forPublish:true});
+  const inventory=await inventoryState(env,ctx.project.id);
+  requireGeoInventoryReview(plots,inventory.rows);
   const res=await env.DB.prepare(
-    `UPDATE geo_plot_mapping_drafts_3d SET verified_revision=revision,updated_by=?,updated_at=?
+    `UPDATE geo_plot_mapping_drafts_3d SET verified_revision=revision,
+      verified_inventory_revision=?,updated_by=?,updated_at=?
       WHERE project_id=? AND revision=? AND geo_release_id=? AND building_release_id=?
+        AND COALESCE((SELECT i.revision FROM geo_plot_inventory_3d i
+          WHERE i.project_id=geo_plot_mapping_drafts_3d.project_id),0)=?
         AND EXISTS(SELECT 1 FROM geo_experience_active_releases_3d ar
           JOIN geo_releases_3d gr ON gr.id=ar.geo_release_id AND gr.project_id=ar.project_id
           WHERE ar.experience_id=geo_plot_mapping_drafts_3d.experience_id
             AND ar.project_id=geo_plot_mapping_drafts_3d.project_id
             AND ar.geo_release_id=geo_plot_mapping_drafts_3d.geo_release_id
             AND gr.source_building_release_id=geo_plot_mapping_drafts_3d.building_release_id)`
-  ).bind(actor.email,currentIso(),ctx.project.id,draft.revision,ctx.active.geo_release_id,
-    ctx.active.source_building_release_id).run();
+  ).bind(inventory.revision,actor.email,currentIso(),ctx.project.id,draft.revision,
+    ctx.active.geo_release_id,ctx.active.source_building_release_id,inventory.revision).run();
   if (res.meta?.changes!==1) throw Error("Mapping changed during verification.");
   return state(env,ctx);
 }
@@ -115,6 +132,10 @@ async function publish(env,ctx,actor,body) {
       draft.geo_release_id!==ctx.active.geo_release_id || draft.building_release_id!==ctx.active.source_building_release_id)
     throw Error("Current mapping must be saved and verified for the active Geo/Building release.");
   const plots=validateGeoPlotCollection(JSON.parse(draft.plots_json),{forPublish:true});
+  const inventory=await inventoryState(env,ctx.project.id);
+  if(draft.verified_inventory_revision!==inventory.revision)
+    throw Error("Plot inventory was imported or changed after the last Verify. Reconcile the CSV and verify this revision again.");
+  requireGeoInventoryReview(plots,inventory.rows);
   const text=JSON.stringify(plots),sha=await digest(text),id="geo_plot_"+crypto.randomUUID(),now=currentIso();
   const versionRow=await env.DB.prepare("SELECT COALESCE(MAX(version),0)+1 AS version FROM geo_plot_mapping_releases_3d WHERE experience_id=?")
     .bind(ctx.active.experience_id).first();
@@ -135,18 +156,22 @@ async function publish(env,ctx,actor,body) {
           AND gr.source_building_release_id=?)
         AND EXISTS(SELECT 1 FROM geo_plot_mapping_drafts_3d d WHERE d.project_id=?
           AND d.experience_id=? AND d.geo_release_id=? AND d.building_release_id=?
-          AND d.revision=? AND d.verified_revision=d.revision)`).bind(id,ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
+          AND d.revision=? AND d.verified_revision=d.revision
+          AND d.verified_inventory_revision=?
+          AND d.verified_inventory_revision=COALESCE(
+            (SELECT i.revision FROM geo_plot_inventory_3d i WHERE i.project_id=d.project_id),0))`).bind(id,ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
       ctx.active.source_building_release_id,versionRow.version,draft.revision,text,sha,actor.email,now,
       ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,ctx.active.source_building_release_id,
       ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
-      ctx.active.source_building_release_id,draft.revision),
+      ctx.active.source_building_release_id,draft.revision,inventory.revision),
     env.DB.prepare(`INSERT INTO geo_plot_mapping_active_3d(experience_id,project_id,mapping_release_id,updated_by,updated_at)
       VALUES (?,?,?,?,?) ON CONFLICT(experience_id) DO UPDATE SET
       mapping_release_id=excluded.mapping_release_id,updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
       .bind(ctx.active.experience_id,ctx.project.id,id,actor.email,now),
     env.DB.prepare(`INSERT INTO engine_admin_audit(id,actor_email,action,project_id,target_id,details_json,created_at)
       VALUES (?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),actor.email,"geo.plots_published",ctx.project.id,id,
-      JSON.stringify({geoReleaseId:ctx.active.geo_release_id,version:versionRow.version,plotCount:plots.length,sha}),now)
+      JSON.stringify({geoReleaseId:ctx.active.geo_release_id,version:versionRow.version,
+        inventoryRevision:inventory.revision,plotCount:plots.length,sha}),now)
   ]);
   return state(env,ctx);
 }
