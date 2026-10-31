@@ -53,6 +53,14 @@ function csv(plots:Plot[]):string{
       plot.sides[role]?.unit,plot.sides[role]?.source,plot.sides[role]?.roadFacing])
   ].map(cell).join(","))].join("\n");
 }
+function exportMasterplanDraftReview(slug:string,draft:MasterplanDraft){
+  // Owner-private local review snapshot, NOT a complete D1+R2 recovery package.
+  const body=JSON.stringify({schema:"rekixo-masterplan-source-review-v1",projectSlug:slug,
+    createdAt:new Date().toISOString(),draft},null,2);
+  const url=URL.createObjectURL(new Blob([body],{type:"application/json;charset=utf-8"}));
+  const a=document.createElement("a");a.href=url;a.download=slug+"-source-change-review.json";a.click();
+  window.setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
 export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const slug=new URLSearchParams(location.search).get("project")||"";
   const endpoint=`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/masterplan-geo`;
@@ -92,6 +100,13 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     setDraft(d=>d?{...d,...patch}:d);setDirty(true);
   }
   async function upload(file:File){
+    if(dirty||working)throw Error("Apply any open plot and Save the current mapping draft before replacing its source image.");
+    if(draft?.imageAssetId&&(draft.plots.length>0||draft.controlPoints.length>0)){
+      if(!window.confirm("Replacing this masterplan image clears the CURRENT DRAFT's "+
+        draft.plots.length+" polygons and "+draft.controlPoints.length+
+        " GPS controls. Published releases remain immutable. A private review JSON will download now. Continue?"))return;
+      exportMasterplanDraftReview(slug,draft);
+    }
     if(!["image/png","image/jpeg","image/webp"].includes(file.type))
       throw Error("Use original PNG, JPG or WebP masterplan.");
     if(file.size>16*1024*1024)throw Error("Choose an optimized masterplan image under 16 MB.");
@@ -293,6 +308,10 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       <aside className="masterplan-dock">
         {mode==="source"?<>
           <h2>Original Masterplan</h2>
+          {draft?.imageAssetId&&<button type="button" disabled={!draft}
+            onClick={()=>draft&&exportMasterplanDraftReview(slug,draft)}>
+            Download source-change review snapshot (JSON · not a full backup)
+          </button>}
           <label>Upload image (PNG, JPG, WebP · max 16 MB)
             <input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy}
               onChange={e=>{const file=e.target.files?.[0];e.target.value="";
