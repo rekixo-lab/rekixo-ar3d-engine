@@ -9,6 +9,8 @@ import {adjacentPlot,boundedZoom,hasPendingPlotEdits,isTextEditingTarget,
 import GeoPlotInventoryPanel from "./GeoPlotInventoryPanel";
 import {nextUnmappedInventory,type GeoInventoryRow} from "../../../../shared/geo-plot-inventory.js";
 import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
+import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
+import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import "./geo-plot-mapper.css";
 
 type Point = [number, number]; // Immutable Building-local X/Z metres.
@@ -18,7 +20,9 @@ type Plot = { id: string; corners: Point[]; layout: "three" | "four";
   sides: Partial<Record<Role, Side>>; area: { value: number; unit: "sqft" | "sqm" | "sqyd"; source: string; verified: boolean };
   facing: string; facingSource:string; facingVerified:boolean; planeY?:number;planeSource?:string;planeVerified?:boolean;road: string; notes: string };
 type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | null;
-  draft: {revision:number;verifiedRevision:number|null;stale:boolean;plots:Plot[]};
+  inventoryRevision:number;
+  draft: {revision:number;verifiedRevision:number|null;verifiedInventoryRevision:number|null;
+    stale:boolean;plots:Plot[]};
   activeMapping:{id:string;version:number;current:boolean}|null;
   releases:Array<{id:string;version:number;geoReleaseId:string}> };
 type GeoPublic = { geoRelease:{id:string}; buildingRelease:{id:string};
@@ -181,6 +185,13 @@ export default function GeoPlotMapper(){
   workingRef.current=working;
   const displayedPlots=useMemo(()=>plots.filter(p=>p.id.toLowerCase().includes(inventoryQuery.trim().toLowerCase())),
     [plots,inventoryQuery]);
+  const inventoryIssues=useMemo(()=>geoInventoryReviewIssues(plots,inventoryRows),
+    [plots,inventoryRows]);
+  const selectedInventory=useMemo(()=>inventoryRows.find(p=>
+    p.id.toLowerCase()===working?.id.toLowerCase()),[inventoryRows,working?.id]);
+  const onInventoryRowsChange=useCallback((rows:GeoInventoryRow[],revision:number)=>{
+    setInventoryRows(rows);setState(prev=>prev?{...prev,inventoryRevision:revision}:prev);
+  },[]);
   const hasUnapplied=hasPendingPlotEdits(working,originalId?plots.find(p=>p.id===originalId):null);
   const api=slug?`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/geo-plots`:"";
   const refresh=useCallback(async(isCurrent:()=>boolean)=>{
@@ -455,7 +466,26 @@ export default function GeoPlotMapper(){
     if(pointerStartRef.current?.id===e.pointerId)pointerStartRef.current=null;
     dragRef.current=null;clearPointer();
   };
-  const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>p?{...p,sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...patch}}}:p);
+  const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>{
+    if(!p)return p;
+    const changesReference=["edges","length","unit","source","roadFacing"].some(k=>Object.hasOwn(patch,k));
+    return {...p,...(Object.hasOwn(patch,"roadFacing")?{facingVerified:false}:{}),
+      sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...patch,
+        ...(changesReference?{verified:false}:{})}}};
+  });
+  const selectRoadFront=(edge:number)=>{
+    if(!working)return;
+    if(!window.confirm("Make polygon edge "+edge+" the road-facing FRONT? All side and facing approvals will reset. No published plot is changed."))return;
+    setWorking(p=>p?assignFourCornerRoadFront(p,edge):p);
+    setMessage("Road-facing Front changed to edge "+edge+". Review Front/Back/Depth lengths and sources, then reverify.");
+  };
+  const applyCurrentSource=()=>{
+    if(!working||!selectedInventory)return;
+    if(!window.confirm("Replace approved values and sources for Plot "+working.id+
+      " with current CSV inventory? Existing polygon corners, site plane and published release remain unchanged. Modified approvals reset."))return;
+    setWorking(p=>p?applyApprovedInventoryRow(p,selectedInventory):p);
+    setMessage("Plot "+working.id+": approved CSV values staged. Recheck road-facing edge, measurements and sources before applying.");
+  };
   const applyPlot=(openNext=false)=>{
     if(!working)return;const id=working.id.trim();if(!id||working.corners.length<3)throw Error("Plot number and at least 3 mapped corners required.");
     if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId))throw Error("Duplicate plot ID.");
@@ -693,7 +723,9 @@ export default function GeoPlotMapper(){
         <div className="geo-plot-tool-group geo-plot-tool-group--publish">
           <button type="button" className="geo-plot-publish-button"
             disabled={!editable||busy||dirty||Boolean(working)||!state||
-              state.draft.verifiedRevision!==state.draft.revision}
+              state.draft.verifiedRevision!==state.draft.revision||
+              state.draft.verifiedInventoryRevision!==state.inventoryRevision||
+              inventoryIssues.length>0}
             onClick={()=>void execute("publish")}>Publish Mapping</button>
         </div>
       </section>
@@ -795,7 +827,7 @@ export default function GeoPlotMapper(){
       <aside className="geo-plot-dock">
         <GeoPlotInventoryPanel key={slug} slug={slug} mappedIds={plots.map(p=>p.id)}
           workingId={working?.id} blocked={!editable||busy||dirty||hasUnapplied}
-          onRowsChange={setInventoryRows}
+          onRowsChange={onInventoryRowsChange}
           onStart={row=>{
             if(!confirmUnapplied())return;
             if(plots.some(p=>p.id.toLowerCase()===row.id.toLowerCase())){
