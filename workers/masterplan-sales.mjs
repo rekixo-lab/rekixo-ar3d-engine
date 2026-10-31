@@ -2,7 +2,7 @@
 const json=(value,status=200)=>Response.json(value,{status,headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
 const fail=(msg,status=409)=>json({error:msg},status);
 const uuid=v=>typeof v==="string"&&/^[0-9a-f-]{36}$/i.test(v);
-const positiveMoney=v=>Number.isSafeInteger(v)&&v>0&&v<=100000000000000;
+const positiveMoney=v=>Number.isSafeInteger(v)&&v>0&&v<=1000000000000;
 const date=v=>typeof v==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&
   !Number.isNaN(Date.parse(v+"T00:00:00Z"));
 const text=(v,max=250)=>typeof v==="string"&&v.length<=max&&
@@ -38,12 +38,24 @@ async function getSales(env,project,saleId){
     JOIN masterplan_geo_releases_3d r ON r.id=a.release_id AND r.project_id=a.project_id
     WHERE a.project_id=?`).bind(project.id).first();
   const mapped=current?JSON.parse(current.mapping_json).plots.map(p=>p.id):[];
-  const occupied=new Set(result.filter(s=>s.state!=="void").map(s=>s.plotId.toLowerCase()));
-  const totals=result.filter(s=>s.state!=="void").reduce((acc,s)=>({
-    agreementPaise:acc.agreementPaise+Number(s.agreementPaise),
-    receivedPaise:acc.receivedPaise+Number(s.receivedPaise),
-    balancePaise:acc.balancePaise+Number(s.balancePaise)}),
-    {agreementPaise:0,receivedPaise:0,balancePaise:0});
+  // Inventory/summary must include ALL active sales, not just the first 250
+  // register rows. The DB unique plot constraint protects concurrent bookings.
+  const [all,ledger]=await Promise.all([
+    env.DB.prepare(`SELECT plot_id FROM masterplan_sales_3d
+      WHERE project_id=? AND state<>'void'`).bind(project.id).all(),
+    env.DB.prepare(`SELECT
+      COALESCE((SELECT SUM(agreement_paise) FROM masterplan_sales_3d
+        WHERE project_id=? AND state<>'void'),0) AS agreementPaise,
+      COALESCE((SELECT SUM(CASE WHEN p.kind='receipt' THEN p.amount_paise ELSE -p.amount_paise END)
+        FROM masterplan_sale_payments_3d p
+        JOIN masterplan_sales_3d s ON s.id=p.sale_id AND s.project_id=p.project_id
+        WHERE s.project_id=? AND s.state<>'void'),0) AS receivedPaise`)
+      .bind(project.id,project.id).first()
+  ]);
+  const occupied=new Set((all.results||[]).map(s=>s.plot_id.toLowerCase()));
+  const totals={agreementPaise:Number(ledger?.agreementPaise||0),
+    receivedPaise:Number(ledger?.receivedPaise||0),
+    balancePaise:Number(ledger?.agreementPaise||0)-Number(ledger?.receivedPaise||0)};
   return {sales:result,payments,inventory:{
     mappedPlotCount:mapped.length,availablePlotIds:mapped.filter(id=>!occupied.has(id.toLowerCase())),
     sourceReleaseId:current?.id||null},totals,role:"owner"};
