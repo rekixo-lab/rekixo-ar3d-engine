@@ -2314,7 +2314,6 @@ async function routeProjects(request, env, actor, url) {
   if (!project) return json({ error: "Cloud project not found." }, { status: 404 });
   if (parts.length>1 && !projectKindAllowsCloudRoute(project.project_kind,parts[1]))
     return json({error:"This module is not enabled for this project type."},{status:403});
-
   if (request.method !== "GET") {
     const deletionJob = await activeDeletionJob(env);
     if (deletionJob)
