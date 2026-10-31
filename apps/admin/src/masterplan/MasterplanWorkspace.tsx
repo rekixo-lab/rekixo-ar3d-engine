@@ -85,7 +85,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     return()=>{on=false;};},[load]);
   useEffect(()=>{
     const source=assets.find(a=>a.id===draft?.imageAssetId);
-    setImageUrl(source?.contentUrl||"");
+    setImageUrl(source?.contentUrl ? source.contentUrl+"?preview=1" : "");
   },[draft?.imageAssetId,assets]);
   function changeDraft(patch:Partial<MasterplanDraft>){
     setDraft(d=>d?{...d,...patch}:d);setDirty(true);
