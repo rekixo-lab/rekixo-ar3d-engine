@@ -32,7 +32,8 @@ export async function servePublicMasterplanShareCard(request,env,slug){
   if(!row)return Response.json({error:"Published share card unavailable."},{status:404});
   const obj=await serveR2Object(env.MODEL_ASSETS,row.r2_key,request,{
     mimeType:row.mime_type,expectedSize:row.byte_size,sha256:row.card_sha256,
-    cacheControl:"public,max-age=300,must-revalidate",allowRange:false
+    cacheControl:"public,max-age=300,must-revalidate",allowRange:false,
+    verifyStoredChecksum:true
   });
   return obj.response||Response.json({error:"Missing share card"},{status:503});
 }
