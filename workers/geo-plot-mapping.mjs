@@ -12,7 +12,7 @@ function sameOrigin(request) {
   catch { return false; }
 }
 async function context(env, slug) {
-  const project = await env.DB.prepare("SELECT id,slug,status FROM projects_3d WHERE slug=?").bind(slug).first();
+  const project = await env.DB.prepare("SELECT id,slug,status,project_kind FROM projects_3d WHERE slug=?").bind(slug).first();
   if (!project) return null;
   const active = await env.DB.prepare(
     `SELECT e.id AS experience_id, ar.geo_release_id, r.source_building_release_id
@@ -175,6 +175,8 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
   try {
     const ctx=await context(env,slug);
     if (!ctx) return fail("Project not found.",404);
+    if ((ctx.project.project_kind||"legacy")!=="legacy")
+      return fail("The legacy Geo Plot Mapper is not enabled for this project type.",403);
     if (!ctx.active) return fail("Publish a verified Geo Experience before mapping plots.",409);
     if (request.method==="GET") return json(await state(env,ctx));
     if (!["PUT","POST"].includes(request.method)) return fail("Method not allowed.",405);
