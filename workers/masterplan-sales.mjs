@@ -10,11 +10,7 @@ const text=(v,max=250)=>typeof v==="string"&&v.length<=max&&
   !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(v)?v.trim():"";
 const origin=req=>{try{return new URL(req.headers.get("origin")||"").origin===new URL(req.url).origin;}catch{return false;}};
 const now=()=>new Date().toISOString();
-async function audit(env,actor,action,project,id,extra={}){
-  await env.DB.prepare(`INSERT INTO engine_admin_audit(id,actor_email,action,project_id,target_id,details_json,created_at)
-    VALUES(?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),actor.email,action,project.id,id,JSON.stringify(extra),now()).run();
-}
-async function getSales(env,project,saleId){
+async function getSales(env,project,saleId,offset=0){
   const sql=`SELECT s.id,s.plot_id AS plotId,s.buyer_name AS buyerName,
     s.buyer_phone AS buyerPhone,s.agreement_paise AS agreementPaise,s.state,s.revision,
     s.notes,s.source_mapping_release_id AS sourceReleaseId,s.created_at AS createdAt,
@@ -22,8 +18,8 @@ async function getSales(env,project,saleId){
     COALESCE((SELECT SUM(CASE WHEN p.kind='receipt' THEN p.amount_paise ELSE -p.amount_paise END)
       FROM masterplan_sale_payments_3d p WHERE p.sale_id=s.id),0) AS receivedPaise
     FROM masterplan_sales_3d s WHERE s.project_id=?`;
-  const sales=await env.DB.prepare(sql+(saleId?" AND s.id=?":"")+" ORDER BY s.created_at DESC LIMIT 250")
-    .bind(...(saleId?[project.id,saleId]:[project.id])).all();
+  const sales=await env.DB.prepare(sql+(saleId?" AND s.id=?":"")+" ORDER BY s.created_at DESC,s.id DESC LIMIT 250 OFFSET ?")
+    .bind(...(saleId?[project.id,saleId,0]:[project.id,offset])).all();
   const result=(sales.results||[]).map(s=>({...s,
     balancePaise:Number(s.agreementPaise)-Number(s.receivedPaise)}));
   let payments=[];
@@ -41,7 +37,7 @@ async function getSales(env,project,saleId){
   const mapped=current?JSON.parse(current.mapping_json).plots.map(p=>p.id):[];
   // Inventory/summary must include ALL active sales, not just the first 250
   // register rows. The DB unique plot constraint protects concurrent bookings.
-  const [all,ledger]=await Promise.all([
+  const [all,ledger,count]=await Promise.all([
     env.DB.prepare(`SELECT plot_id FROM masterplan_sales_3d
       WHERE project_id=? AND state<>'void'`).bind(project.id).all(),
     env.DB.prepare(`SELECT
@@ -51,13 +47,17 @@ async function getSales(env,project,saleId){
         FROM masterplan_sale_payments_3d p
         JOIN masterplan_sales_3d s ON s.id=p.sale_id AND s.project_id=p.project_id
         WHERE s.project_id=? AND s.state<>'void'),0) AS receivedPaise`)
-      .bind(project.id,project.id).first()
+      .bind(project.id,project.id).first(),
+    env.DB.prepare("SELECT COUNT(*) AS total FROM masterplan_sales_3d WHERE project_id=?")
+      .bind(project.id).first()
   ]);
   const occupied=new Set((all.results||[]).map(s=>s.plot_id.toLowerCase()));
   const totals={agreementPaise:Number(ledger?.agreementPaise||0),
     receivedPaise:Number(ledger?.receivedPaise||0),
     balancePaise:Number(ledger?.agreementPaise||0)-Number(ledger?.receivedPaise||0)};
-  return {sales:result,payments,inventory:{
+  const totalSales=Number(count?.total||0);
+  return {sales:result,totalSales,nextOffset:(!saleId&&offset+result.length<totalSales)?offset+result.length:null,
+    payments,inventory:{
     mappedPlotCount:mapped.length,availablePlotIds:mapped.filter(id=>!occupied.has(id.toLowerCase())),
     sourceReleaseId:current?.id||null},totals,role:"owner"};
 }
@@ -100,12 +100,20 @@ async function confirmSale(env,actor,project,body){
   if(!uuid(body.saleId)||!Number.isInteger(body.expectedRevision))
     throw Error("Sale ID and expected revision required.");
   const time=now();
-  const result=await env.DB.prepare(`UPDATE masterplan_sales_3d
-    SET state='confirmed',revision=revision+1,confirmed_by=?,confirmed_at=?
-    WHERE project_id=? AND id=? AND revision=? AND state='booked'`)
-    .bind(actor.email,time,project.id,body.saleId,body.expectedRevision).run();
-  if(result.meta?.changes!==1)throw Error("Sale changed or is not booked. Reload ledger.");
-  await audit(env,actor,"masterplan.sale_confirmed",project,body.saleId);
+  const results=await env.DB.batch([
+    env.DB.prepare(`UPDATE masterplan_sales_3d
+      SET state='confirmed',revision=revision+1,confirmed_by=?,confirmed_at=?
+      WHERE project_id=? AND id=? AND revision=? AND state='booked'`)
+      .bind(actor.email,time,project.id,body.saleId,body.expectedRevision),
+    env.DB.prepare(`INSERT INTO engine_admin_audit
+      (id,actor_email,action,project_id,target_id,details_json,created_at)
+      SELECT ?,?,'masterplan.sale_confirmed',?,?,?,?
+      FROM masterplan_sales_3d s WHERE s.id=? AND s.project_id=?
+        AND s.state='confirmed' AND s.confirmed_by=? AND s.confirmed_at=?`)
+      .bind(crypto.randomUUID(),actor.email,project.id,body.saleId,"{}",time,
+        body.saleId,project.id,actor.email,time)
+  ]);
+  if(results[0].meta?.changes!==1)throw Error("Sale changed or is not booked. Reload ledger.");
 }
 async function addReceipt(env,actor,project,body){
   if(!uuid(body.saleId)||!positiveMoney(body.amountPaise)||!uuid(body.idempotencyKey)||
@@ -165,14 +173,23 @@ async function voidSale(env,actor,project,body){
   if(!uuid(body.saleId)||!Number.isInteger(body.expectedRevision)||text(body.reason||"",300).length<6)
     throw Error("Sale revision and a correction reason (min six characters) required.");
   const time=now();
-  const res=await env.DB.prepare(`UPDATE masterplan_sales_3d SET
-    state='void',revision=revision+1,voided_by=?,voided_at=?
-    WHERE id=? AND project_id=? AND revision=? AND state<>'void'
-      AND 0=COALESCE((SELECT SUM(CASE WHEN p.kind='receipt' THEN p.amount_paise
-      ELSE -p.amount_paise END) FROM masterplan_sale_payments_3d p WHERE p.sale_id=masterplan_sales_3d.id),0)`)
-    .bind(actor.email,time,body.saleId,project.id,body.expectedRevision).run();
-  if(res.meta?.changes!==1)throw Error("Sale changed or has unreversed payments. Correct receipts first.");
-  await audit(env,actor,"masterplan.sale_void",project,body.saleId,{reason:text(body.reason,300)});
+  const results=await env.DB.batch([
+    env.DB.prepare(`UPDATE masterplan_sales_3d SET
+      state='void',revision=revision+1,voided_by=?,voided_at=?
+      WHERE id=? AND project_id=? AND revision=? AND state<>'void'
+        AND 0=COALESCE((SELECT SUM(CASE WHEN p.kind='receipt' THEN p.amount_paise
+        ELSE -p.amount_paise END) FROM masterplan_sale_payments_3d p WHERE p.sale_id=masterplan_sales_3d.id),0)`)
+      .bind(actor.email,time,body.saleId,project.id,body.expectedRevision),
+    env.DB.prepare(`INSERT INTO engine_admin_audit
+      (id,actor_email,action,project_id,target_id,details_json,created_at)
+      SELECT ?,?,'masterplan.sale_void',?,?,?,?
+      FROM masterplan_sales_3d s WHERE s.id=? AND s.project_id=?
+        AND s.state='void' AND s.voided_by=? AND s.voided_at=?`)
+      .bind(crypto.randomUUID(),actor.email,project.id,body.saleId,
+        JSON.stringify({reason:text(body.reason,300)}),time,
+        body.saleId,project.id,actor.email,time)
+  ]);
+  if(results[0].meta?.changes!==1)throw Error("Sale changed or has unreversed payments. Correct receipts first.");
 }
 export async function handleMasterplanSalesAdmin(request,env,actor,project,parts,url){
   if(parts.length!==2||parts[1]!=="sales")return null;
@@ -180,7 +197,11 @@ export async function handleMasterplanSalesAdmin(request,env,actor,project,parts
   if(request.method==="GET"){
     const saleId=url.searchParams.get("saleId");
     if(saleId&&!uuid(saleId))return fail("Invalid sale identifier.",400);
-    return json(await getSales(env,project,saleId));
+    const offsetText=url.searchParams.get("offset");
+    const offset=offsetText===null?0:Number(offsetText);
+    if(!Number.isSafeInteger(offset)||offset<0||offset>100000)
+      return fail("Invalid sales page offset.",400);
+    return json(await getSales(env,project,saleId,offset));
   }
   if(request.method!=="POST")return fail("Method not allowed.",405);
   if(!origin(request))return fail("Same-origin financial write required.",403);
