@@ -734,13 +734,45 @@ export default function GeoPlotMapper(){
                    x={x} y={y-14} textAnchor="middle">{label+value}</text>;
                })}
              {working.corners.map((point,i)=>{const [x,y]=project(point);
-              return <g key={i}><circle cx={x} cy={y} r="9" fill="#ffe49d" stroke="#182a3e" strokeWidth="2"
-                onPointerDown={e=>{if(mode!=="edit")return;e.stopPropagation();dragRef.current=i;e.currentTarget.setPointerCapture(e.pointerId);}}
-                onPointerUp={e=>{dragRef.current=null;if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}/>
-                <text x={x+10} y={y-8} fill="#fff" fontSize="13" stroke="#111" paintOrder="stroke">{i+1}</text></g>;
+              return <g key={i} className="geo-plot-precision-handle">
+                <circle className="geo-plot-handle-hit" cx={x} cy={y} r="17" fill="transparent"
+                  onPointerDown={e=>{
+                    e.stopPropagation();
+                    if(mode!=="edit")return;
+                    dragRef.current=i;pointerStartRef.current=null;
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    updatePointer(e.clientX,e.clientY,e.pointerType,i);
+                  }}
+                  onPointerUp={e=>{
+                    dragRef.current=null;
+                    if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+                    queuePointer(e.clientX,e.clientY,e.pointerType);
+                  }}
+                  onPointerCancel={()=>{dragRef.current=null;clearPointer();}}/>
+                <circle className="geo-plot-handle-visible" cx={x} cy={y}
+                  r={Math.max(4.5,10-Math.min((zoomPercent-100)/4900,1)*4)}
+                  fill="#ffe49d" stroke="#182a3e" strokeWidth="2.5" pointerEvents="none"/>
+                <text x={x+12} y={y-10} fill="#fff" fontSize="13" stroke="#111"
+                  paintOrder="stroke" pointerEvents="none">{i+1}</text></g>;
             })}
           </>}
         </svg>}
+        {pointerPreview&&mode!=="pan"&&geo&&<>
+          <div className="geo-plot-precision-crosshair" data-snap-kind={pointerPreview.kind}
+            style={{left:pointerPreview.screen[0],top:pointerPreview.screen[1]}}
+            aria-hidden="true"><i/><b/></div>
+          {pointerPreview.kind!=="none"&&
+            <div className="geo-plot-precision-pointer-origin" aria-hidden="true"
+              style={{left:pointerPreview.rawScreen[0],top:pointerPreview.rawScreen[1]}}/>}
+          <div className="geo-plot-precision-loupe" role="img"
+            aria-label="Magnified view centered on the exact mapping target">
+            <canvas ref={loupeCanvasRef} width={144} height={144} aria-hidden="true"/>
+            <div className="geo-plot-loupe-reticle" aria-hidden="true"/>
+            <strong>{pointerPreview.kind==="vertex"?"● Vertex snap":
+              pointerPreview.kind==="edge"?"━ Edge snap":"✚ Exact point"}</strong>
+            <span>Model X {pointerPreview.point[0].toFixed(4)} · Z {pointerPreview.point[1].toFixed(4)} m</span>
+          </div>
+        </>}
         {working&&<div className="geo-plot-scene-status" aria-live="polite">
            <b>Plot {working.id}</b>
            <span>{shape==="four"?working.corners.length+"/4":working.corners.length+" (irregular)"} corners</span>
