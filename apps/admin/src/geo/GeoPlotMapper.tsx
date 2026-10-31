@@ -305,11 +305,17 @@ export default function GeoPlotMapper(){
         sides:Object.fromEntries(Object.entries(prev.sides).map(([k,v])=>[k,{...v,verified:false}]))};});
   };
   const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>p?{...p,sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...patch}}}:p);
-  const applyPlot=()=>{
+  const applyPlot=(openNext=false)=>{
     if(!working)return;const id=working.id.trim();if(!id||working.corners.length<3)throw Error("Plot number and at least 3 mapped corners required.");
     if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId))throw Error("Duplicate plot ID.");
-    setPlots(prev=>[...prev.filter(p=>p.id!==(originalId||id)),{...working,id}].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})));
-    setDirty(true);setMessage("Plot staged locally. Save Mapping Draft before verification.");
+    const updated=[...plots.filter(p=>p.id!==(originalId||id)),{...working,id}]
+      .sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
+    setPlots(updated);setDirty(true);
+    if(openNext){
+      setWorking({...blank(nextFreePlotId(updated)),planeY:groundY,planeSource:"",planeVerified:false});
+      setOriginalId(null);setMode("draw");
+      setMessage("Plot "+id+" staged. Draw the next plot, then Save Mapping Draft.");
+    }else setMessage("Plot "+id+" staged. Save Mapping Draft before verification.");
   };
   const execute=async(action:"save"|"verify"|"publish"|"activate"|"rebind-reset",id?:string)=>{
     if(!state||!geo) return;setBusy(true);setMessage("");
@@ -474,15 +480,65 @@ export default function GeoPlotMapper(){
         role={message.startsWith("ERROR")?"alert":"status"}>{message}
         {message.startsWith("ERROR")&&<button type="button" onClick={()=>window.location.reload()}>
           Retry loading Geo source</button>}</div>}
-    <section className="geo-plot-tools" aria-label="Plot mapper controls">
-      <button disabled={!editable||busy} className={mode==="pan"?"active":""} onClick={()=>setMode("pan")}>Pan / Pinch</button>
-      <button disabled={!editable||busy} onClick={()=>begin("four")}>4 Corner</button>
-      <button disabled={!editable||busy} onClick={()=>begin("irregular")}>Irregular Polygon</button>
-      <button disabled={!editable||busy||!working} onClick={()=>setMode("edit")}>Edit Corners</button>
-      <button disabled={!working||!working.corners.length} onClick={()=>{setWorking(p=>p?{...p,corners:p.corners.slice(0,-1),sides:initialSides(p.corners.slice(0,-1))}:p);}}>Undo Corner</button>
-      <label><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/> Snap Corners</label>
-      <button disabled={!editable||busy||dirty||Boolean(working)||!state||state.draft.verifiedRevision!==state.draft.revision} onClick={()=>void execute("publish")}>Publish Mapping</button>
-    </section>
+    <div className="geo-plot-editor-shell" ref={editorRef} data-fullscreen={focused?"true":"false"}>
+      <div className="geo-plot-editor-head">
+        <div><strong>PRECISION PLOT STUDIO</strong>
+          <span>Front-first boundaries · editable corners · source-backed measurements</span></div>
+        <div className="geo-plot-editor-head-stats">
+          <span><b>{plots.length}</b> mapped</span>
+          <span><b>{working?.id||"—"}</b> current plot</span>
+          {dirty&&<span className="geo-plot-unsaved">Unsaved mapping draft</span>}
+        </div>
+      </div>
+      <section className="geo-plot-tools" aria-label="Plot mapper controls">
+        <div className="geo-plot-tool-group" aria-label="Boundary drawing tools">
+          <button type="button" disabled={!editable||busy} className={mode==="pan"?"active":""}
+            title="Pan and pinch zoom (P)" aria-pressed={mode==="pan"}
+            onClick={()=>setMode("pan")}>✋ Pan</button>
+          <button type="button" disabled={!editable||busy}
+            className={mode==="draw"&&shape==="four"?"active":""}
+            title="Draw four-corner boundary, first edge is Front (D)"
+            onClick={()=>begin("four")}>▱ 4 corners</button>
+          <button type="button" disabled={!editable||busy}
+            className={mode==="draw"&&shape==="irregular"?"active":""}
+            title="Draw irregular boundary with 3–80 corners (I)"
+            onClick={()=>begin("irregular")}>⬡ Irregular</button>
+          <button type="button" disabled={!editable||busy||!working}
+            className={mode==="edit"?"active":""} title="Drag corners for precision (E)"
+            onClick={()=>setMode("edit")}>✎ Edit</button>
+          <button type="button" className="geo-plot-tool-complete"
+            disabled={!editable||busy||!working||working.corners.length<3||
+              (shape==="four"&&working.corners.length!==4)}
+            onClick={finishBoundary}>✓ Boundary complete</button>
+        </div>
+        <div className="geo-plot-tool-group geo-plot-tool-group--secondary">
+          <button type="button" disabled={!working?.corners.length||busy}
+            title="Undo last plotted corner (Backspace)" onClick={undoCorner}>↶ Undo</button>
+          <button type="button" disabled={!working||busy} onClick={cancelWorking}>Cancel</button>
+          <label className="geo-plot-toggle"><input type="checkbox" checked={snap}
+            onChange={e=>setSnap(e.target.checked)}/> Snap {snap?"ON":"OFF"}</label>
+          <label className="geo-plot-toggle"><input type="checkbox" checked={showGuides}
+            onChange={e=>setShowGuides(e.target.checked)}/> Labels</label>
+        </div>
+        <div className="geo-plot-tool-group geo-plot-zoom-tools" aria-label="Precision viewport zoom">
+          <button type="button" disabled={!geo} aria-label="Zoom out" onClick={()=>zoomBy(.8)}>−</button>
+          <input type="range" min="100" max="3200" step="25"
+            value={zoomPercent} onChange={e=>setZoom(Number(e.target.value))}
+            aria-label="Zoom percent" aria-valuetext={zoomPercent+" percent"}/>
+          <output>{zoomPercent}%</output>
+          <button type="button" disabled={!geo} aria-label="Zoom in" onClick={()=>zoomBy(1.25)}>+</button>
+          <button type="button" disabled={!geo} title="Fit all geometry (F)" onClick={fitView}>Fit</button>
+          <button type="button" className="geo-plot-fullscreen-toggle" title="Show toolbar, canvas and inspector in full screen"
+            aria-pressed={focused} onClick={()=>void toggleFullscreen()}>
+            {focused?"⊟ Exit full screen":"⛶ Full screen"}</button>
+        </div>
+        <div className="geo-plot-tool-group geo-plot-tool-group--publish">
+          <button type="button" className="geo-plot-publish-button"
+            disabled={!editable||busy||dirty||Boolean(working)||!state||
+              state.draft.verifiedRevision!==state.draft.revision}
+            onClick={()=>void execute("publish")}>Publish Mapping</button>
+        </div>
+      </section>
     <div className="geo-plot-workspace">
       <div className="geo-plot-scene">
         <div className="geo-plot-canvas" ref={hostRef} aria-label="Top-down 3D masterplan plot mapping canvas"/>
@@ -580,6 +636,7 @@ export default function GeoPlotMapper(){
         <button disabled={!plots.length} onClick={exportCsv}>Export Measurement CSV</button>
         {state?.releases.map(r=><button key={r.id} disabled={!editable||busy||r.geoReleaseId!==state.geoReleaseId} onClick={()=>void execute("activate",r.id)}>Activate Mapping v{r.version}</button>)}
       </aside>
+      </div>
     </div>
   </main>;
 }
