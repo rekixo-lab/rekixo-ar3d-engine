@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import "./masterplan-public.css";
+import {fitImageFrame,panImageFrame,pinchImageFrame} from "../../../../shared/masterplan-image-gestures.js";
 type Point=[number,number];
 type Plot={id:string;corners:Point[];facing:string;road:string;notes:string;
   area:{value:number;unit:string};sides:Record<string,{length:number;unit:string;roadFacing:boolean}>};
@@ -31,7 +32,7 @@ function loadMaps(apiKey:string):Promise<GoogleRoot>{
     const cb="rekixoMasterplanReady"+Math.random().toString(36).slice(2);
     const host=window as unknown as Record<string,unknown>;
     host[cb]=()=>{delete host[cb];const maps=googleWindow.google;
-      if(maps?.maps?.Map)resolve(maps);else reject(Error("Google Maps not initialized."));};
+      if(maps?.maps?.Map)resolve(maps);else {googleLoad=null;reject(Error("Google Maps not initialized."));}};
     const script=document.createElement("script");script.async=true;script.defer=true;
     script.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async&callback=${cb}`;
     script.onerror=()=>{delete host[cb];googleLoad=null;reject(Error("Google Maps could not load."));};
@@ -57,6 +58,47 @@ export default function MasterplanPublic(){
   const imageRef=useRef<HTMLImageElement|null>(null);
   const polygonsRef=useRef<GPolygon[]>([]);
   const [attempt,setAttempt]=useState(0);
+  const [fallbackFrame,setFallbackFrame]=useState({x:0,y:0,w:1,h:1});
+  const fallbackPointers=useRef<Map<number,Point>>(new Map());
+  const fallbackStarts=useRef<Map<number,Point>>(new Map());
+  const fallbackMoved=useRef(false);
+  function fallbackDown(e:ReactPointerEvent<SVGSVGElement>){
+    if(!data)return;
+    if(!fallbackPointers.current.size)fallbackMoved.current=false;
+    fallbackPointers.current.set(e.pointerId,[e.clientX,e.clientY]);
+    fallbackStarts.current.set(e.pointerId,[e.clientX,e.clientY]);
+    if(e.target===e.currentTarget)e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function fallbackMove(e:ReactPointerEvent<SVGSVGElement>){
+    if(!data||!fallbackPointers.current.has(e.pointerId))return;
+    const previous=fallbackPointers.current.get(e.pointerId)!;
+    const before=[...fallbackPointers.current.values()];
+    fallbackPointers.current.set(e.pointerId,[e.clientX,e.clientY]);
+    const after=[...fallbackPointers.current.values()];
+    const box=e.currentTarget.getBoundingClientRect();
+    const image={width:data.image.width,height:data.image.height};
+    const viewport={width:box.width,height:box.height};
+    if(after.length===2){
+      const mid=(p:Point[]):Point=>[(p[0][0]+p[1][0])/2-box.left,
+        (p[0][1]+p[1][1])/2-box.top];
+      const distance=(p:Point[])=>Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);
+      fallbackMoved.current=true;
+      setFallbackFrame(f=>pinchImageFrame(f,image,viewport,mid(before),mid(after),
+        distance(before),distance(after)));
+    }else if(after.length===1){
+      const dx=e.clientX-previous[0],dy=e.clientY-previous[1];
+      const start=fallbackStarts.current.get(e.pointerId)||previous;
+      if(Math.hypot(e.clientX-start[0],e.clientY-start[1])>6)
+        fallbackMoved.current=true;
+      setFallbackFrame(f=>panImageFrame(f,image,viewport,[dx,dy]));
+    }
+  }
+  function fallbackUp(e:ReactPointerEvent<SVGSVGElement>){
+    fallbackPointers.current.delete(e.pointerId);
+    fallbackStarts.current.delete(e.pointerId);
+    if(e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId);
+  }
   useEffect(()=>{
     const controller=new AbortController();
     setError("");setData(null);setSelected(null);setFallback(false);setMapReady(false);
@@ -66,7 +108,10 @@ export default function MasterplanPublic(){
         const v=await response.json() as PublicData&{error?:string};
         if(!response.ok)throw Error(v.error||"Masterplan not published.");
         return v;
-      }).then(setData).catch(e=>{if(!controller.signal.aborted)setError(String(e));});
+      }).then(v=>{if(!controller.signal.aborted){
+        setFallbackFrame(fitImageFrame({width:v.image.width,height:v.image.height}));
+        fallbackPointers.current.clear();fallbackStarts.current.clear();setData(v);
+      }}).catch(e=>{if(!controller.signal.aborted)setError(String(e));});
     return()=>controller.abort();
   },[slug,attempt]);
   useEffect(()=>{
@@ -84,7 +129,8 @@ export default function MasterplanPublic(){
       const middle=locationOf(t,[.5,.5]);
       const map=new Map(mapHost.current,{center:middle,zoom:18,
         mapId:data.maps.mapId, mapTypeId:"satellite",tilt:0,
-        mapTypeControl:true,fullscreenControl:true,streetViewControl:false});
+        gestureHandling:"cooperative",zoomControl:true,
+        mapTypeControl:window.innerWidth>650,fullscreenControl:true,streetViewControl:false});
       const bounds=new LatLngBounds();
       ([ [0,0],[1,0],[1,1],[0,1] ] as Point[]).forEach(p=>bounds.extend(locationOf(t,p)));
       map.fitBounds(bounds,40);
@@ -142,18 +188,22 @@ export default function MasterplanPublic(){
     <section className="masterplan-public-map">
       <div className="masterplan-public-mapcanvas" ref={mapHost} style={{visibility:fallback?"hidden":"visible"}}/>
       {fallback&&data&&<div className="masterplan-public-fallback">
-        <p>Google Map is unavailable. Showing the approved image only—not verified satellite placement.</p>
-        <svg viewBox={`0 0 ${data.image.width} ${data.image.height}`} preserveAspectRatio="xMidYMid meet">
-          <image href={data.image.url} width={data.image.width} height={data.image.height}/>
+        <p>Google Map is unavailable. Image-only view—not verified satellite placement. Drag or pinch to inspect.</p>
+        <svg viewBox={`${fallbackFrame.x} ${fallbackFrame.y} ${fallbackFrame.w} ${fallbackFrame.h}`}
+          preserveAspectRatio="xMidYMid meet" onPointerDown={fallbackDown}
+          onPointerMove={fallbackMove} onPointerUp={fallbackUp} onPointerCancel={fallbackUp}>
+          <image href={data.image.url} width={data.image.width} height={data.image.height}
+            opacity={opacity} />
           {showPlots&&data.plots.map(plot=><polygon key={plot.id}
             points={plot.corners.map(([u,v])=>(u*data.image.width)+","+(v*data.image.height)).join(" ")}
             fill="rgba(9,185,137,.21)" stroke="#1ce5af" strokeWidth={Math.max(2,data.image.width/800)}
-            onClick={()=>setSelected(plot)}/>)}
+            onClick={()=>{if(!fallbackMoved.current)setSelected(plot);}}/>)}
         </svg>
       </div>}
       {!data&&!error&&<div className="masterplan-public-loading">Preparing the published Geo Masterplan…</div>}
       {data&&<div className="masterplan-public-toolbar">
         <button onClick={()=>setShowPlots(x=>!x)} aria-pressed={showPlots}>Plots {showPlots?"ON":"OFF"}</button>
+        {fallback&&<button onClick={()=>setFallbackFrame(fitImageFrame(data.image))}>Fit Image</button>}
         <label>Image opacity <input type="range" min=".2" max="1" step=".05" value={opacity}
           onChange={e=>setOpacity(Number(e.target.value))}/></label>
         <span>{data.plots.length} plots · v{data.release.version}</span>

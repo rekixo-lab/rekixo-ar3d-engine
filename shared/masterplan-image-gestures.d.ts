@@ -1,0 +1,10 @@
+export type ImageFrame={x:number;y:number;w:number;h:number};
+export type ImageExtent={width:number;height:number};
+export type ImageViewport={width:number;height:number};
+export type ImagePixel=[number,number];
+export function fitImageFrame(image:ImageExtent):ImageFrame;
+export function clampImageFrame(frame:ImageFrame,image:ImageExtent):ImageFrame;
+export function zoomImageFrame(frame:ImageFrame,image:ImageExtent,factor:number,anchor?:ImagePixel):ImageFrame;
+export function imageWorldAt(frame:ImageFrame,viewport:ImageViewport,point:ImagePixel):ImagePixel;
+export function panImageFrame(frame:ImageFrame,image:ImageExtent,viewport:ImageViewport,delta:ImagePixel):ImageFrame;
+export function pinchImageFrame(frame:ImageFrame,image:ImageExtent,viewport:ImageViewport,previousMid:ImagePixel,currentMid:ImagePixel,previousDistance:number,currentDistance:number):ImageFrame;

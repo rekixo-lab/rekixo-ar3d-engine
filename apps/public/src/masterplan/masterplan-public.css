@@ -7,7 +7,8 @@
 .masterplan-public-mapcanvas{position:absolute;inset:0;width:100%;height:100%}
 .masterplan-public-fallback{position:absolute;inset:0;background:#0b1d2b;display:flex;align-items:center;justify-content:center}
 .masterplan-public-fallback>p{position:absolute;left:12px;top:6px;right:12px;font-size:12px;background:#3c2920ea;color:#fff2d5;padding:9px;border-radius:9px;z-index:3}
-.masterplan-public-fallback svg{width:100%;height:100%;cursor:crosshair}
+.masterplan-public-fallback svg{width:100%;height:100%;cursor:grab;touch-action:none;user-select:none}
+.masterplan-public-fallback svg image{pointer-events:none}
 .masterplan-public-fallback polygon{cursor:pointer}
 .masterplan-public-toolbar{position:absolute;top:14px;left:14px;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:10px;max-width:calc(100% - 28px);border:1px solid #558978;border-radius:11px;padding:8px 12px;background:#092433ec;box-shadow:0 3px 12px #0004;font-size:12px}
 .masterplan-public-toolbar button{border:1px solid #46ca9c;color:#ecfff9;background:#1b5649;padding:8px 10px;border-radius:7px;cursor:pointer}
