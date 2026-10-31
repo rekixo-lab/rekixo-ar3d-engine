@@ -112,7 +112,7 @@ test("lookalike Google Maps host is blocked before writing project profile",asyn
     method:"PUT",headers:{"Origin":"https://engine.example","Content-Type":"application/json"},
     body:JSON.stringify({expectedRevision:0,profile:{mapsUrl:"https://maps.google.evil.com/fake"}})
   });
-  const res=await handleProjectManagementAdmin(req,{},{
+  const res=await handleProjectManagementAdmin(req,{}, {email:"owner@example.com"},{
     id:"project-id",slug:"example-project",status:"draft"},["example-project","manage"]);
   assert.equal(res.status,409);
   assert.match((await res.json()).error,/Google Maps HTTPS/);
