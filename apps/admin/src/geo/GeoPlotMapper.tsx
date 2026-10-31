@@ -931,7 +931,7 @@ export default function GeoPlotMapper(){
           <details open className="geo-plot-inspector-section">
             <summary>04 · Front, Back & Depth sizes</summary>
           <p className="geo-plot-hint">Front must face the actual road, not the top of the screen. For four-corner plots select the road-touching edge. Corner plots may have multiple road-facing sides.</p>
-          {working.corners.length===4&&<label>Road-facing FRONT boundary
+          {working.corners.length===4&&working.layout==="four"&&<label>Road-facing FRONT boundary
             <select value={working.sides.front?.edges[0]??0}
               onChange={e=>selectRoadFront(Number(e.target.value))}>
               {working.corners.map((_,i)=><option key={i} value={i}>Edge {i} · Corner {i+1} → {i===3?1:i+2}</option>)}
