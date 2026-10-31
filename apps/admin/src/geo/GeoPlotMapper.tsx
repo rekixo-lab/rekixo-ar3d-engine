@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { projects as listProjects, type CloudProjectSummary } from "../studio/cloud";
+import {adjacentPlot,boundedZoom,hasPendingPlotEdits,isTextEditingTarget,
+  nextFreePlotId,sideLabelAnchor} from "../../../../shared/geo-plot-editor.js";
 import "./geo-plot-mapper.css";
 
 type Point = [number, number]; // Immutable Building-local X/Z metres.
@@ -129,15 +131,24 @@ export default function GeoPlotMapper(){
   const [groundY,setGroundY]=useState(0);
   const [snap,setSnap]=useState(true);
   const [selectedRole,setSelectedRole]=useState<Role>("front");
+  const [inventoryQuery,setInventoryQuery]=useState("");
+  const [focused,setFocused]=useState(false);
+  const [zoomPercent,setZoomPercent]=useState(100);
+  const [showGuides,setShowGuides]=useState(true);
   const activeProjectRef=useRef(slug);
   activeProjectRef.current=slug;
+  const editorRef=useRef<HTMLDivElement>(null);
   const hostRef=useRef<HTMLDivElement>(null);
+  const modelBoundsRef=useRef<{center:THREE.Vector3;size:THREE.Vector3;maxY:number}|null>(null);
   const rendererRef=useRef<THREE.WebGLRenderer|null>(null);
   const cameraRef=useRef<THREE.OrthographicCamera|null>(null);
   const controlsRef=useRef<OrbitControls|null>(null);
   const dragRef=useRef<number|null>(null);
   const workingRef=useRef(working);
   workingRef.current=working;
+  const displayedPlots=useMemo(()=>plots.filter(p=>p.id.toLowerCase().includes(inventoryQuery.trim().toLowerCase())),
+    [plots,inventoryQuery]);
+  const hasUnapplied=hasPendingPlotEdits(working,originalId?plots.find(p=>p.id===originalId):null);
   const api=slug?`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/geo-plots`:"";
   const refresh=useCallback(async(isCurrent:()=>boolean)=>{
     if(!slug){setState(null);setGeo(null);setPlots([]);return;}
@@ -184,27 +195,30 @@ export default function GeoPlotMapper(){
       camera.left=-mid;camera.right=mid;camera.top=mid*h/w;camera.bottom=-mid*h/w;
       camera.updateProjectionMatrix();setViewTick(v=>v+1);};
     const obs=new ResizeObserver(resize);obs.observe(host);
-    const changed=()=>setViewTick(v=>v+1);controls.addEventListener("change",changed);
+    const changed=()=>{setViewTick(v=>v+1);setZoomPercent(Math.round(camera.zoom*100));};
+    controls.addEventListener("change",changed);
     setModelStatus("Loading checksum-verified 3D master plan…");
     void modelFromVerifiedSource(geo.canonicalModel||geo.model).then(m=>{
       if(!alive){m.traverse(n=>{if(n instanceof THREE.Mesh){n.geometry.dispose();}});return;}
       object=m;scene.add(m);const box=new THREE.Box3().setFromObject(m);
       if(box.isEmpty())throw Error("3D source has no geometry.");
       const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
+      modelBoundsRef.current={center:center.clone(),size:size.clone(),maxY:box.max.y};
       const span=Math.max(size.x,size.z,1)*0.68;
       camera.left=-span;camera.right=span;
       const w=Math.max(host.clientWidth,1),h=Math.max(host.clientHeight,1);
       camera.top=span*h/w;camera.bottom=-span*h/w;
       camera.position.set(center.x,box.max.y+Math.max(size.y,span)*2.5,center.z);
       camera.up.set(0,0,-1);camera.lookAt(center);camera.updateProjectionMatrix();
-      controls.target.copy(center);controls.update();setGroundY(box.min.y);setModelStatus("");
+      camera.zoom=1;controls.target.copy(center);controls.update();
+      setZoomPercent(100);setGroundY(box.min.y);setModelStatus("");
       setViewTick(v=>v+1);
     }).catch(e=>{if(alive)setModelStatus(e instanceof Error?e.message:"Model failed to load.");});
     resize();render();
     return()=>{alive=false;cancelAnimationFrame(frame);obs.disconnect();controls.removeEventListener("change",changed);
       controls.dispose();renderer.forceContextLoss();renderer.dispose();renderer.domElement.remove();
       if(object)object.traverse(n=>{if(n instanceof THREE.Mesh){n.geometry.dispose();const mats=Array.isArray(n.material)?n.material:[n.material];mats.forEach(mat=>mat.dispose());}});
-      cameraRef.current=null;rendererRef.current=null;controlsRef.current=null;};
+      cameraRef.current=null;rendererRef.current=null;controlsRef.current=null;modelBoundsRef.current=null;};
   },[geo?.canonicalModel?.url,geo?.canonicalModel?.sha256,geo?.model.url,geo?.model.sha256]);
   const project=(p:Point):Point=>{
     const camera=cameraRef.current;if(!camera)return [0,0];
@@ -224,7 +238,57 @@ export default function GeoPlotMapper(){
     }
     return point;
   };
-  const choose=(plot:Plot)=>{setWorking(structuredClone(plot));if(Number.isFinite(plot.planeY))setGroundY(plot.planeY!);setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");setMode("edit");};
+  const confirmUnapplied=()=>!hasUnapplied||window.confirm(
+    "This plot has unapplied changes. Leave this plot without applying them?");
+  const choose=(plot:Plot)=>{
+    if(working?.id===plot.id&&originalId===plot.id)return;
+    if(!confirmUnapplied())return;
+    setWorking(structuredClone(plot));
+    if(Number.isFinite(plot.planeY))setGroundY(plot.planeY!);
+    setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");setMode("edit");
+  };
+  const chooseSibling=(direction:1|-1)=>{
+    const neighbor=adjacentPlot(plots,working?.id||"",direction);
+    if(neighbor)choose(neighbor);
+  };
+  const fitView=()=>{
+    const camera=cameraRef.current,controls=controlsRef.current,bounds=modelBoundsRef.current;
+    if(!camera||!controls||!bounds)return;
+    const span=Math.max(bounds.size.x,bounds.size.z,1)*0.68;
+    const width=Math.max(hostRef.current?.clientWidth||1,1);
+    const height=Math.max(hostRef.current?.clientHeight||1,1);
+    camera.left=-span;camera.right=span;camera.top=span*height/width;camera.bottom=-span*height/width;
+    camera.zoom=1;
+    camera.position.set(bounds.center.x,bounds.maxY+Math.max(bounds.size.y,span)*2.5,bounds.center.z);
+    camera.up.set(0,0,-1);camera.lookAt(bounds.center);camera.updateProjectionMatrix();
+    controls.target.copy(bounds.center);controls.update();
+    setZoomPercent(100);setViewTick(v=>v+1);
+  };
+  const setZoom=(value:number)=>{
+    const camera=cameraRef.current;if(!camera)return;
+    camera.zoom=boundedZoom(1,value/100);
+    camera.updateProjectionMatrix();controlsRef.current?.update();
+    setZoomPercent(Math.round(camera.zoom*100));setViewTick(v=>v+1);
+  };
+  const zoomBy=(factor:number)=>setZoom(boundedZoom(zoomPercent/100,factor)*100);
+  const toggleFullscreen=async()=>{
+    try{
+      if(document.fullscreenElement===editorRef.current)await document.exitFullscreen();
+      else if(!document.fullscreenElement)await editorRef.current?.requestFullscreen();
+      else setMessage("ERROR: Exit the other fullscreen view before opening Plot Mapper focus mode.");
+    }catch{setMessage("ERROR: Fullscreen was blocked. Use the normal editor view.");}
+  };
+  useEffect(()=>{
+    const changed=()=>setFocused(document.fullscreenElement===editorRef.current);
+    document.addEventListener("fullscreenchange",changed);
+    return()=>document.removeEventListener("fullscreenchange",changed);
+  },[]);
+  useEffect(()=>{
+    if(!dirty&&!hasUnapplied)return;
+    const beforeUnload=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue="";};
+    window.addEventListener("beforeunload",beforeUnload);
+    return()=>window.removeEventListener("beforeunload",beforeUnload);
+  },[dirty,hasUnapplied]);
   const onDraw=(event:React.PointerEvent<SVGSVGElement>)=>{
     if(mode!=="draw"||dragRef.current!==null)return;
     const p=unproject(event.clientX,event.clientY);if(!p)return;
@@ -237,14 +301,15 @@ export default function GeoPlotMapper(){
   const editPoint=(index:number,clientX:number,clientY:number)=>{
     const p=unproject(clientX,clientY);if(!p)return;
     setWorking(prev=>{if(!prev)return prev;const corners=prev.corners.map((q,i)=>i===index?p:q);
-      return {...prev,corners,sides:Object.fromEntries(Object.entries(prev.sides).map(([k,v])=>[k,{...v,verified:false}]))};});
+      return {...prev,corners,area:{...prev.area,verified:false},facingVerified:false,
+        sides:Object.fromEntries(Object.entries(prev.sides).map(([k,v])=>[k,{...v,verified:false}]))};});
   };
   const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>p?{...p,sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...patch}}}:p);
   const applyPlot=()=>{
     if(!working)return;const id=working.id.trim();if(!id||working.corners.length<3)throw Error("Plot number and at least 3 mapped corners required.");
     if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId))throw Error("Duplicate plot ID.");
     setPlots(prev=>[...prev.filter(p=>p.id!==(originalId||id)),{...working,id}].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})));
-    setDirty(true);setMessage("Plot staged locally. Save Draft to persist it.");
+    setDirty(true);setMessage("Plot staged locally. Save Mapping Draft before verification.");
   };
   const execute=async(action:"save"|"verify"|"publish"|"activate"|"rebind-reset",id?:string)=>{
     if(!state||!geo) return;setBusy(true);setMessage("");
@@ -332,10 +397,54 @@ export default function GeoPlotMapper(){
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   const begin=(kind:"four"|"irregular")=>{
+    if(!confirmUnapplied())return;
     setShape(kind);setMode("draw");setOriginalId(null);
-    const ids=new Set(plots.map(p=>p.id));let id=1;while(ids.has(String(id)))id++;
-    setWorking({...blank(String(id)),planeY:groundY,planeSource:"",planeVerified:false});setMessage("Tap each plot corner on the top-down verified model.");
+    setWorking({...blank(nextFreePlotId(plots)),planeY:groundY,planeSource:"",planeVerified:false});
+    setMessage("Start at the road-facing Front edge, then tap corners clockwise. Complete the boundary before entering surveyed sizes.");
   };
+  const undoCorner=()=>{
+    if(!working?.corners.length||busy)return;
+    setWorking(p=>{if(!p)return p;
+      const corners=p.corners.slice(0,-1);
+      return {...p,corners,sides:initialSides(corners),
+        area:{...p.area,verified:false},facingVerified:false};
+    });setMode("draw");
+  };
+  const cancelWorking=()=>{
+    if(!confirmUnapplied())return;
+    setWorking(null);setOriginalId(null);setMode("pan");setMessage("Unapplied plot selection cleared; saved draft unchanged.");
+  };
+  const finishBoundary=()=>{
+    if(!working||working.corners.length<3){setMessage("ERROR: Mark at least 3 corners before completing the boundary.");return;}
+    if(shape==="four"&&working.corners.length!==4){
+      setMessage("ERROR: A 4-corner boundary requires exactly 4 points.");return;
+    }
+    setMode("edit");setMessage("Boundary ready. Adjust corner handles and enter approved measurements in the inspector.");
+  };
+  useEffect(()=>{
+    const handleKey=(event:KeyboardEvent)=>{
+      if(isTextEditingTarget(event.target)||event.altKey||event.metaKey||busy)return;
+      if(event.ctrlKey&&event.key.toLowerCase()==="s"){
+        event.preventDefault();
+        if(working&&hasUnapplied)setMessage("Apply Plot to Draft before saving the mapping.");
+        else if(dirty)void execute("save");
+        return;
+      }
+      if(event.ctrlKey)return;
+      const k=event.key.toLowerCase();
+      if((k==="p"||k==="d"||k==="i"||k==="e"||k==="f")&&!editable)return;
+      if(k==="p"){setMode("pan");return;}
+      if(k==="d"){begin("four");return;}
+      if(k==="i"){begin("irregular");return;}
+      if(k==="e"&&working){setMode("edit");return;}
+      if(k==="f"){fitView();return;}
+      if(k==="backspace"&&working?.corners.length){event.preventDefault();undoCorner();return;}
+      if(k==="+"||k==="="){event.preventDefault();zoomBy(1.25);return;}
+      if(k==="-"){event.preventDefault();zoomBy(0.8);}
+    };
+    document.addEventListener("keydown",handleKey);
+    return()=>document.removeEventListener("keydown",handleKey);
+  });
   const editable=Boolean(state&&!state.draft.stale&&geo);
   const path=(points:Point[])=>points.map(p=>project(p).join(",")).join(" ");
   return <main className="geo-plot-page">
