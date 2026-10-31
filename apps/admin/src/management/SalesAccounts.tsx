@@ -5,7 +5,8 @@ type Sale={id:string;plotId:string;buyerName:string;buyerPhone:string;agreementP
   receivedPaise:number;balancePaise:number;createdAt:string};
 type Payment={id:string;saleId:string;kind:"receipt"|"reversal";amountPaise:number;
   paidOn:string;method:string;reference:string;note:string;reversesId?:string|null};
-type Ledger={sales:Sale[];totalSales:number;nextOffset:number|null;payments:Payment[];inventory:{mappedPlotCount:number;availablePlotIds:string[];sourceReleaseId:string|null};
+type Ledger={sales:Sale[];totalSales:number;nextOffset:number|null;payments:Payment[];
+  totalPayments:number;nextPaymentOffset:number|null;inventory:{mappedPlotCount:number;availablePlotIds:string[];sourceReleaseId:string|null};
   totals:{agreementPaise:number;receivedPaise:number;balancePaise:number};role:string};
 const money=(paise:number)=>"₹"+(Number(paise||0)/100).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 const quote=(value:unknown)=>'"'+String(value??"").replace(/"/g,'""').replace(/^[=+@-]/,"'$&")+'"';
@@ -21,6 +22,8 @@ export default function SalesAccounts(){
   const [state,setState]=useState<Ledger|null>(null);
   const [selected,setSelected]=useState<Sale|null>(null);
   const [selectedPayments,setSelectedPayments]=useState<Payment[]>([]);
+  const [totalPayments,setTotalPayments]=useState(0);
+  const [nextPaymentOffset,setNextPaymentOffset]=useState<number|null>(null);
   const [buyer,setBuyer]=useState("");const [phone,setPhone]=useState("");
   const [plotId,setPlotId]=useState("");const [agreement,setAgreement]=useState("");
   const [paymentAmount,setPaymentAmount]=useState("");const [method,setMethod]=useState("upi");
@@ -37,6 +40,7 @@ export default function SalesAccounts(){
   const details=useCallback(async(id:string)=>{
     const value=await api<Ledger>(url+"?saleId="+encodeURIComponent(id));
     setSelected(value.sales[0]||null);setSelectedPayments(value.payments);
+    setTotalPayments(value.totalPayments);setNextPaymentOffset(value.nextPaymentOffset);
   },[url]);
   async function perform(body:object,refreshSaleId?:string){
     setBusy(true);setMessage("");setError("");
@@ -57,6 +61,21 @@ export default function SalesAccounts(){
       setState(previous=>previous?.nextOffset===offset
         ? {...page,sales:[...previous.sales,...page.sales]}:previous);
     }catch(e){setError(e instanceof Error?e.message:"Could not load more sales.");}
+    finally{setBusy(false);}
+  }
+  async function loadMorePayments(){
+    if(!selected||nextPaymentOffset===null||busy)return;
+    const saleId=selected.id,offset=nextPaymentOffset;
+    setBusy(true);setError("");
+    try{
+      const page=await api<Ledger>(url+"?saleId="+encodeURIComponent(saleId)+
+        "&paymentOffset="+offset);
+      if(page.nextPaymentOffset===offset)
+        throw Error("Payment history pagination did not advance.");
+      setSelectedPayments(previous=>[...previous,...page.payments]);
+      setTotalPayments(page.totalPayments);
+      setNextPaymentOffset(page.nextPaymentOffset);
+    }catch(e){setError(e instanceof Error?e.message:"Could not load older payments.");}
     finally{setBusy(false);}
   }
   async function book(){
@@ -173,6 +192,7 @@ export default function SalesAccounts(){
             onClick={()=>void receipt()}>Add Payment (Immutable Receipt)</button>
         </>}
         <h2>Payment History</h2>
+        <p>Showing {selectedPayments.length} of {totalPayments} immutable entries.</p>
         <div className="engine-manage-client-list">
           {selectedPayments.map(p=><div key={p.id}><div>
             <strong>{p.kind==="receipt"?"Receipt":"Reversal"} · {money(p.amountPaise)}</strong>
@@ -185,6 +205,8 @@ export default function SalesAccounts(){
                   paidOn,idempotencyKey:crypto.randomUUID()},selected.id);
             }}>Reverse</button>}</div>)}
         </div>
+        {nextPaymentOffset!==null&&<button disabled={busy}
+          onClick={()=>void loadMorePayments()}>Load Older Payment Entries</button>}
         {selected.state!=="void"&&selected.receivedPaise===0&&<button disabled={busy} onClick={()=>{
           const reason=prompt("Why are you voiding this booking/sale? (minimum 6 characters)");
           if(reason&&reason.trim().length>=6)void perform({action:"void",saleId:selected.id,
