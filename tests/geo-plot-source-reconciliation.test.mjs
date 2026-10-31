@@ -106,4 +106,9 @@ test("both editors offer road edge selection and reset geometry-dependent approv
   assert.match(image,/area:\{\.\.\.prev.area,verified:false\},facingVerified:false/);
   assert.match(image,/assignFourCornerRoadFront/);
   assert.match(image,/facingVerified:false/);
+  const imagePublish=read("workers/masterplan-geo-admin.mjs");
+  assert.match(imagePublish,/plot\.road && plot\.sides\.front\?\.roadFacing!==true/);
+  assert.match(imagePublish,/before verification/);
+  // Keep the public V1 sealed-release validator backward-compatible.
+  assert.doesNotMatch(read("workers/masterplan-geo-geometry.mjs"),/road-facing FRONT/);
 });
