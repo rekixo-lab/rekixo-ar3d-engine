@@ -24,7 +24,7 @@ async function audit(env,actor,action,project,targetId,extra={}){
 async function snapshot(env,project){
   const [d,a,history]=await Promise.all([
     env.DB.prepare("SELECT * FROM masterplan_geo_drafts_3d WHERE project_id=?").bind(project.id).first(),
-    env.DB.prepare(`SELECT r.id,r.version,r.mapping_sha256,r.published_at FROM masterplan_geo_active_3d a
+    env.DB.prepare(`SELECT r.id,r.version,r.draft_revision,r.mapping_sha256,r.published_at FROM masterplan_geo_active_3d a
       JOIN masterplan_geo_releases_3d r ON r.id=a.release_id AND r.project_id=a.project_id
       WHERE a.project_id=?`).bind(project.id).first(),
     env.DB.prepare(`SELECT id,version,published_at AS publishedAt
@@ -36,7 +36,8 @@ async function snapshot(env,project){
       imageAssetId:d.image_asset_id,width:d.source_width,height:d.source_height,
       controlPoints:JSON.parse(d.control_points_json),plots:JSON.parse(d.plots_json)}
       :{revision:0,verifiedRevision:null,imageAssetId:null,width:0,height:0,controlPoints:[],plots:[]},
-    activeRelease:a?{id:a.id,version:a.version,sha256:a.mapping_sha256,publishedAt:a.published_at}:null,
+    activeRelease:a?{id:a.id,version:a.version,draftRevision:a.draft_revision,
+      sha256:a.mapping_sha256,publishedAt:a.published_at}:null,
     history:history.results||[]};
 }
 async function save(env,actor,project,body){
@@ -92,6 +93,13 @@ async function verify(env,actor,project,body){
 async function publish(env,actor,project,body){
   const {d,reviewed,source}=await loadDraft(env,project,body.expectedRevision);
   if(d.verified_revision!==d.revision)throw Error("Save and Verify this exact revision before Publish.");
+  const already=await env.DB.prepare(`SELECT r.id,
+    EXISTS(SELECT 1 FROM masterplan_geo_active_3d a
+      WHERE a.project_id=r.project_id AND a.release_id=r.id) AS active
+    FROM masterplan_geo_releases_3d r WHERE r.project_id=? AND r.draft_revision=?`)
+    .bind(project.id,d.revision).first();
+  if(already?.active)return snapshot(env,project);
+  if(already)throw Error("This verified draft was published earlier. Activate that release from History.");
   const mapping={schema:"rekixo-masterplan-geo-v1",
     image:{assetId:source.id,width:reviewed.width,height:reviewed.height,
       sha256:source.sha256,mimeType:source.mime_type},
