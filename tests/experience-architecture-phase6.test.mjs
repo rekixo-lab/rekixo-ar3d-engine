@@ -159,7 +159,7 @@ test("Public Worker deploy is triggered by future Geo runtime-only changes", () 
 
   assert.match(
     workflow,
-    /workers\/\(public\|release-runtime\|geo-release-runtime\|geo-plot-public\|geo-plot-geometry\|http-range\|storage-boundary\|project-branding\)\\\.mjs\$/,
+    /workers\/\(public\|release-runtime\|geo-release-runtime\|geo-plot-public\|geo-plot-geometry\|masterplan-geo-public\|masterplan-geo-geometry\|masterplan-share-public\|http-range\|storage-boundary\|project-branding\)\\\.mjs\$/,
   );
   assert.match(workflow, /Deploy isolated 3D Public Worker/);
 });
