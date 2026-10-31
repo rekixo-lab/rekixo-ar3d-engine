@@ -178,14 +178,16 @@ export async function readPublishedGeoPlotSource(env,ctx,slug) {
       :"A verified published Geo release is required before plot mapping.",
       released.state==="corrupt"?503:409);
   const experience=await publicGeoExperienceFromState(env,released);
+  return verifiedGeoPlotSourceResponse(ctx,experience);
+}
+export function verifiedGeoPlotSourceResponse(ctx,experience) {
   if(!experience?.model?.url||!experience.canonicalModel?.url)
     return fail("Published Building/Geo model is unavailable or failed integrity checks.",503);
-  if(experience.geoRelease.id!==ctx.active.geo_release_id||
-     experience.buildingRelease.id!==ctx.active.source_building_release_id)
+  if(experience.geoRelease?.id!==ctx.active?.geo_release_id||
+     experience.buildingRelease?.id!==ctx.active?.source_building_release_id)
     return fail("Geo release changed during load. Reload the plot mapper.",409);
   const canonical=experience.canonicalModel;
-  if(!canonical.url.startsWith("/3Dprojects/api/releases/")||
-     !canonical.url.includes("/models/")||
+  if(!/^\/3Dprojects\/api\/releases\/[A-Za-z0-9_.-]+\/models\/[A-Za-z0-9_.-]+\/model\.glb(?:\?|$)/.test(canonical.url)||
      (canonical.sha256!=null && !/^[a-f0-9]{64}$/i.test(canonical.sha256)))
     return fail("Published canonical model URL or checksum is not valid.",503);
   return json({
