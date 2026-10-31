@@ -82,7 +82,7 @@ test("project creation starts Source Pack and presents Geo only as a later optio
   const dashboard = read("apps/admin/src/dashboard/EngineDashboard.tsx");
 
   assert.match(dashboard, /Choose one independent Engine project type/);
-  assert.match(dashboard, /newProjectStartPath\\(createKind\\)/);
+  assert.match(dashboard, /newProjectStartPath\(createKind\)/);
   assert.match(dashboard, /Finish Building workflow/);
   assert.match(dashboard, /Customer ko map-based experience chahiye to Geo add karein; otherwise Building complete hai/);
   assert.match(dashboard, /OPTIONAL/);
