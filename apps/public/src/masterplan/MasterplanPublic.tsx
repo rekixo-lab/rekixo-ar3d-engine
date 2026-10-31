@@ -60,11 +60,13 @@ export default function MasterplanPublic(){
   const [attempt,setAttempt]=useState(0);
   const [fallbackFrame,setFallbackFrame]=useState({x:0,y:0,w:1,h:1});
   const fallbackPointers=useRef<Map<number,Point>>(new Map());
+  const fallbackStarts=useRef<Map<number,Point>>(new Map());
   const fallbackMoved=useRef(false);
   function fallbackDown(e:ReactPointerEvent<SVGSVGElement>){
     if(!data)return;
     if(!fallbackPointers.current.size)fallbackMoved.current=false;
     fallbackPointers.current.set(e.pointerId,[e.clientX,e.clientY]);
+    fallbackStarts.current.set(e.pointerId,[e.clientX,e.clientY]);
     if(e.target===e.currentTarget)e.currentTarget.setPointerCapture(e.pointerId);
   }
   function fallbackMove(e:ReactPointerEvent<SVGSVGElement>){
@@ -85,12 +87,15 @@ export default function MasterplanPublic(){
         distance(before),distance(after)));
     }else if(after.length===1){
       const dx=e.clientX-previous[0],dy=e.clientY-previous[1];
-      if(Math.hypot(dx,dy)>0.5)fallbackMoved.current=true;
+      const start=fallbackStarts.current.get(e.pointerId)||previous;
+      if(Math.hypot(e.clientX-start[0],e.clientY-start[1])>6)
+        fallbackMoved.current=true;
       setFallbackFrame(f=>panImageFrame(f,image,viewport,[dx,dy]));
     }
   }
   function fallbackUp(e:ReactPointerEvent<SVGSVGElement>){
     fallbackPointers.current.delete(e.pointerId);
+    fallbackStarts.current.delete(e.pointerId);
     if(e.currentTarget.hasPointerCapture(e.pointerId))
       e.currentTarget.releasePointerCapture(e.pointerId);
   }
@@ -105,7 +110,7 @@ export default function MasterplanPublic(){
         return v;
       }).then(v=>{if(!controller.signal.aborted){
         setFallbackFrame(fitImageFrame({width:v.image.width,height:v.image.height}));
-        fallbackPointers.current.clear();setData(v);
+        fallbackPointers.current.clear();fallbackStarts.current.clear();setData(v);
       }}).catch(e=>{if(!controller.signal.aborted)setError(String(e));});
     return()=>controller.abort();
   },[slug,attempt]);
