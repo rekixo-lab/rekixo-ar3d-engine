@@ -98,7 +98,7 @@ export default function SalesAccounts(){
     }catch(e){setError(e instanceof Error?e.message:"Private CSV export failed.");}
     finally{setBusy(false);}
   }
-  const active=state?.sales.filter(s=>s.state!=="void"&&[s.plotId,s.buyerName,s.buyerPhone]
+  const active=state?.sales.filter(s=>[s.plotId,s.buyerName,s.buyerPhone]
     .some(v=>v.toLowerCase().includes(search.trim().toLowerCase())))||[];
   const reversed=new Set(selectedPayments.filter(p=>p.kind==="reversal").map(p=>p.reversesId));
   return <main className="engine-manage">
@@ -143,7 +143,7 @@ export default function SalesAccounts(){
             <small>{s.state.toUpperCase()} · Agreement {money(s.agreementPaise)} · Received {money(s.receivedPaise)}
               · Balance {money(s.balancePaise)}</small>
           </div><button onClick={()=>void details(s.id)}>Open Ledger</button></div>)}
-          {!active.length&&<p>No sales registered.</p>}
+          {!active.length&&<p>No matching sales on the currently loaded pages.</p>}
         </div>
         <p>Showing {state?.sales.length||0} of {state?.totalSales||0} sales (including voided records in the export).</p>
         {state?.nextOffset!==null&&state&&<button disabled={busy}
