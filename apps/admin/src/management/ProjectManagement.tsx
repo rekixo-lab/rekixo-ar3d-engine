@@ -51,7 +51,8 @@ export default function ProjectManagement({section}:{section:Tab}){
     setBusy(true);setError("");setMessage("");
     try{const next=await request<ManagedState>(endpoint,method,body);
       setState(next);setProfile(next.profile.values);setMessage("Saved and verified from Engine database.");
-    }catch(e){setError(e instanceof Error?e.message:"Operation failed.");}
+      return true;
+    }catch(e){setError(e instanceof Error?e.message:"Operation failed.");return false;}
     finally{setBusy(false);}
   }
   if(!slug)return <section className="engine-manage"><h2>Select a project from Overview first</h2></section>;
@@ -70,7 +71,11 @@ export default function ProjectManagement({section}:{section:Tab}){
         });}}>
           <div className="engine-manage-grid">{fields.map(field=><label key={field.key}>{field.name}
             <input disabled={busy||state?.project.status==="archived"} value={profile[field.key]}
-              maxLength={field.key==="address"?600:field.key.toLowerCase().includes("url")?1000:field.key==="email"?254:200}
+              maxLength={field.key==="address"?600:field.key.endsWith("Url")?1000:
+                field.key==="email"?254:field.key==="contactName"?160:
+                ["phonePrimary","phoneSecondary","whatsapp"].includes(field.key)?25:200}
+              type={field.key==="email"?"email":field.key.endsWith("Url")?"url":
+                ["phonePrimary","phoneSecondary","whatsapp"].includes(field.key)?"tel":"text"}
               placeholder={field.hint||""}
               onChange={e=>setProfile(p=>p?{...p,[field.key]:e.target.value}:p)}/></label>)}</div>
           <div className="engine-manage-actions"><span>Revision {state?.profile.revision||0} · Owner controlled</span>
@@ -84,7 +89,7 @@ export default function ProjectManagement({section}:{section:Tab}){
           Creating a record never grants access to customer data or financial records.</p>
         <form onSubmit={e=>{e.preventDefault();void perform("POST",{
           action:"create-client",displayName:name,email,phone,proposedRole:role,notes
-        }).then(()=>{setName("");setEmail("");setPhone("");setNotes("");});}}>
+        }).then(saved=>{if(saved){setName("");setEmail("");setPhone("");setNotes("");}});}}>
           <div className="engine-manage-grid">
             <label>Client / Staff name<input required value={name} maxLength={160} onChange={e=>setName(e.target.value)}/></label>
             <label>Email<input type="email" value={email} maxLength={254} onChange={e=>setEmail(e.target.value)}/></label>
