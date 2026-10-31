@@ -234,10 +234,18 @@ export default function GeoPlotMapper(){
         if(ctx&&host.clientWidth&&host.clientHeight){
           const scaleX=source.width/host.clientWidth,scaleY=source.height/host.clientHeight;
           const sourceW=Math.min(42*scaleX,source.width),sourceH=Math.min(42*scaleY,source.height);
-          const sx=Math.max(0,Math.min(source.width-sourceW,pointer.screen[0]*scaleX-sourceW/2));
-          const sy=Math.max(0,Math.min(source.height-sourceH,pointer.screen[1]*scaleY-sourceH/2));
-          try{ctx.imageSmoothingEnabled=false;ctx.drawImage(source,sx,sy,sourceW,sourceH,0,0,loupe.width,loupe.height);}
-          catch{/* A temporarily unavailable WebGL capture never changes mapping coordinates. */}
+          const targetX=pointer.screen[0]*scaleX,targetY=pointer.screen[1]*scaleY;
+          const sx=Math.max(0,targetX-sourceW/2),sy=Math.max(0,targetY-sourceH/2);
+          const ex=Math.min(source.width,targetX+sourceW/2),ey=Math.min(source.height,targetY+sourceH/2);
+          const dstX=(sx-targetX+sourceW/2)/sourceW*loupe.width;
+          const dstY=(sy-targetY+sourceH/2)/sourceH*loupe.height;
+          const dstW=(ex-sx)/sourceW*loupe.width,dstH=(ey-sy)/sourceH*loupe.height;
+          ctx.clearRect(0,0,loupe.width,loupe.height);
+          if(ex>sx&&ey>sy){
+            try{ctx.imageSmoothingEnabled=false;
+              ctx.drawImage(source,sx,sy,ex-sx,ey-sy,dstX,dstY,dstW,dstH);}
+            catch{/* A temporarily unavailable WebGL capture never changes mapping coordinates. */}
+          }
         }
       }
     };
@@ -692,6 +700,7 @@ export default function GeoPlotMapper(){
       <div className="geo-plot-scene">
         <div className="geo-plot-canvas" ref={hostRef} aria-label="Top-down 3D masterplan plot mapping canvas"/>
         {geo&&<svg ref={overlayRef} className="geo-plot-overlay" viewBox={`0 0 ${viewport.w} ${viewport.h}`}
+           preserveAspectRatio="none"
            data-tool-mode={mode} data-snap={snap?"on":"off"}
            style={{pointerEvents:mode==="pan"?"none":"auto"}}
            onPointerDown={onOverlayPointerDown}
