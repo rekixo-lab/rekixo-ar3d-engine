@@ -33,7 +33,8 @@ export default function GeoPlotInventoryPanel({slug,mappedIds,workingId,blocked,
   const [query,setQuery]=useState("");
   useEffect(()=>{
     let mounted=true;setInventory(null);setPreview(null);setError("");setSuccess("");
-    void Promise.all([request<Snapshot>(url(slug)),listAssets(slug)]).then(([result,assetList])=>{
+    void Promise.all([request<Snapshot>(url(slug)),
+      listAssets(slug).catch(()=>({assets:[] as CloudAssetSummary[]}))]).then(([result,assetList])=>{
       if(!mounted)return;
       setInventory(result);onRowsChange(result.rows);
       setReferenceAssets(assetList.assets.filter(a=>a.kind==="reference"&&a.mimeType.startsWith("image/")));
@@ -89,8 +90,10 @@ export default function GeoPlotInventoryPanel({slug,mappedIds,workingId,blocked,
   const taken=new Set(mappedIds.map(x=>x.toLowerCase()));
   const pending=nextUnmappedInventory(rows,mappedIds,workingId);
   const filtered=rows.filter(p=>p.id.toLowerCase().includes(query.toLowerCase()));
-  return <details open className="geo-plot-inventory-first">
-    <summary>01 · Plot Inventory & original sources</summary>
+  return <details className="geo-plot-inventory-first">
+    <summary>01 · Plot Inventory & original sources
+      <small> · {rows.length} IDs / {rows.filter(p=>!taken.has(p.id.toLowerCase())).length} pending</small>
+    </summary>
     <div className="geo-plot-inventory-first-body">
       <p className="geo-plot-hint">Upload approved Plot Data <strong>before</strong> mapping. Imported data remains unverified draft metadata. No published polygon, sale or Building/Geo release is changed.</p>
       {error&&<p className="geo-plot-inventory-error" role="alert">{error}</p>}
