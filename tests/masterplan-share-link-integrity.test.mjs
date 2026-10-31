@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {publicMasterplanShareSnapshot} from "../workers/masterplan-share-public.mjs";
+import {publicMasterplanShareSnapshot,servePublicMasterplanShareCard} from "../workers/masterplan-share-public.mjs";
 import {injectPublicBrandingMetadata} from "../workers/project-branding.mjs";
 import {handleMasterplanShareAdmin} from "../workers/masterplan-share-admin.mjs";
 
@@ -62,4 +62,34 @@ test("admin share state returns canonical public link rather than admin hostname
   assert.equal(res.status,200);
   const state=await res.json();
   assert.equal(state.shareUrl,"https://ar3dstudio.in/3Dprojects/test-layout/masterplan?share=share-old");
+});
+
+test("pinned public OpenGraph poster is actually downloadable via GET and HEAD",async()=>{
+  const image=new Uint8Array(oldShare.byte_size);image.fill(42);
+  let reads=0;
+  const env={...publicDb(),MODEL_ASSETS:{
+    async head(key){
+      assert.equal(key,oldShare.r2_key);
+      return {size:image.length,httpEtag:"test-immutable-poster",
+        customMetadata:{sha256:oldShare.card_sha256}};
+    },
+    async get(key){
+      assert.equal(key,oldShare.r2_key);
+      reads++;
+      return {body:new Blob([image],{type:"image/jpeg"}).stream()};
+    }
+  }};
+  const url="https://ar3dstudio.in/3Dprojects/api/projects/test-layout/masterplan-share-card?v=share-old";
+  const get=await servePublicMasterplanShareCard(new Request(url),env,slug);
+  assert.equal(get.status,200);
+  assert.equal(get.headers.get("content-type"),"image/jpeg");
+  assert.equal(get.headers.get("content-length"),String(image.length));
+  assert.equal((await get.arrayBuffer()).byteLength,image.length);
+  const head=await servePublicMasterplanShareCard(new Request(url,{method:"HEAD"}),env,slug);
+  assert.equal(head.status,200);
+  assert.equal(head.headers.get("content-length"),String(image.length));
+  assert.equal(reads,1,"HEAD must not download image bytes");
+  const invalid=await servePublicMasterplanShareCard(
+    new Request(url.replace("share-old","../../invalid")),env,slug);
+  assert.equal(invalid.status,404);
 });
