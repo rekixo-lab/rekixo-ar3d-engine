@@ -273,7 +273,7 @@ export default function GeoPlotMapper(){
       cameraRef.current=null;rendererRef.current=null;controlsRef.current=null;modelBoundsRef.current=null;
       pointerPreviewRef.current=null;};
   },[geo?.canonicalModel?.url,geo?.canonicalModel?.sha256,geo?.model.url,geo?.model.sha256]);
-  const project=(p:Point):Point=>{
+  const project=(p:readonly [number,number]):Point=>{
     const camera=cameraRef.current;if(!camera)return [0,0];
     const vec=new THREE.Vector3(p[0],groundY+0.02,p[1]).project(camera);
     return [(vec.x+1)*viewport.w/2,(1-vec.y)*viewport.h/2];
