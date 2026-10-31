@@ -59,10 +59,18 @@ export async function serveR2Object(
     expectedSize,
     sha256,
     allowRange = false,
+    verifyStoredChecksum = false,
   } = {},
 ) {
   const head = await bucket.head(key);
   if (!head) return { missing: true };
+  // Optional strict mode for immutable original-image releases. R2 upload
+  // stores the SHA-256 in customMetadata; never present a mismatched object
+  // under an authoritative published checksum.
+  if (verifyStoredChecksum && (!/^[a-f0-9]{64}$/i.test(String(sha256 || "")) ||
+      String(head.customMetadata?.sha256 || "").toLowerCase() !== String(sha256).toLowerCase())) {
+    return { corruption: `Published asset checksum metadata mismatch for ${key}.` };
+  }
   if (
     expectedSize !== undefined &&
     Number.isFinite(Number(expectedSize)) &&
