@@ -5,3 +5,4 @@ export function isEngineProjectKind(kind: unknown): kind is EngineProjectKind;
 export function selectedProjectKind(kind: unknown): EngineProjectKind;
 export function newProjectStartPath(kind: EngineProjectKind): "masterplan" | "source-pack";
 export function projectModuleVisible(kind: EngineProjectKind, module: string): boolean;
+export function projectKindAllowsCloudRoute(kind: EngineProjectKind | unknown, route: string): boolean;
