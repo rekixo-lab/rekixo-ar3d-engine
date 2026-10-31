@@ -6,6 +6,8 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import { projects as listProjects, type CloudProjectSummary } from "../studio/cloud";
 import {adjacentPlot,boundedZoom,hasPendingPlotEdits,isTextEditingTarget,
   nextFreePlotId,sideLabelAnchor} from "../../../../shared/geo-plot-editor.js";
+import GeoPlotInventoryPanel from "./GeoPlotInventoryPanel";
+import {nextUnmappedInventory,type GeoInventoryRow} from "../../../../shared/geo-plot-inventory.js";
 import "./geo-plot-mapper.css";
 
 type Point = [number, number]; // Immutable Building-local X/Z metres.
@@ -26,6 +28,23 @@ const directions=["north","north-east","east","south-east","south","south-west",
 const emptySide = (edges:number[]=[]):Side => ({edges,length:0,unit:"ft",roadFacing:false,source:"",verified:false});
 const blank = (id:string):Plot => ({id,corners:[],layout:"four",sides:{},
   area:{value:0,unit:"sqft",source:"",verified:false},facing:"north",facingSource:"",facingVerified:false,road:"",notes:""});
+function fromInventory(row:GeoInventoryRow,planeY:number):Plot {
+  return {...blank(row.id),planeY,planeSource:"",planeVerified:false,
+    area:{value:row.area,unit:row.areaUnit||"sqft",source:row.areaSource,verified:false},
+    facing:row.facing||"north",facingSource:row.facingSource,road:row.road,
+    notes:[row.dimensions?"Approved dimensions label: "+row.dimensions:"",row.notes].filter(Boolean).join(" · ")};
+}
+function sidesWithInventory(corners:Point[],row?:GeoInventoryRow):Plot["sides"] {
+  const sides=initialSides(corners);
+  if(!row)return sides;
+  for(const role of ROLES){
+    const side=sides[role];
+    if(!side||!(row[role]>0))continue;
+    sides[role]={...side,length:row[role],unit:row.lengthUnit||"ft",
+      source:row.measurementSource,verified:false};
+  }
+  return sides;
+}
 function initialSides(corners:Point[]): Plot["sides"] {
   if(corners.length<3)return {};
   const result:Plot["sides"]={};
@@ -118,6 +137,7 @@ export default function GeoPlotMapper(){
   const [state,setState]=useState<MappingState|null>(null);
   const [geo,setGeo]=useState<GeoPublic|null>(null);
   const [plots,setPlots]=useState<Plot[]>([]);
+  const [inventoryRows,setInventoryRows]=useState<GeoInventoryRow[]>([]);
   const [working,setWorking]=useState<Plot|null>(null);
   const [originalId,setOriginalId]=useState<string|null>(null);
   const [dirty,setDirty]=useState(false);
@@ -165,7 +185,7 @@ export default function GeoPlotMapper(){
   useEffect(()=>{void listProjects().then(r=>setOptions(r.projects)).catch(()=>undefined);},[]);
   useEffect(()=>{
     let live=true;
-    setState(null);setGeo(null);setPlots([]);setWorking(null);setDirty(false);
+    setState(null);setGeo(null);setPlots([]);setInventoryRows([]);setWorking(null);setDirty(false);
     void refresh(()=>live).catch(e=>{if(live){setState(null);setGeo(null);
       setMessage("ERROR: "+(e instanceof Error?e.message:"Unable to load published Geo source."));}});
     return()=>{live=false;};
@@ -296,7 +316,9 @@ export default function GeoPlotMapper(){
     setWorking(prev=>{
       if(!prev||prev.corners.length>=80||(shape==="four"&&prev.corners.length>=4))return prev;
       const points=[...prev.corners,p];
-      return {...prev,corners:points,layout:points.length===3?"three":"four",sides:initialSides(points)};
+      const sourceRow=inventoryRows.find(r=>r.id.toLowerCase()===prev.id.toLowerCase());
+      return {...prev,corners:points,layout:points.length===3?"three":"four",
+        sides:sidesWithInventory(points,sourceRow)};
     });
   };
   const editPoint=(index:number,clientX:number,clientY:number)=>{
@@ -313,9 +335,11 @@ export default function GeoPlotMapper(){
       .sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
     setPlots(updated);setDirty(true);
     if(openNext){
-      setWorking({...blank(nextFreePlotId(updated)),planeY:groundY,planeSource:"",planeVerified:false});
+      const next=nextUnmappedInventory(inventoryRows,updated.map(p=>p.id),id);
+      setWorking(next?fromInventory(next,groundY):
+        {...blank(nextFreePlotId([...updated,...inventoryRows])),planeY:groundY,planeSource:"",planeVerified:false});
       setOriginalId(null);setMode("draw");
-      setMessage("Plot "+id+" staged. Draw the next plot, then Save Mapping Draft.");
+      setMessage("Plot "+id+" staged. "+(next?"Next unmapped inventory plot "+next.id+" is ready.":"No pending inventory plots.")+" Save Mapping Draft before verification.");
      }else {
       setWorking(null);setOriginalId(null);setMode("pan");
       setMessage("Plot "+id+" staged. Save Mapping Draft before verification.");
@@ -407,9 +431,11 @@ export default function GeoPlotMapper(){
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   const begin=(kind:"four"|"irregular")=>{
-    if(!confirmUnapplied())return;
+    const selected=working&&!originalId&&!working.corners.length&&
+      inventoryRows.some(p=>p.id.toLowerCase()===working.id.toLowerCase());
+    if(!selected&&!confirmUnapplied())return;
     setShape(kind);setMode("draw");setOriginalId(null);
-    setWorking({...blank(nextFreePlotId(plots)),planeY:groundY,planeSource:"",planeVerified:false});
+    if(!selected)setWorking({...blank(nextFreePlotId([...plots,...inventoryRows])),planeY:groundY,planeSource:"",planeVerified:false});
     setMessage("Start at the road-facing Front edge, then tap corners clockwise. Complete the boundary before entering surveyed sizes.");
   };
   const undoCorner=()=>{
@@ -596,6 +622,18 @@ export default function GeoPlotMapper(){
            (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Tap corners clockwise":"Drag corner handles"))}</div>
       </div>
       <aside className="geo-plot-dock">
+        <GeoPlotInventoryPanel key={slug} slug={slug} mappedIds={plots.map(p=>p.id)}
+          workingId={working?.id} blocked={!editable||busy||dirty||hasUnapplied}
+          onRowsChange={setInventoryRows}
+          onStart={row=>{
+            if(!confirmUnapplied())return;
+            if(plots.some(p=>p.id.toLowerCase()===row.id.toLowerCase())){
+              setMessage("ERROR: This plot is already mapped; use Plot Editor to change it.");
+              return;
+            }
+            setWorking(fromInventory(row,groundY));setOriginalId(null);setShape("four");setMode("draw");
+            setMessage("Plot "+row.id+" loaded from CSV. Start at the road-facing Front edge, then mark corners.");
+          }}/>
         <div className="geo-plot-inspector-head">
            <div><small>PROJECT PLOT INVENTORY</small><h3>Plot Editor</h3></div>
            <span>{displayedPlots.length}/{plots.length}</span>

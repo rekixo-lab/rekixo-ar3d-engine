@@ -2,6 +2,7 @@ import { engineAdminReadAccess } from "./admin-cloud.mjs";
 import { validateGeoPlotCollection } from "./geo-plot-geometry.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
 import { activeGeoReleaseState,publicGeoExperienceFromState } from "./geo-release-runtime.mjs";
+import { handleGeoPlotInventory } from "./geo-plot-inventory.mjs";
 
 const json = (value, init = {}) => Response.json(value, {headers: {"Cache-Control":"no-store"}, ...init});
 const fail = (message, status = 400) => json({error:message}, {status});
@@ -197,7 +198,7 @@ export function verifiedGeoPlotSourceResponse(ctx,experience) {
   });
 }
 export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.url)) {
-  const match=url.pathname.match(/^\/3Dprojects\/api\/cloud\/projects\/([^/]+)\/geo-plots(?:\/(source))?$/);
+  const match=url.pathname.match(/^\/3Dprojects\/api\/cloud\/projects\/([^/]+)\/geo-plots(?:\/(source|inventory))?$/);
   if (!match) return null;
   const slug=decodeURIComponent(match[1]).toLowerCase();
   if (!validProjectSlug(slug)) return fail("Invalid project slug.");
@@ -212,6 +213,10 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
     if (match[2]==="source") {
       if(request.method!=="GET")return fail("Method not allowed.",405);
       return readPublishedGeoPlotSource(env,ctx,slug);
+    }
+    if (match[2]==="inventory") {
+      if(request.method==="POST"&&!sameOrigin(request))return fail("Same-origin request required.",403);
+      return handleGeoPlotInventory(request,env,ctx,access.actor);
     }
     if (request.method==="GET") return json(await state(env,ctx));
     if (!["PUT","POST"].includes(request.method)) return fail("Method not allowed.",405);
