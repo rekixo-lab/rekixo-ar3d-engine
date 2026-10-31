@@ -75,6 +75,13 @@ async function loadDraft(env,project,expectedRevision){
     imageAssetId:d.image_asset_id,width:d.source_width,height:d.source_height,
     controlPoints:JSON.parse(d.control_points_json),plots:JSON.parse(d.plots_json)},
     {publish:true});
+  // New image-masterplan releases must review the actual road-facing Front
+  // before verification. Do not change the immutable public release validator:
+  // historical sealed versions must remain readable and reactivatable.
+  for(const plot of reviewed.plots){
+    if(plot.road && plot.sides.front?.roadFacing!==true)
+      throw Error("Plot "+plot.id+": select the road-facing FRONT edge and mark Road-facing before verification.");
+  }
   const source=await asset(env,project,reviewed.imageAssetId);
   return {d,reviewed,source};
 }
