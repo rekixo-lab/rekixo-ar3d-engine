@@ -1,0 +1,12 @@
+export type FourCornerSide={edges:number[];length:number;unit:"ft"|"m";roadFacing:boolean;source:string;verified:boolean};
+export type ReviewedPlot={id:string;corners:Array<[number,number]>;layout:"three"|"four";
+  sides:Partial<Record<"front"|"back"|"depthA"|"depthB",FourCornerSide>>;
+  area:{value:number;unit:"sqft"|"sqm"|"sqyd";source:string;verified:boolean};
+  facing:string;facingSource:string;facingVerified:boolean;road:string;
+  [key:string]:unknown};
+export type ApprovedRow={id:string;area:number;areaUnit:"sqft"|"sqm"|"sqyd"|"";
+ areaSource:string;front:number;back:number;depthA:number;depthB:number;
+ lengthUnit:"ft"|"m"|"";
+ measurementSource:string;road:string;facing:string;facingSource:string};
+export function assignFourCornerRoadFront<T extends ReviewedPlot>(plot:T,frontEdge:number):T;
+export function applyApprovedInventoryRow<T extends ReviewedPlot>(plot:T,row:ApprovedRow):T;
