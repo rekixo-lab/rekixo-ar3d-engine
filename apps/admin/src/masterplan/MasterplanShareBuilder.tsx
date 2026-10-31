@@ -107,7 +107,7 @@ export default function MasterplanShareBuilder(){
       <h2>Published Preview</h2>
       {state?.active?<><p>Live Share v{state.active.version}</p>
         {live&&<img src={live.contentUrl+"?preview=1"} alt="Published share poster" style={{maxWidth:"min(100%,490px)"}}/>}
-        <button onClick={()=>{void navigator.clipboard.writeText(location.origin+state.shareUrl).then(()=>setMessage("Link copied."));}}>
+        <button onClick={()=>{void navigator.clipboard.writeText(state.shareUrl).then(()=>setMessage("Link copied."));}}>
           Copy Published Link</button></>:<p>No published share preview yet. Published Geo Masterplan is required first.</p>}
       <h2>Share Release History</h2>
       {state?.history.map(v=><button key={v.id} disabled={busy||state.active?.id===v.id}
