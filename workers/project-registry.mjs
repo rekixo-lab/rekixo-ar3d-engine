@@ -24,4 +24,3 @@ export async function projectBySlug(env, slug) {
       LIMIT 1`,
   ).bind(slug).first();
 }
-
