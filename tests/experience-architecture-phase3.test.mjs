@@ -81,8 +81,8 @@ test("Phase 3 responsive coverage follows the new Overview control-center layout
 test("project creation starts Source Pack and presents Geo only as a later optional stage", () => {
   const dashboard = read("apps/admin/src/dashboard/EngineDashboard.tsx");
 
-  assert.match(dashboard, /Project create hote hi Source Pack workflow open hoga/);
-  assert.match(dashboard, /Create & Open Source Pack/);
+  assert.match(dashboard, /Choose one independent Engine project type/);
+  assert.match(dashboard, /newProjectStartPath\\(createKind\\)/);
   assert.match(dashboard, /Finish Building workflow/);
   assert.match(dashboard, /Customer ko map-based experience chahiye to Geo add karein; otherwise Building complete hai/);
   assert.match(dashboard, /OPTIONAL/);
