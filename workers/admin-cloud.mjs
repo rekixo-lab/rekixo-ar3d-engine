@@ -19,6 +19,7 @@ import {
 } from "./project-deletion.mjs";
 import { processDwgArchitecture } from "./dwg-processor-route.mjs";
 import { handleProjectBrandingAdmin } from "./project-branding.mjs";
+import { handleProjectManagementAdmin } from "./project-management.mjs";
 const BASE_PATH = "/3Dprojects";
 const CLOUD_PATH = `${BASE_PATH}/api/cloud`;
 const COOKIE = "rekixo_3d_admin";
@@ -2338,6 +2339,11 @@ async function routeProjects(request, env, actor, url) {
 
   if (parts.length === 1)
     return patchProject(request, env, actor, project);
+
+  if (parts[1] === "manage") {
+    const response=await handleProjectManagementAdmin(request,env,actor,project,parts);
+    if(response)return response;
+  }
 
   if (parts[1] === "branding")
     return handleProjectBrandingAdmin(request, env, actor, project, slug, parts.slice(2));
