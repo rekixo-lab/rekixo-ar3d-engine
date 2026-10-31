@@ -987,7 +987,7 @@ async function uploadAsset(request, env, actor, project, slug, url) {
   );
 }
 
-async function assetContent(env, project, slug, assetId) {
+async function assetContent(env, project, slug, assetId, url) {
   const row = await env.DB.prepare(
     `SELECT *
        FROM studio_assets_3d
@@ -1015,7 +1015,15 @@ async function assetContent(env, project, slug, assetId) {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("Cache-Control", "private,no-store");
-  headers.set("Content-Disposition", `attachment; filename="${String(row.name).replace(/[\r\n"]/g, "_")}"`);
+  // The original endpoint stays download-only. Authenticated image editors
+  // opt into an inline preview without making original files public.
+  const inlinePreview = url.searchParams.get("preview") === "1" &&
+    ["image/png","image/jpeg","image/webp"].includes(row.mime_type) &&
+    ["source","reference"].includes(row.kind);
+  headers.set("Content-Type", inlinePreview ? row.mime_type : (headers.get("Content-Type") || row.mime_type));
+  headers.set("Content-Disposition", inlinePreview
+    ? "inline"
+    : `attachment; filename="${String(row.name).replace(/[\r\n"]/g, "_")}"`);
   for (const [key, value] of Object.entries(SECURITY_HEADERS))
     headers.set(key, value);
   return new Response(object.body, { headers });
@@ -2369,7 +2377,7 @@ async function routeProjects(request, env, actor, url) {
     if (!validAssetId(assetId))
       return json({ error: "Valid asset ID is required." }, { status: 400 });
     if (parts.length === 4 && parts[3] === "content" && request.method === "GET")
-      return assetContent(env, project, slug, assetId);
+      return assetContent(env, project, slug, assetId, url);
     if (parts.length === 3)
       return deleteAsset(request, env, actor, project, slug, assetId);
   }

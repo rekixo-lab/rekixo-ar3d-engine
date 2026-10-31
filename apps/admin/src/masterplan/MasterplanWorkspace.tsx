@@ -12,7 +12,7 @@ type Control={u:number;v:number;lat:number;lng:number;source:string;verified:boo
 type MasterplanDraft={revision:number;verifiedRevision:number|null;imageAssetId:string|null;
   width:number;height:number;controlPoints:Control[];plots:Plot[]};
 type MasterplanState={project:{slug:string;name:string;status:string};draft:MasterplanDraft;
-  activeRelease:{id:string;version:number}|null;history:Array<{id:string;version:number}>};
+  activeRelease:{id:string;version:number;draftRevision:number}|null;history:Array<{id:string;version:number}>};
 type Mode="source"|"plots"|"controls";
 type Tool="pan"|"draw"|"edit"|"point";
 const roles:Role[]=["front","depthA","back","depthB"];
@@ -85,7 +85,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     return()=>{on=false;};},[load]);
   useEffect(()=>{
     const source=assets.find(a=>a.id===draft?.imageAssetId);
-    setImageUrl(source?.contentUrl||"");
+    setImageUrl(source?.contentUrl ? source.contentUrl+"?preview=1" : "");
   },[draft?.imageAssetId,assets]);
   function changeDraft(patch:Partial<MasterplanDraft>){
     setDraft(d=>d?{...d,...patch}:d);setDirty(true);
@@ -204,6 +204,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   }
   const approved=state?.draft.verifiedRevision===state?.draft.revision&&Boolean(state?.draft.revision);
+  const alreadyLive=Boolean(approved&&state?.activeRelease?.draftRevision===state?.draft.revision);
   const publishedUrl=slug?`/3Dprojects/${encodeURIComponent(slug)}/masterplan`:"";
   const source=assets.find(a=>a.id===draft?.imageAssetId);
   return <main className="masterplan-workspace">
@@ -225,7 +226,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       {mode!=="source"&&<button onClick={newBoundary} disabled={!imageUrl}>+ New Polygon</button>}
       <button disabled={!dirty||busy||!draft?.imageAssetId} onClick={()=>void operation("save")}>Save Draft</button>
       <button disabled={dirty||busy||!state?.draft.revision||Boolean(working)} onClick={()=>void operation("verify")}>Verify</button>
-      <button disabled={dirty||busy||!approved||Boolean(working)} onClick={()=>void operation("publish")}>Publish Masterplan</button>
+      <button disabled={dirty||busy||!approved||alreadyLive||Boolean(working)}
+        onClick={()=>void operation("publish")}>{alreadyLive?"Published · Current Draft":"Publish Masterplan"}</button>
       {state?.activeRelease&&<a href={publishedUrl} target="_blank" rel="noreferrer">Open Live Geo Map</a>}
     </div>
     <div className="masterplan-grid">

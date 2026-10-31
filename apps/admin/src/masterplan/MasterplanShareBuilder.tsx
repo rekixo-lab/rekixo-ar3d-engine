@@ -4,7 +4,7 @@ import type {Asset} from "../studio/domain";
 import "../management/project-management.css";
 type Version={id:string;version:number};
 type ShareState={draft:{revision:number;title:string;description:string;cardAssetId:string|null};
-  active:{id:string;version:number;title:string;description:string;cardAssetId:string}|null;
+  active:{id:string;version:number;revision:number;title:string;description:string;cardAssetId:string}|null;
   history:Version[];shareUrl:string};
 async function call<T>(url:string,method="GET",body?:object):Promise<T>{
   const r=await fetch(url,{cache:"no-store",method,headers:{"Accept":"application/json",...(body?{"Content-Type":"application/json"}:{})},
@@ -94,19 +94,19 @@ export default function MasterplanShareBuilder(){
             onChange={e=>{const file=e.target.files?.[0];e.target.value="";if(file)void upload(file);}}/></label>
       </div>
       {source&&<div style={{maxWidth:490,marginTop:14}}>
-        <img src={source.contentUrl} alt="Draft share preview" style={{maxWidth:"100%",borderRadius:10}}/></div>}
+        <img src={source.contentUrl+"?preview=1"} alt="Draft share preview" style={{maxWidth:"100%",borderRadius:10}}/></div>}
       <div className="engine-manage-actions"><span>Draft revision {state?.draft.revision||0} · 550 KB share image limit</span>
         <button disabled={busy||!cardId||title.trim().length<3||description.trim().length<10}
           onClick={()=>void exec("PUT",{expectedRevision:state?.draft.revision||0,title,description,cardAssetId:cardId})}>
           Save Share Draft</button>
-        <button disabled={busy||!state?.draft.cardAssetId||state?.draft.title!==title||state?.draft.description!==description||
+        <button disabled={busy||!state?.draft.cardAssetId||state?.active?.revision===state?.draft.revision||state?.draft.title!==title||state?.draft.description!==description||
             state?.draft.cardAssetId!==cardId}
           onClick={()=>void exec("POST",{action:"publish",expectedRevision:state?.draft.revision||0})}>
-          Publish WhatsApp Preview</button>
+          {state?.active?.revision===state?.draft.revision?"Published · Current Draft":"Publish WhatsApp Preview"}</button>
       </div>
       <h2>Published Preview</h2>
       {state?.active?<><p>Live Share v{state.active.version}</p>
-        {live&&<img src={live.contentUrl} alt="Published share poster" style={{maxWidth:"min(100%,490px)"}}/>}
+        {live&&<img src={live.contentUrl+"?preview=1"} alt="Published share poster" style={{maxWidth:"min(100%,490px)"}}/>}
         <button onClick={()=>{void navigator.clipboard.writeText(location.origin+state.shareUrl).then(()=>setMessage("Link copied."));}}>
           Copy Published Link</button></>:<p>No published share preview yet. Published Geo Masterplan is required first.</p>}
       <h2>Share Release History</h2>

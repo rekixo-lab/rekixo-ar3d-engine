@@ -22,9 +22,28 @@ async function released(env,slug){
   const reviewed=validateMasterplanDraft({
     imageAssetId:data.image?.assetId,width:data.image?.width,height:data.image?.height,
     controlPoints:data.controlPoints,plots:data.plots},{publish:true});
-  if(!reviewed.calibration||row.source_asset_id!==reviewed.imageAssetId||
+  const expected=reviewed.calibration;
+  const stored=data.calibration;
+  // The published JSON hash alone does not prove the saved transform is
+  // numerically usable. Recompute from approved controls and require an
+  // exact, finite Geo transform so the customer map cannot render NaNs.
+  const sameVector=(actual,verified)=>Array.isArray(actual) &&
+    actual.length===3 && verified.every((value,i)=>
+      typeof actual[i]==="number" && Number.isFinite(actual[i]) &&
+      Math.abs(actual[i]-value)<=1e-12);
+  if(data.schema!=="rekixo-masterplan-geo-v1"||
+     !stored||!expected||
+     !sameVector(stored.transform?.lat,expected.transform.lat)||
+     !sameVector(stored.transform?.lng,expected.transform.lng)||
+     !Number.isFinite(stored.maxResidualM)||
+     Math.abs(stored.maxResidualM-expected.maxResidualM)>0.00001||
+     !Number.isFinite(stored.sizeM?.width)||
+     !Number.isFinite(stored.sizeM?.height)||
+     Math.abs(stored.sizeM.width-expected.sizeM.width)>0.001||
+     Math.abs(stored.sizeM.height-expected.sizeM.height)>0.001||
+     row.source_asset_id!==reviewed.imageAssetId||
      data.image.sha256!==row.source_sha256||
-     Math.abs(reviewed.calibration.maxResidualM-data.calibration?.maxResidualM)>0.00001)
+     data.image.mimeType!==row.mime_type)
     throw Error("Published calibration/source binding is corrupt.");
   assertDraftAssetKey(slug,row.source_asset_id,row.r2_key);
   return {row,data};
@@ -41,7 +60,8 @@ export async function publicMasterplanResponse(request,env,slug,part){
   if(part==="masterplan-image"){
     const result=await serveR2Object(env.MODEL_ASSETS,row.r2_key,request,{
       mimeType:row.mime_type,expectedSize:row.byte_size,sha256:row.source_sha256,
-      cacheControl:"private,max-age=0,must-revalidate",allowRange:false});
+      cacheControl:"private,max-age=0,must-revalidate",allowRange:false,
+       verifyStoredChecksum:true});
     return result.response || err("Approved masterplan image is missing or corrupted.",503);
   }
   if(part!=="masterplan")return err("Unknown masterplan route.");

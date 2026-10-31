@@ -15,7 +15,7 @@ async function imageAsset(env,project,id){
 async function state(env,project){
   const [d,a,releases]=await Promise.all([
     env.DB.prepare("SELECT * FROM masterplan_share_drafts_3d WHERE project_id=?").bind(project.id).first(),
-    env.DB.prepare(`SELECT r.id,r.version,r.title,r.description,r.card_asset_id,
+    env.DB.prepare(`SELECT r.id,r.version,r.revision,r.title,r.description,r.card_asset_id,
      r.published_at FROM masterplan_share_active_3d a
      JOIN masterplan_share_releases_3d r ON r.id=a.release_id AND r.project_id=a.project_id
      WHERE a.project_id=?`).bind(project.id).first(),
@@ -26,7 +26,7 @@ async function state(env,project){
   return {project:{slug:project.slug,name:project.name,status:project.status},
     draft:d?{revision:d.revision,title:d.title,description:d.description,cardAssetId:d.card_asset_id}:
       {revision:0,title:project.name,description:"",cardAssetId:null},
-    active:a?{id:a.id,version:a.version,title:a.title,description:a.description,
+    active:a?{id:a.id,version:a.version,revision:a.revision,title:a.title,description:a.description,
       cardAssetId:a.card_asset_id,publishedAt:a.published_at}:null,
     history:releases.results||[],shareUrl:`/3Dprojects/${encodeURIComponent(project.slug)}/masterplan`};
 }
@@ -74,6 +74,13 @@ export async function handleMasterplanShareAdmin(req,env,actor,project,parts){
         .bind(project.id).first();
       if(!d||d.revision!==body.expectedRevision||!d.card_asset_id)
         throw Error("Upload a share poster and Save the current draft first.");
+      const existing=await env.DB.prepare(`SELECT r.id,
+        EXISTS(SELECT 1 FROM masterplan_share_active_3d a
+          WHERE a.project_id=r.project_id AND a.release_id=r.id) AS active
+        FROM masterplan_share_releases_3d r WHERE r.project_id=? AND r.revision=?`)
+        .bind(project.id,d.revision).first();
+      if(existing?.active)return json(await state(env,project));
+      if(existing)throw Error("This Share draft was published earlier. Activate that version from History.");
       const card=await imageAsset(env,project,d.card_asset_id);
       const mapping=await env.DB.prepare(`SELECT a.release_id FROM masterplan_geo_active_3d a
         WHERE a.project_id=?`).bind(project.id).first();
