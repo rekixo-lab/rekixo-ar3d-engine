@@ -652,7 +652,8 @@ export default function GeoPlotMapper(){
           (message.startsWith("ERROR:")?"Load failed":"Checking…")}</b></span>
       <span>Draft <b>r{state?.draft.revision||0}</b></span>
       <span>Mapped <b>{plots.length}</b></span>
-      <span>Verified <b>{state?.draft.verifiedRevision===state?.draft.revision&&state?.draft.revision?"Yes":"No"}</b></span>
+      <span>Verified <b>{state?.draft.revision&&state.draft.verifiedRevision===state.draft.revision&&
+          state.draft.verifiedInventoryRevision===state.inventoryRevision?"Yes":"Needs review"}</b></span>
       <span>Live mapping <b>{state?.activeMapping?.current?"v"+state.activeMapping.version:"None / stale"}</b></span>
     </section>
     {state?.draft.stale&&<div className="geo-plot-warning">
@@ -983,7 +984,11 @@ export default function GeoPlotMapper(){
           const file=e.target.files?.[0];e.target.value="";if(file)void importCsv(file).catch(x=>setMessage("ERROR: "+String(x)));
         }}/></label>
         <button disabled={!plots.length} onClick={exportCsv}>Export Measurement CSV</button>
-        {state?.releases.map(r=><button key={r.id} disabled={!editable||busy||r.geoReleaseId!==state.geoReleaseId} onClick={()=>void execute("activate",r.id)}>Activate Mapping v{r.version}</button>)}
+        {state?.releases.map(r=><button key={r.id} disabled={!editable||busy||r.geoReleaseId!==state.geoReleaseId}
+          onClick={()=>{
+            if(window.confirm("Activate historic Mapping v"+r.version+"? This restores its sealed plot data, which may predate the current approved CSV inventory. Current draft and immutable history remain intact."))
+              void execute("activate",r.id);
+          }}>Activate Mapping v{r.version}</button>)}
         </div>
         <div className="geo-plot-shortcuts">
           <strong>Keyboard shortcuts</strong>
