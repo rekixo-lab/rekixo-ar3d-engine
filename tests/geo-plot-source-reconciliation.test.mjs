@@ -112,6 +112,10 @@ test("both editors offer road edge selection and reset geometry-dependent approv
     "manual Front edge edits must reset legacy Geo facing approval");
   assert.match(image,/role==="front"&&Object\.hasOwn\(patch,"edges"\)/,
     "manual Front edge edits must reset image Geo facing approval");
+  assert.match(legacy,/Object\.hasOwn\(patch,"edges"\)\?\{roadFacing:false\}/,
+    "moving an edge must not retain a stale road-side flag in legacy Geo");
+  assert.match(image,/Object\.hasOwn\(patch,"edges"\)\?\{roadFacing:false\}/,
+    "moving an edge must not retain a stale road-side flag in image Geo");
   const imagePublish=read("workers/masterplan-geo-admin.mjs");
   assert.match(imagePublish,/plot\.road && plot\.sides\.front\?\.roadFacing!==true/);
   assert.match(imagePublish,/before verification/);
