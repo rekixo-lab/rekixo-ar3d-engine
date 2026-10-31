@@ -22,6 +22,7 @@ import { handleProjectBrandingAdmin } from "./project-branding.mjs";
 import { handleProjectManagementAdmin } from "./project-management.mjs";
 import { handleMasterplanGeoAdmin } from "./masterplan-geo-admin.mjs";
 import { handleMasterplanSalesAdmin } from "./masterplan-sales.mjs";
+import { cloudProjectRow, projectBySlug } from "./project-registry.mjs";
 const BASE_PATH = "/3Dprojects";
 const CLOUD_PATH = `${BASE_PATH}/api/cloud`;
 const COOKIE = "rekixo_3d_admin";
@@ -484,32 +485,6 @@ async function sessionStatus(request, env) {
     user: session ? { email: session.email } : undefined,
     expiresAt: session?.exp,
   });
-}
-
-function cloudProjectRow(row) {
-  return {
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    location: row.location ?? undefined,
-    status: row.status,
-    projectKind: row.project_kind || "legacy",
-    updatedAt: row.updated_at,
-    draftRevision:
-      row.draft_revision === null || row.draft_revision === undefined
-        ? undefined
-        : Number(row.draft_revision),
-    assetCount: Number(row.asset_count || 0),
-  };
-}
-
-async function projectBySlug(env, slug) {
-  return env.DB.prepare(
-    `SELECT id,slug,name,location,status,project_kind,updated_at,active_release_id
-       FROM projects_3d
-      WHERE slug=?
-      LIMIT 1`,
-  ).bind(slug).first();
 }
 
 export function cloudAssetKey(slug, assetId) {
