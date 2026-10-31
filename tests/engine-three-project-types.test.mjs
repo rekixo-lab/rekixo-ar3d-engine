@@ -15,7 +15,7 @@ const plot={
   layout:"four",sides:{front:side([0]),depthA:side([1]),back:side([2]),depthB:side([3])},
   area:{value:250,unit:"sqm",source:"approved survey",verified:true},
   facing:"north-east",facingSource:"approved north arrow",facingVerified:true,
-  road:"24 ft road",notes:"";
+  road:"24 ft road",notes:""};
 };
 const source={imageAssetId:"asset-01",width:2400,height:1600,controlPoints:control,plots:[plot]};
 test("explicit Engine project kinds and separate project navigation",()=>{
