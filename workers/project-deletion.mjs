@@ -162,7 +162,15 @@ async function deleteProjectRecords(env, project) {
   const mappingSchema = await env.DB.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='geo_plot_mapping_releases_3d' LIMIT 1"
   ).first();
+  const masterplanSchema=await env.DB.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='masterplan_geo_releases_3d' LIMIT 1"
+  ).first();
   await env.DB.batch([
+    ...(masterplanSchema ? [
+      env.DB.prepare("DELETE FROM masterplan_geo_active_3d WHERE project_id=?").bind(project.id),
+      env.DB.prepare("DELETE FROM masterplan_geo_releases_3d WHERE project_id=?").bind(project.id),
+      env.DB.prepare("DELETE FROM masterplan_geo_drafts_3d WHERE project_id=?").bind(project.id),
+    ] : []),
     ...(mappingSchema ? [
       env.DB.prepare("DELETE FROM geo_plot_mapping_active_3d WHERE project_id=?").bind(project.id),
       env.DB.prepare("DELETE FROM geo_plot_mapping_releases_3d WHERE project_id=?").bind(project.id),
