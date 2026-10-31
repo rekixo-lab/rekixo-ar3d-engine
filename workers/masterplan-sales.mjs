@@ -4,7 +4,8 @@ const fail=(msg,status=409)=>json({error:msg},status);
 const uuid=v=>typeof v==="string"&&/^[0-9a-f-]{36}$/i.test(v);
 const positiveMoney=v=>Number.isSafeInteger(v)&&v>0&&v<=1000000000000;
 const date=v=>typeof v==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&
-  !Number.isNaN(Date.parse(v+"T00:00:00Z"));
+  !Number.isNaN(Date.parse(v+"T00:00:00Z")) &&
+  new Date(v+"T00:00:00Z").toISOString().slice(0,10)===v;
 const text=(v,max=250)=>typeof v==="string"&&v.length<=max&&
   !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(v)?v.trim():"";
 const origin=req=>{try{return new URL(req.headers.get("origin")||"").origin===new URL(req.url).origin;}catch{return false;}};
@@ -75,18 +76,24 @@ async function createSale(env,actor,project,body){
   const plot=plots.find(p=>p.id.toLowerCase()===plotId.toLowerCase());
   if(!plot)throw Error("Plot must exist in the active published masterplan mapping.");
   const id=crypto.randomUUID(),time=now();
-  await env.DB.batch([
+  const changed=await env.DB.batch([
     env.DB.prepare(`INSERT INTO masterplan_sales_3d
       (id,project_id,plot_id,source_mapping_release_id,buyer_name,buyer_phone,
        agreement_paise,state,revision,notes,created_by,created_at)
-       VALUES(?,?,?,?,?,?,?,'booked',1,?,?,?)`)
-       .bind(id,project.id,plot.id,active.id,buyer,phone,amount,notes,actor.email,time),
+       SELECT ?,?,?,?,?,?,?,'booked',1,?,?,?
+       WHERE EXISTS(SELECT 1 FROM masterplan_geo_active_3d
+         WHERE project_id=? AND release_id=?)`)
+       .bind(id,project.id,plot.id,active.id,buyer,phone,amount,notes,actor.email,time,
+         project.id,active.id),
     env.DB.prepare(`INSERT INTO engine_admin_audit
       (id,actor_email,action,project_id,target_id,details_json,created_at)
-       VALUES(?,?,?,?,?,?,?)`)
-       .bind(crypto.randomUUID(),actor.email,"masterplan.sale_booked",project.id,id,
-         JSON.stringify({plotId:plot.id,mappingRelease:active.id,agreementPaise:amount}),time)
+       SELECT ?,?,'masterplan.sale_booked',?,?,?,?
+       WHERE EXISTS(SELECT 1 FROM masterplan_sales_3d WHERE id=? AND project_id=?)`)
+       .bind(crypto.randomUUID(),actor.email,project.id,id,
+         JSON.stringify({plotId:plot.id,mappingRelease:active.id,agreementPaise:amount}),time,id,project.id)
   ]);
+  if(changed[0].meta?.changes!==1)
+    throw Error("Masterplan source release changed during booking. Reload inventory.");
   return id;
 }
 async function confirmSale(env,actor,project,body){
