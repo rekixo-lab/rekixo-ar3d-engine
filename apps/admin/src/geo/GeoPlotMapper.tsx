@@ -199,6 +199,7 @@ export default function GeoPlotMapper(){
   useEffect(()=>{
     let live=true;
     setState(null);setGeo(null);setPlots([]);setInventoryRows([]);setWorking(null);setDirty(false);
+    pointerPreviewRef.current=null;setPointerPreview(null);
     void refresh(()=>live).catch(e=>{if(live){setState(null);setGeo(null);
       setMessage("ERROR: "+(e instanceof Error?e.message:"Unable to load published Geo source."));}});
     return()=>{live=false;};
@@ -378,6 +379,7 @@ export default function GeoPlotMapper(){
     overlay.addEventListener("wheel",handleWheel,{passive:false});
     return()=>overlay.removeEventListener("wheel",handleWheel);
   },[geo]);
+  useEffect(()=>{if(mode==="pan"){pointerPreviewRef.current=null;setPointerPreview(null);}},[mode]);
   const toggleFullscreen=async()=>{
     try{
       if(document.fullscreenElement===editorRef.current)await document.exitFullscreen();
@@ -668,7 +670,7 @@ export default function GeoPlotMapper(){
         </div>
         <div className="geo-plot-tool-group geo-plot-zoom-tools" aria-label="Precision viewport zoom">
           <button type="button" disabled={!geo} aria-label="Zoom out" onClick={()=>zoomBy(.8)}>−</button>
-          <input type="range" min="100" max="3200" step="25"
+          <input type="range" min="100" max="5000" step="25"
             value={zoomPercent} onChange={e=>setZoom(Number(e.target.value))}
             aria-label="Zoom percent" aria-valuetext={zoomPercent+" percent"}/>
           <output>{zoomPercent}%</output>
@@ -689,11 +691,14 @@ export default function GeoPlotMapper(){
       <div className="geo-plot-workspace">
       <div className="geo-plot-scene">
         <div className="geo-plot-canvas" ref={hostRef} aria-label="Top-down 3D masterplan plot mapping canvas"/>
-        {geo&&<svg className="geo-plot-overlay" viewBox={`0 0 ${viewport.w} ${viewport.h}`}
+        {geo&&<svg ref={overlayRef} className="geo-plot-overlay" viewBox={`0 0 ${viewport.w} ${viewport.h}`}
+           data-tool-mode={mode} data-snap={snap?"on":"off"}
            style={{pointerEvents:mode==="pan"?"none":"auto"}}
-           onPointerDown={onDraw}
-           onPointerMove={e=>{if(dragRef.current!==null)editPoint(dragRef.current,e.clientX,e.clientY);}}
-           onPointerUp={()=>dragRef.current=null} onPointerCancel={()=>dragRef.current=null}>
+           onPointerDown={onOverlayPointerDown}
+           onPointerMove={onOverlayPointerMove}
+           onPointerUp={onOverlayPointerUp}
+           onPointerCancel={onOverlayPointerCancel}
+           onPointerLeave={()=>{if(dragRef.current===null&&!pointerStartRef.current)clearPointer();}}>
           {plots.map(p=>{
              const x=p.corners.reduce((n,q)=>n+q[0],0)/p.corners.length;
              const y=p.corners.reduce((n,q)=>n+q[1],0)/p.corners.length;
@@ -706,7 +711,14 @@ export default function GeoPlotMapper(){
                  textAnchor="middle" dominantBaseline="middle">{p.id}</text>}
              </g>;
            })}
-           {working&&working.corners.length>0&&<>
+           {working&&mode==="draw"&&working.corners.length>0&&pointerPreview&&
+            <line className="geo-plot-precision-rubberband"
+              x1={project(working.corners[working.corners.length-1])[0]}
+              y1={project(working.corners[working.corners.length-1])[1]}
+              x2={pointerPreview.screen[0]} y2={pointerPreview.screen[1]}
+              stroke="#ffe78c" strokeWidth="1.5" strokeDasharray="5 4"
+              pointerEvents="none"/>}
+          {working&&working.corners.length>0&&<>
             <polyline points={path(working.corners)} fill={working.corners.length>=3?"rgba(250,204,21,.22)":"none"}
               stroke="#ffd965" strokeWidth="2.5" strokeDasharray="7 4"/>
             {showGuides&&ROLES.filter(role=>working.layout==="four"||role!=="depthB")
@@ -735,7 +747,7 @@ export default function GeoPlotMapper(){
            <span>{mode==="draw"?"Mark Front edge first":mode==="edit"?"Drag numbered corner handles":"Pan / pinch to inspect"}</span>
          </div>}
          <div className="geo-plot-scene-info">{modelStatus||("Top view · model coordinates in metres · "+
-           (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Tap corners clockwise":"Drag corner handles"))}</div>
+           (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Click corners clockwise · wheel zoom at cursor":"Drag numbered handles · wheel zoom at cursor"))}</div>
       </div>
       <aside className="geo-plot-dock">
         <GeoPlotInventoryPanel key={slug} slug={slug} mappedIds={plots.map(p=>p.id)}
