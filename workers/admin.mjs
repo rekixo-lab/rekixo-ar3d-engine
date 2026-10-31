@@ -419,6 +419,10 @@ export default {
       }
     }
 
+    // APIs must fail closed as JSON, not silently serve SPA HTML. The public
+    // /api/projects/:slug/geo-placement endpoint is not an Admin API route.
+    if (url.pathname.startsWith(`${BASE_PATH}/api/`))
+      return json({error:"Unknown Engine Admin API route."},{status:404});
     return addSecurityHeaders(await env.ASSETS.fetch(toAssetRequest(request)));
   },
 };
