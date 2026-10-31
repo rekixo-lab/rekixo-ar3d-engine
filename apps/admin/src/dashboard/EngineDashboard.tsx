@@ -372,7 +372,7 @@ export default function EngineDashboard() {
                     <a href={`/3Dprojects/profile?project=${encodeURIComponent(selectedProject.slug)}`}>Open Profile</a>
                   </article>
                 </section>
-              ) : <section className="engine-overview-status-grid" aria-label="Project readiness">
+              ) : (<section className="engine-overview-status-grid" aria-label="Project readiness">
                 <article className="engine-control-card">
                   <div className="engine-overview-card-head">
                     <span>SOURCE PACK</span>
@@ -412,7 +412,7 @@ export default function EngineDashboard() {
                   <p>Building and Geo release history, activation and live status in one place.</p>
                   <a href={projectHref("releases", selectedProject.slug)}>Open Releases</a>
                 </article>
-              </section>
+              </section>)}
 
               {selectedProject.projectKind !== "masterplan_geo" ? <section className="engine-overview-flow engine-control-card">
                 <div>
@@ -425,7 +425,7 @@ export default function EngineDashboard() {
                   <a href={projectHref("geo-mapper", selectedProject.slug)}><span>03</span><b>Geo</b><small>Optional real-world placement</small></a>
                   <a href={projectHref("releases", selectedProject.slug)}><span>04</span><b>Release</b><small>Activate and go live</small></a>
                 </div>
-              </section>
+              </section> : null}
             </>
           )}
         </div>
@@ -438,10 +438,24 @@ export default function EngineDashboard() {
               <div>
                 <p>NEW ENGINE PROJECT</p>
                 <h2 id="engine-create-project-title">Create 3D Project</h2>
-                <span>Project create hote hi Source Pack workflow open hoga.</span>
+                <span>Choose one independent Engine project type. The right tools will appear automatically.</span>
               </div>
               <button type="button" onClick={() => setShowCreate(false)} aria-label="Close">×</button>
             </div>
+            <fieldset className="engine-overview-kind-choices">
+              <legend>What are you building?</legend>
+              {(["building","building_geo","masterplan_geo"] as const).map(kind=>(
+                <label key={kind} className={createKind===kind?"engine-overview-kind active":"engine-overview-kind"}>
+                  <input type="radio" name="engine-project-kind" value={kind} checked={createKind===kind}
+                    onChange={()=>setCreateKind(kind)} />
+                  <span><b>{PROJECT_KIND_LABELS[kind]}</b>
+                    <small>{kind==="building"?"Customer website, floors, units and walkthrough":
+                      kind==="building_geo"?"A separate 3D building anchored to real Geo coordinates":
+                      "An approved layout image with Geo calibration, polygons and plots"}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
             <label>
               <span>Project name</span>
               <input value={createName} onChange={(event) => setCreateName(event.target.value)} autoFocus placeholder="Example Residence" />
@@ -454,7 +468,7 @@ export default function EngineDashboard() {
             <div className="engine-overview-modal__actions">
               <button className="engine-control-button" type="button" disabled={createBusy} onClick={() => setShowCreate(false)}>Cancel</button>
               <button className="engine-control-button engine-control-button--primary" type="button" disabled={createBusy} onClick={() => void createProject()}>
-                {createBusy ? "Creating…" : "Create & Open Source Pack"}
+                {createBusy ? "Creating…" : "Create "+PROJECT_KIND_LABELS[createKind]}
               </button>
             </div>
           </section>
