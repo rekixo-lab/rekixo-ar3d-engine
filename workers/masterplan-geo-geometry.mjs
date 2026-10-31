@@ -87,7 +87,7 @@ export function deriveAffineGeoCalibration(controls){
   const determinant=eCoef[1]*nCoef[2]-eCoef[2]*nCoef[1];
   if(metersPerImageU<1||metersPerImageV<1||
      metersPerImageU>50000||metersPerImageV>50000||
-     Math.abs(determin)<1)
+     Math.abs(determinant)<1)
     throw Error("Implausible or degenerate Geo layout dimensions/calibration.");
   if(maxResidualM>2)throw Error("Geo control point residual "+maxResidualM.toFixed(2)+"m exceeds 2m review limit.");
   return {transform,maxResidualM:Number(maxResidualM.toFixed(5)),
