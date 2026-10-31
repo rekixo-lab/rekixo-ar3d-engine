@@ -315,7 +315,10 @@ export default function GeoPlotMapper(){
       setWorking({...blank(nextFreePlotId(updated)),planeY:groundY,planeSource:"",planeVerified:false});
       setOriginalId(null);setMode("draw");
       setMessage("Plot "+id+" staged. Draw the next plot, then Save Mapping Draft.");
-    }else setMessage("Plot "+id+" staged. Save Mapping Draft before verification.");
+     }else {
+      setWorking(null);setOriginalId(null);setMode("pan");
+      setMessage("Plot "+id+" staged. Save Mapping Draft before verification.");
+    }
   };
   const execute=async(action:"save"|"verify"|"publish"|"activate"|"rebind-reset",id?:string)=>{
     if(!state||!geo) return;setBusy(true);setMessage("");
@@ -586,7 +589,14 @@ export default function GeoPlotMapper(){
          </div>
          {working&&<>
           <h3>{plots.some(p=>p.id===working.id)?"Update":"New"} Plot {working.id}</h3>
+          <div className="geo-plot-inspector-selection">
+             <span>{originalId?"Editing mapped plot":"New polygon"}</span>
+             <strong>Plot {working.id}</strong>
+             <small>{working.corners.length} corners · {hasUnapplied?"Not applied to draft":"Up to date"}</small>
+           </div>
           <label>Plot Number<input readOnly={Boolean(originalId)} value={working.id} onChange={e=>setWorking({...working,id:e.target.value})}/></label>
+          <details open className="geo-plot-inspector-section">
+            <summary>01 · Geometry & site plane</summary>
           <p className="geo-plot-hint">Corners: {working.corners.length} · Model area (unverified): {areaSqm(working.corners).toFixed(2)} m²
           · Geo-scale area estimate: {(areaSqm(working.corners)*(geo?.placement.scale||1)**2).toFixed(2)} m²</p>
           <label>Mapping plane height (model-local Y, metres)<input type="number" step="any"
@@ -604,6 +614,9 @@ export default function GeoPlotMapper(){
                 Recheck approved plan dimensions, GLB metric scale and Geo alignment before verifying.</p>
               : null;
           })()}
+          </details>
+          <details open className="geo-plot-inspector-section">
+            <summary>02 · Approved area & source</summary>
           <label>Approved Area<input inputMode="decimal" type="number" min="0.001" value={working.area.value||""}
             onChange={e=>setWorking({...working,area:{...working.area,value:Number(e.target.value),verified:false}})}/></label>
           <label>Area Unit<select value={working.area.unit} onChange={e=>setWorking({...working,area:{...working.area,unit:e.target.value as Plot["area"]["unit"]}})}>
@@ -612,6 +625,9 @@ export default function GeoPlotMapper(){
             onChange={e=>setWorking({...working,area:{...working.area,source:e.target.value,verified:false}})}/></label>
           <label className="geo-plot-check"><input type="checkbox" checked={working.area.verified}
             onChange={e=>setWorking({...working,area:{...working.area,verified:e.target.checked}})}/> Area verified against source</label>
+          </details>
+          <details open className="geo-plot-inspector-section">
+            <summary>03 · Road, facing & north</summary>
           <label>Road / Access<input value={working.road} onChange={e=>setWorking({...working,road:e.target.value})}/></label>
           <label>Facing <select value={working.facing} onChange={e=>setWorking({...working,facing:e.target.value,facingVerified:false})}>
             {directions.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
@@ -620,7 +636,10 @@ export default function GeoPlotMapper(){
             onChange={e=>setWorking({...working,facingSource:e.target.value,facingVerified:false})}/></label>
           <label className="geo-plot-check"><input type="checkbox" checked={working.facingVerified}
             onChange={e=>setWorking({...working,facingVerified:e.target.checked})}/> Facing verified against reference</label>
-          <p className="geo-plot-hint">Side edge numbers are zero-based; a logical side may contain multiple consecutive edges.</p>
+          </details>
+          <details open className="geo-plot-inspector-section">
+            <summary>04 · Front, Back & Depth sizes</summary>
+          <p className="geo-plot-hint">Side edge numbers are zero-based; one side may contain multiple consecutive edges. The first boundary edge is Front by convention—verify against the approved drawing.</p>
           {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{const side=working.sides[role]||emptySide();
             const referenceM=geometrySideLengthMetres(working.corners,side.edges,geo?.placement.scale||1);
             const reference=side.unit==="ft"?referenceM*3.280839895:referenceM;
@@ -641,10 +660,25 @@ export default function GeoPlotMapper(){
               <label className="geo-plot-check"><input type="checkbox" checked={side.verified} onChange={e=>changeSide(role,{verified:e.target.checked})}/> Source verified</label>
             </fieldset>;
           })}
+          </details>
+          <details open className="geo-plot-inspector-section">
+            <summary>05 · Notes & confirm</summary>
           <label>Notes<textarea rows={2} value={working.notes} onChange={e=>setWorking({...working,notes:e.target.value})}/></label>
-          <button disabled={!editable||busy||working.corners.length<3} onClick={()=>{try{applyPlot();}catch(e){setMessage(String(e));}}}>Apply Plot to Draft</button>
+          <div className="geo-plot-inspector-actions">
+            <button type="button" className="geo-plot-action-primary"
+              disabled={!editable||busy||working.corners.length<3||
+                (shape==="four"&&working.corners.length!==4)}
+              onClick={()=>{try{applyPlot();}catch(e){setMessage("ERROR: "+String(e));}}}>✓ Apply Plot to Draft</button>
+            <button type="button" disabled={!editable||busy||working.corners.length<3||
+                (shape==="four"&&working.corners.length!==4)}
+              onClick={()=>{try{applyPlot(true);}catch(e){setMessage("ERROR: "+String(e));}}}>
+              Apply & Draw Next →</button>
+          </div>
+          </details>
         </>}
-        <h3>Project Mapping Actions</h3>
+        <div className="geo-plot-draft-actions">
+          <h3>Save, review & publish</h3>
+          <p className="geo-plot-hint">Apply individual plots, save the complete mapping draft, then verify every source-backed measurement before publishing.</p>
         <button disabled={!editable||busy||!dirty} onClick={()=>void execute("save")}>{busy?"Saving…":"Save Mapping Draft"}</button>
         <button disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision} onClick={()=>void execute("verify")}>Verify All Plots</button>
         <label className="geo-plot-import">Import Measurements CSV<input type="file" accept=".csv,text/csv" onChange={e=>{
@@ -652,6 +686,12 @@ export default function GeoPlotMapper(){
         }}/></label>
         <button disabled={!plots.length} onClick={exportCsv}>Export Measurement CSV</button>
         {state?.releases.map(r=><button key={r.id} disabled={!editable||busy||r.geoReleaseId!==state.geoReleaseId} onClick={()=>void execute("activate",r.id)}>Activate Mapping v{r.version}</button>)}
+        </div>
+        <div className="geo-plot-shortcuts">
+          <strong>Keyboard shortcuts</strong>
+          <span>P Pan · D 4 corners · I Irregular · E Edit · F Fit</span>
+          <span>+ / − Zoom · Backspace Undo (new plot) · Ctrl+S Save draft</span>
+        </div>
       </aside>
       </div>
     </div>
