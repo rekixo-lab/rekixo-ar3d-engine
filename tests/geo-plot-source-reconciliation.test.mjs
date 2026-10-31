@@ -112,3 +112,10 @@ test("both editors offer road edge selection and reset geometry-dependent approv
   // Keep the public V1 sealed-release validator backward-compatible.
   assert.doesNotMatch(read("workers/masterplan-geo-geometry.mjs"),/road-facing FRONT/);
 });
+test("source image replacement cannot silently drop uncommitted polygons or GPS points",()=>{
+  const editor=read("apps/admin/src/masterplan/MasterplanWorkspace.tsx");
+  assert.match(editor,/if\(dirty\|\|working\)throw Error/);
+  assert.match(editor,/Replacing this masterplan image clears the CURRENT DRAFT/);
+  assert.match(editor,/exportMasterplanDraftReview\(slug,draft\)/);
+  assert.match(editor,/not a full backup/);
+});
