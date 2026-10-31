@@ -22,7 +22,7 @@ test("snap radius is CSS pixels and does not scale or round model coordinates",(
     assert.equal(a.kind,"vertex");
     assert.deepEqual(a.point,[0,0]);
     assert.ok(a.distance<=6);
-    const far=point(20/zoom,20/zoom);
+    const far=point(-20/zoom,-20/zoom);
     const b=precisionSnap(far,project(far),[{points:square}],project,{enabled:true});
     assert.equal(b.kind,"none");
     assert.deepEqual(b.point,far);
@@ -37,11 +37,12 @@ test("nearest vertex wins; first polygon position does not bias the answer",()=>
 });
 test("nearest edge wins when no vertex is within 6 pixels",()=>{
   const project=p=>p;
-  const raw=point(5,2.5);
-  const out=precisionSnap(raw,raw,[{points:square}],project,{enabled:true});
+  const raw=point(50,2.5);
+  const largerRing=[point(0,0),point(100,0),point(100,100),point(0,100)];
+  const out=precisionSnap(raw,raw,[{points:largerRing}],project,{enabled:true});
   assert.equal(out.kind,"edge");
-  assert.ok(distance(out.point,[5,0])<1e-9);
-  assert.ok(distance(out.screen,[5,0])<1e-9);
+  assert.ok(distance(out.point,[50,0])<1e-9);
+  assert.ok(distance(out.screen,[50,0])<1e-9);
 });
 test("dragging a corner never snaps to itself or its adjacent edges",()=>{
   const project=p=>p;
