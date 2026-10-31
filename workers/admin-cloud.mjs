@@ -23,6 +23,7 @@ import { handleProjectManagementAdmin } from "./project-management.mjs";
 import { handleMasterplanGeoAdmin } from "./masterplan-geo-admin.mjs";
 import { handleMasterplanSalesAdmin } from "./masterplan-sales.mjs";
 import { handleMasterplanShareAdmin } from "./masterplan-share-admin.mjs";
+import { referencedMasterplanAssetIds } from "./masterplan-asset-protection.mjs";
 import { cloudProjectRow, projectBySlug } from "./project-registry.mjs";
 const BASE_PATH = "/3Dprojects";
 const CLOUD_PATH = `${BASE_PATH}/api/cloud`;
@@ -789,7 +790,7 @@ async function cloudDraft(request, env, actor, project, slug) {
   const assetRows = await env.DB.prepare(
     "SELECT id FROM studio_assets_3d WHERE project_id=? AND deleted_at IS NULL",
   ).bind(project.id).all();
-  const referenced = new Set(assetIds);
+  const referenced = new Set([...assetIds,...await referencedMasterplanAssetIds(env,project.id)]);
   const statements = [
     env.DB.prepare(
       "UPDATE projects_3d SET name=?,location=?,updated_at=? WHERE id=?",
@@ -1053,6 +1054,8 @@ async function deleteAsset(request, env, actor, project, slug, assetId) {
     }
   }
 
+  if ((await referencedMasterplanAssetIds(env,project.id)).has(assetId))
+    return json({error:"Asset belongs to a Geo Masterplan draft, published release or social preview. Deletion blocked."},{status:409});
   const expectedKey = cloudAssetKey(slug, assetId);
   if (row.r2_key !== expectedKey)
     return json({ error: "Asset storage key violates project isolation." }, { status: 500 });
