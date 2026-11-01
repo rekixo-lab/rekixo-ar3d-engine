@@ -530,8 +530,12 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         };
         refreshPlotPolygons=(enabled)=>{
           if(cancelled||!plotLayer)return;
+          // A small estate should never lose an edge merely because Google
+          // reports 2D ground bounds during a steep camera pitch.
+          // Large projects keep conservative viewport culling for performance.
           const visible=new Set((enabled?
-            visibleGeoPlotPaths(preparedPaths,currentViewport()):[]).map(p=>p.plot.id));
+            (preparedPaths.length<=160?preparedPaths:
+              visibleGeoPlotPaths(preparedPaths,currentViewport())):[]).map(p=>p.plot.id));
           plotLayer.group.visible=enabled;
           for(const [id,group] of plotLayer.groupsById)group.visible=visible.has(id);
           overlay?.requestRedraw();
