@@ -43,8 +43,8 @@ CREATE TRIGGER IF NOT EXISTS trg_geo_commercial_event_immutable_update
  BEGIN SELECT RAISE(ABORT,'Geo commercial evidence events are immutable'); END;
 CREATE TRIGGER IF NOT EXISTS trg_geo_commercial_event_immutable_delete
  BEFORE DELETE ON geo_plot_commercial_events_3d
- WHEN EXISTS(SELECT 1 FROM projects_3d p WHERE p.id=OLD.project_id)
- BEGIN SELECT RAISE(ABORT,'Geo commercial evidence events are immutable while project exists'); END;
+ WHEN EXISTS(SELECT 1 FROM geo_plot_mapping_releases_3d r WHERE r.id=OLD.mapping_release_id)
+ BEGIN SELECT RAISE(ABORT,'Geo commercial evidence events cannot be deleted while their mapping release exists'); END;
 CREATE TRIGGER IF NOT EXISTS trg_geo_commercial_event_owner
  BEFORE INSERT ON geo_plot_commercial_events_3d
  WHEN NOT EXISTS(SELECT 1 FROM geo_plot_mapping_releases_3d r
