@@ -28,10 +28,12 @@ function urlValue(value, kind="external") {
   return url.href;
 }
 const fields={
+  projectNumber:80,ownerName:160,
   builderName:200,contactName:160,address:600,phonePrimary:25,phoneSecondary:25,
   whatsapp:25,email:254,websiteUrl:1000,mapsUrl:1000,brochureUrl:1000,
 };
 const columns={
+  projectNumber:"project_number",ownerName:"owner_name",
   builderName:"builder_name",contactName:"contact_name",address:"address",
   phonePrimary:"phone_primary",phoneSecondary:"phone_secondary",whatsapp:"whatsapp",
   email:"email",websiteUrl:"website_url",mapsUrl:"maps_url",brochureUrl:"brochure_url",
@@ -45,12 +47,16 @@ function normalizeProfile(value){
   if(!email(out.email))throw Error("Invalid email address.");
   for(const key of ["websiteUrl","brochureUrl"])out[key]=urlValue(out[key]);
   out.mapsUrl=urlValue(out.mapsUrl,"maps");
+  if(typeof value.publicContactsEnabled!=="boolean")
+    throw Error("Explicit public contact permission is required.");
+  out.publicContactsEnabled=value.publicContactsEnabled;
   return out;
 }
-const emptyProfile=()=>Object.fromEntries(Object.keys(fields).map(key=>[key,""]));
+const emptyProfile=()=>({...Object.fromEntries(Object.keys(fields).map(key=>[key,""])),publicContactsEnabled:false});
 function profileView(row){
   return {revision:row?.revision||0,values:row
-    ? Object.fromEntries(Object.entries(columns).map(([k,v])=>[k,row[v]||""]))
+    ? {...Object.fromEntries(Object.entries(columns).map(([k,v])=>[k,row[v]||""])),
+       publicContactsEnabled:row.public_contacts_enabled===1}
     : emptyProfile()};
 }
 async function audit(env,actor,action,projectId,targetId,detail={}){
@@ -95,9 +101,9 @@ export async function handleProjectManagementAdmin(request,env,actor,project,par
       if(!Number.isInteger(body.expectedRevision)||body.expectedRevision<0)
         return fail("Expected profile revision required.");
       const value=normalizeProfile(body.profile);
-      const args=Object.keys(columns).map(k=>value[k]);
+      const args=[...Object.keys(columns).map(k=>value[k]),value.publicContactsEnabled?1:0];
       const now=new Date().toISOString();
-      const cols=Object.values(columns);
+      const cols=[...Object.values(columns),"public_contacts_enabled"];
       let result;
       if(body.expectedRevision===0){
         const binds=[project.id,...args,actor.email,now];
