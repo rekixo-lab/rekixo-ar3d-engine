@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {validateGeoPlotCollection} from "../workers/geo-plot-geometry.mjs";
-import {nextCsvPlotForDrawing,positionCursorLoupe,assignVisiblePlotEdge,
+import {nextCsvPlotForDrawing,assignVisiblePlotEdge,
   draftStorageKey,packLocalPlotDraft,unpackLocalPlotDraft,visibleMappingProgress
 } from "../shared/geo-plot-mapper-ux.js";
 const row=id=>({id:String(id)});
@@ -25,15 +25,6 @@ test("CSV-first drawing uses pending approved Plot 1, never invents Plot 37",()=
   assert.deepEqual(visibleMappingProgress(inventory,[plot()]),
     {inventory:36,confirmed:1,pending:35,unexpected:0});
   assert.equal(visibleMappingProgress(inventory,[{id:"37"}]).unexpected,1);
-});
-test("loupe follows pointer in center and flips inside four viewport edges",()=>{
-  assert.deepEqual(positionCursorLoupe([100,100],[900,700]),{left:118,top:118});
-  for(const pt of [[0,0],[899,0],[0,699],[899,699],[450,350]]){
-    const pos=positionCursorLoupe(pt,[900,700]);
-    assert.ok(pos.left>=8&&pos.left+170<=900);
-    assert.ok(pos.top>=8&&pos.top+170<=700);
-  }
-  assert.deepEqual(positionCursorLoupe([10,10],[400,400]),{left:28,top:28});
 });
 test("four-corner visual Front selection assigns actual visible road edge and resets approvals",()=>{
   const before=plot(),after=assignVisiblePlotEdge(before,"front",2);
@@ -100,7 +91,9 @@ test("actual UI contract keeps Confirm & Next, source/revision-safe local recove
   assert.match(editor,/assignVisiblePlotEdge\(/);
   assert.match(editor,/unpackLocalPlotDraft/);
   assert.match(editor,/getCoalescedEvents/);
-  assert.match(editor,/positionCursorLoupe/);
+  assert.doesNotMatch(editor,/positionCursorLoupe|loupeCanvasRef|geo-plot-precision-loupe/);
+  assert.match(css,/cursor:crosshair!important/);
+  assert.doesNotMatch(css,/cursor:none|geo-plot-precision-loupe|geo-plot-precision-crosshair/);
   assert.match(css,/\.geo-plot-dock-tabs/);
   assert.match(css,/\.geo-plot-confirm-primary/);
 });
