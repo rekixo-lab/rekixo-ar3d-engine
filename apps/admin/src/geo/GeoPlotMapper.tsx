@@ -191,6 +191,11 @@ export default function GeoPlotMapper(){
   const [snap,setSnap]=useState(false);
   const [selectedRole,setSelectedRole]=useState<Role>("front");
   const [inventoryQuery,setInventoryQuery]=useState("");
+  const [publishedPreview,setPublishedPreview]=useState<{
+    draftRevision:number;activeReleaseId:string|null;token:string;
+    diff:{liveCount:number;draftCount:number;added:number;removed:number;changed:number;
+      changes:Array<{plotId:string;kind:string;fields:string[]}>}
+  }|null>(null);
   const [cloneFrom,setCloneFrom]=useState("");
   const [cloneX,setCloneX]=useState("");
   const [cloneZ,setCloneZ]=useState("");
@@ -608,7 +613,7 @@ export default function GeoPlotMapper(){
     if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId))throw Error("Duplicate plot ID.");
     const updated=[...plots.filter(p=>p.id!==(originalId||id)),{...working,id}]
       .sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
-    setPlots(updated);setDirty(true);
+    setPlots(updated);setDirty(true);setPublishedPreview(null);
     if(openNext){
       const next=nextUnmappedInventory(inventoryRows,updated.map(p=>p.id),id);
       resetWorking(next?fromInventory(next,groundY):
@@ -620,15 +625,49 @@ export default function GeoPlotMapper(){
       setMessage("Plot "+id+" staged. Save Mapping Draft before verification.");
     }
   };
+  const inspectPublish=async()=>{
+    if(!state||!geo||dirty||working||busy)return;
+    setBusy(true);
+    try{
+      const info=await callApi<NonNullable<typeof publishedPreview>>(api+"?preview=1");
+      if(activeProjectRef.current!==slug)return;
+      if(info.draftRevision!==state.draft.revision)
+        throw Error("Draft revision changed while comparing live publication. Reload.");
+      setPublishedPreview(info);
+      setMessage("Live/draft preflight ready. "+info.diff.added+" added, "+
+        info.diff.changed+" changed, "+info.diff.removed+" removed plots. Review before publish.");
+    }catch(error){setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));}
+    finally{setBusy(false);}
+  };
   const execute=async(action:"save"|"verify"|"publish"|"activate"|"rebind-reset",id?:string)=>{
     if(!state||!geo) return;setBusy(true);setMessage("");
     try{
+      let approvedPreflight:NonNullable<typeof publishedPreview>|null=null;
+      if(action==="publish"){
+        // Fresh server-side sealed release read: a cached diff can never approve
+        // a concurrent active-version switch or an updated draft.
+        approvedPreflight=await callApi<NonNullable<typeof publishedPreview>>(api+"?preview=1");
+        if(approvedPreflight.draftRevision!==state.draft.revision)
+          throw Error("Draft changed since the last review. Reload before publish.");
+        setPublishedPreview(approvedPreflight);
+        const d=approvedPreflight.diff;
+        const summary="PUBLISH CURRENT DRAFT?\n"+
+          "Live "+d.liveCount+" → Draft "+d.draftCount+" plots.\n"+
+          d.added+" ADDED, "+d.changed+" CHANGED, "+d.removed+" REMOVED.\n"+
+          d.changes.slice(0,12).map(p=>p.kind.toUpperCase()+" Plot "+p.plotId+
+            " ("+p.fields.join(", ")+")").join("\n")+
+          (d.changes.length>12?"\n...plus "+(d.changes.length-12)+" more changes.":"")+
+          "\nPublished releases are immutable; changed facts need independent source reapproval. Continue?";
+        if(!window.confirm(summary))return;
+      }
       const body=action==="save"?{expectedRevision:state.draft.revision,geoReleaseId:state.geoReleaseId,plots}
         :{action,expectedRevision:state.draft.revision,...(id?{releaseId:id}:{}),
+          ...(action==="publish"?{expectedPreflightToken:approvedPreflight!.token,
+            expectedActiveReleaseId:approvedPreflight!.activeReleaseId}:{}),
           ...(action==="rebind-reset"?{confirmation:"RESET MAPPING "+slug}:{})};
       const result=await callApi<MappingState>(api,{method:action==="save"?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       if(activeProjectRef.current!==slug)return; // Never display another project’s save response.
-      setState(result);setPlots(result.draft.plots);setDirty(false);setWorking(null);
+      setState(result);setPlots(result.draft.plots);setDirty(false);setWorking(null);setPublishedPreview(null);
       setMessage(action==="save"?"Mapping draft saved and server read-back confirmed.":action==="verify"?"All plot sources and geometry verified.":action==="publish"?"Immutable plot mapping published for this Geo release.":action==="rebind-reset"?"New empty draft created for active Geo. Historical published mapping releases remain preserved.":"Published mapping version activated.");
     }catch(e){setMessage("ERROR: "+(e instanceof Error?e.message:"Mapping operation failed."));}
     finally{setBusy(false);}
@@ -1224,6 +1263,18 @@ export default function GeoPlotMapper(){
         </>}
         <div className="geo-plot-draft-actions">
           <h3>Save, review & publish</h3>
+          <button type="button" disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision}
+            onClick={()=>void inspectPublish()}>Preview Live vs Draft Plot Changes</button>
+          {publishedPreview&&<div className="geo-plot-review-dashboard" role="status">
+            <strong>Live {publishedPreview.diff.liveCount} → Draft {publishedPreview.diff.draftCount}</strong>
+            <p>{publishedPreview.diff.added} added · {publishedPreview.diff.changed} changed ·
+              {publishedPreview.diff.removed} removed. A fresh preflight and confirmation is required to publish.</p>
+            {publishedPreview.diff.changes.slice(0,12).map((x,i)=><p key={i}>
+              {x.kind}: Plot {x.plotId} ({x.fields.join(", ")})</p>)}
+            {publishedPreview.diff.changes.length>12&&<p>
+              +{publishedPreview.diff.changes.length-12} additional differences.
+              Download private evidence/quality review before publishing.</p>}
+          </div>}
           <p className="geo-plot-hint">Apply each plot, save the draft, reconcile the approved CSV, then verify. A new inventory revision blocks Publish until re-reviewed.</p>
         <button disabled={!editable||busy||!dirty} onClick={()=>void execute("save")}>{busy?"Saving…":"Save Mapping Draft"}</button>
         <button disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision||inventoryIssues.length>0} onClick={()=>void execute("verify")}>Verify All Plots</button>
