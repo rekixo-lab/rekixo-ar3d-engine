@@ -53,6 +53,7 @@ async function listState(env,ctx,source){
     ORDER BY plot_id COLLATE NOCASE LIMIT 2500`)
     .bind(ctx.project.id,source.releaseId).all();
   return {mappingReleaseId:source.releaseId,plotCount:source.plots.length,
+    plotIds:source.plots.map(p=>p.id),
     rows:(rows.results||[]).map(r=>({...r,publicApproved:r.publicApproved===1})),
     notice:"Owner-reviewed commercial facts only. No buyer/payment ledger equivalence is implied."};
 }
