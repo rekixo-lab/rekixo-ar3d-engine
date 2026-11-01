@@ -24,11 +24,12 @@ test("WebGL customer plots retain raycast and fall back to real projected triang
   assert.match(layer,/if\(a\.w<=0\|\|b\.w<=0\|\|c\.w<=0\)continue/);
 });
 
-test("customer selection has pointer-capture fallback and accessible direct plot selection",()=>{
+test("customer selection retains real map taps and approved detail after status bar removal",()=>{
   assert.match(viewer,/window\.addEventListener\("pointerup",onNativePointerUp,true\)/);
   assert.match(viewer,/window\.removeEventListener\("pointerup",onNativePointerUp,true\)/);
-  assert.match(viewer,/aria-label="Select a mapped plot"/);
-  assert.match(viewer,/setSelectedPlot\(data\.plotMapping\?\.plots\.find/);
-  assert.match(viewer,/!showPlotBoundaries/);
+  assert.match(viewer,/mapClick=map\.addListener\("click"/);
+  assert.match(viewer,/pickModelGeoPlot\(/);
+  assert.match(viewer,/setSelectedPlot\(plotIds\.get\(id\)\|\|null\)/);
   assert.match(viewer,/geo-plot-public-details/);
+  assert.doesNotMatch(viewer,/geo-plot-public-controls|showPlotBoundaries/);
 });

@@ -43,14 +43,12 @@ test("manual zoom preserves one-finger Google pan and avoids resetting the user'
   assert.ok(!satelliteHandler.includes("applyCamera(activeCameraView)"));
 });
 
-test("verified close-up 3D inspection can go past the satellite imagery ceiling", () => {
-  assert.ok(source.includes("function GeoModelInspector"));
-  assert.ok(source.includes("void loadVerifiedModel(model)"));
-  assert.ok(source.includes("controls.minDistance = Math.max(radius * 0.01, 0.001)"));
-  assert.ok(source.includes("controls.touches.ONE = THREE.TOUCH.ROTATE"));
-  assert.ok(source.includes("controls.touches.TWO = THREE.TOUCH.DOLLY_PAN"));
-  assert.ok(source.includes("<GeoModelInspector model={data.model} />"));
-  assert.ok(css.includes(".geo-model-inspector"));
+test("customer map has requested minimal controls without a separate model inspector", () => {
+  assert.doesNotMatch(source, /function GeoModelInspector|<GeoModelInspector/);
+  assert.doesNotMatch(source, /aria-label="Reset Geo camera"|3D Detail/);
+  assert.ok(source.includes('mapTypeId: "satellite"'));
+  assert.ok(source.includes("disableDefaultUI: true"));
+  assert.ok(source.includes("keyboardShortcuts: false"));
 });
 
 test("one zoom-in tap requests precisely 2x map scale and reports a native Google limit", () => {
