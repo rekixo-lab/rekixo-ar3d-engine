@@ -1460,7 +1460,7 @@ export default function GeoPlotMapper(){
           <div className="geo-plot-review-queue-intro">
             <strong>{reviewQueue.affected} mapped Plot IDs need review
               {reviewQueue.blockedPlots>0?" · "+reviewQueue.blockedPlots+" with blockers":""}</strong>
-            <p>36 mapped polygons are not the same as 36 approved sources. Plot boundaries stay
+            <p>{plots.length} mapped polygons do not mean source approvals are complete. Plot boundaries stay
               saved while you review the actual road-facing Front, CSV dimensions,
               model plane and source evidence. No blanket approval is applied.</p>
             {reviewQueue.queue.length>0&&<button type="button"
