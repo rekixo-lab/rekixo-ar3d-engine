@@ -4,6 +4,7 @@
 import {createHash} from "node:crypto";
 import {readFileSync,existsSync,mkdirSync} from "node:fs";
 import {resolve,dirname} from "node:path";
+import {pathToFileURL} from "node:url";
 import {DatabaseSync} from "node:sqlite";
 const sha=x=>createHash("sha256").update(x).digest("hex");
 function assert(ok,message){if(!ok)throw Error("Geo recovery verification: "+message);}
@@ -95,7 +96,7 @@ export function restoreGeoManifestIntoIsolatedSQLite(manifest,databasePath){
   }catch(error){try{db.exec("ROLLBACK");}catch{}throw error;}
   finally{db.close();}
 }
-if(process.argv[1]&&import.meta.url===new URL("file://"+resolve(process.argv[1])).href){
+if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   const [,,input,output]=process.argv;
   if(!input)throw Error("Usage: node scripts/geo-restore-isolated.mjs manifest.json [isolated.sqlite]");
   const manifest=JSON.parse(readFileSync(input,"utf8"));
