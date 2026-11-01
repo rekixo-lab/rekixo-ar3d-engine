@@ -127,7 +127,7 @@ test("evidence files cannot traverse or symlink outside the evidence directory",
 
 test("new 3D Geo dashboard distinguishes publication from physical signoff",()=>{
   const dashboard=readFileSync(new URL("../apps/admin/src/dashboard/EngineDashboard.tsx",import.meta.url),"utf8");
-  assert.match(dashboard,/selectedProject\\.projectKind === "building_geo"\\) return \\{/);
+  assert.ok(dashboard.includes('if (selectedProject.projectKind === "building_geo") return {'));
   assert.match(dashboard,/Geo published · field acceptance required/);
   assert.match(dashboard,/Source-backed mapping is published, not field-certified/);
 });
