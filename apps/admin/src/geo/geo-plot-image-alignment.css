@@ -34,3 +34,20 @@
 .geo-align-qa>p{margin:0}
 .geo-align-qa label{display:flex;align-items:center;gap:8px}
 .geo-align-qa label input{width:auto}
+
+/* Independently checked image plot-corner editor is a single canonical X/Z
+   authoring mode. Enlarging the source is visual only, not a separate dataset. */
+.geo-align-edit-controls{display:grid;gap:8px;border:1px solid #558494;
+  padding:10px;border-radius:9px;background:#163b4b}
+.geo-align-edit-controls>strong{font-size:13px;color:#f4feff}
+.geo-align-edit-controls p{margin:0}
+.geo-align-edit-selectors{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.geo-align-edit-selectors label{min-width:0}
+.geo-align-panel--expanded{position:fixed;z-index:1200;top:3vh;left:3vw;
+  width:94vw;max-width:none;height:auto;max-height:94vh;overflow:auto;
+  box-shadow:0 0 0 150vmax rgba(1,8,15,.88);border-color:#80cdbd}
+.geo-align-panel--expanded .geo-align-body{max-width:none}
+.geo-align-panel--expanded .geo-align-image-stage{max-height:none}
+.geo-align-panel--expanded .geo-align-image-stage>img{width:100%;height:auto}
+@media(max-width:650px){.geo-align-edit-selectors{grid-template-columns:1fr}
+ .geo-align-panel--expanded{top:1vh;left:1vw;width:98vw;max-height:98vh}}
