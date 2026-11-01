@@ -94,7 +94,7 @@ export default function GeoPlotImageAlignmentPanel({
     const switched=Boolean(old&&(old.imageAssetId!==asset.id||
       old.imageSha256!==asset.sha256.toLowerCase()||old.geoReleaseId!==geoReleaseId||
       old.buildingReleaseId!==buildingReleaseId||old.modelSha256!==snapshot.modelSha256));
-    if(switched){
+    if(switched&&old){
       if(!window.confirm("Switch original image? The image alignment draft points will be cleared. "+
         "The CURRENT review JSON will be downloaded first. Published plot data will remain unchanged."))return;
       exportReview(slug,snapshot,old);
