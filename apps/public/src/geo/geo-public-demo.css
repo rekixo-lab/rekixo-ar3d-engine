@@ -595,3 +595,62 @@
   display:block;font-size:11px;line-height:1.5;color:#e6ebf0;
   background:#203444;border:1px solid #687b8a;border-radius:7px;padding:7px;
 }
+
+
+/*
+ * Mobile Geo: fit the scene and its camera dock into the visible viewport.
+ * Previously the scene stopped at 66vh while the dock was fixed at bottom:0,
+ * producing a large empty band on tall Android phones. Keep the map and dock
+ * in one flex column, so their edges meet even when browser chrome resizes.
+ * This layout affects only public Geo on phones; desktop keeps its own sizes.
+ */
+@media (max-width: 640px) {
+  .jio-public-shell {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    height: 100svh;
+    height: 100dvh;
+    min-height: 100svh;
+    min-height: 100dvh;
+    padding: 8px 8px 0;
+    overflow: hidden;
+  }
+
+  /* Lift the map about 5px without moving the project identity/header. */
+  .jio-public-header {
+    flex: 0 0 auto;
+    margin-bottom: 3px;
+  }
+
+  .jio-public-customer-contact {
+    flex: 0 0 auto;
+  }
+
+  .geo-public-map-layout {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .geo-public-map-layout > .geo-integrated-scene {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 0;
+    margin: 0;
+  }
+
+  /* The dock is the next flex item, not a fixed overlay below a 66vh map. */
+  .geo-public-map-layout > .geo-public-toolbar-slot {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    flex: 0 0 auto;
+    width: calc(100% + 16px);
+    margin: 0 -8px;
+  }
+}
