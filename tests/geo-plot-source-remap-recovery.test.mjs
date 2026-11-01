@@ -9,7 +9,7 @@ import {geoSourceChangePlan,stageSelectedGeoSourceRemap} from "../shared/geo-plo
 import {verifyGeoRecoveryManifest,restoreGeoManifestIntoIsolatedSQLite} from "../scripts/geo-restore-isolated.mjs";
 const sha=x=>createHash("sha256").update(x).digest("hex");
 const alignment=(kind)=>{
- const newer=kind==="new",a=newer?12:10,tx=newer?5:0,tz=newer?3:0;
+ const newer=kind==="new",a=newer?8:10,tx=newer?1:0,tz=newer?3:0;
  const anchors=[[0,0],[.5,0],[0,1],[.5,1]].map(([u,v],i)=>({
    id:"A"+i,u,v,x:tx+2*u*a,z:tz+v*a,evidence:"Survey p5"
  }));
@@ -34,7 +34,7 @@ test("Source switch preflight estimates every changed model corner but stages on
  const p=geoSourceChangePlan([one,two],alignment("old"),alignment("new"),["1"]);
  assert.equal(p.selectedCount,1);
  assert.deepEqual(p.unreviewedIds,["2"]);
- assert.deepEqual(p.rows[0].proposedCorners,[[5,3],[17,3],[17,15],[5,15]]);
+ assert.deepEqual(p.rows[0].proposedCorners,[[1,3],[9,3],[9,11],[1,11]]);
  const output=stageSelectedGeoSourceRemap([one,two],alignment("old"),alignment("new"),["1"]);
  assert.deepEqual(output.plots[0].corners,p.rows[0].proposedCorners);
  assert.equal(output.plots[0].area.verified,false);
