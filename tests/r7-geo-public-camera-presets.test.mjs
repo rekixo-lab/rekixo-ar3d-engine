@@ -5,10 +5,13 @@ import test from "node:test";
 const source = fs.readFileSync("apps/public/src/geo/GeoPublicDemo.tsx", "utf8");
 const css = fs.readFileSync("apps/public/src/geo/geo-public-demo.css", "utf8");
 
-test("public Geo exposes the five customer camera presets", () => {
-  for (const label of ["Overview", "Front", "Corner", "Entry view", "Aerial"]) {
+test("public Geo exposes four customer camera preset buttons", () => {
+  for (const label of ["Overview", "Front", "Corner", "Aerial"]) {
     assert.match(source, new RegExp(`label: \\"${label}\\"`));
   }
+  const availableViews=source.slice(source.indexOf("const GEO_CAMERA_VIEWS"),source.indexOf("let mapsPromise"));
+  assert.doesNotMatch(availableViews,/Entry view/);
+  assert.equal((availableViews.match(/label: "/g)||[]).length,4);
   assert.match(source, /geo-camera-toolbar/);
   assert.match(css, /\.geo-camera-toolbar/);
   assert.match(css, /button\.is-active/);
