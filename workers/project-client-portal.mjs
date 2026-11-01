@@ -131,7 +131,7 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
     "FROM projects_3d p JOIN experiences_3d e ON e.project_id=p.id AND e.type='geo' "+
     "JOIN geo_experience_active_releases_3d ar ON ar.experience_id=e.id AND ar.project_id=p.id "+
     "JOIN geo_releases_3d r ON r.id=ar.geo_release_id AND r.project_id=p.id "+
-    "WHERE p.id=? AND p.slug=? AND p.project_kind='legacy' LIMIT 1"
+    "WHERE p.id=? AND p.slug=? AND p.project_kind IN ('legacy','building_geo') LIMIT 1"
    ).bind(s.projectId,slug).first();
    if(!ctx)return response({error:"Current project Geo release is unavailable."},404);
    return handleGeoPlotCommercial(request,env,{
