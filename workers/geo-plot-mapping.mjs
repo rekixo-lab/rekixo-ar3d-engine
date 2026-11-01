@@ -11,6 +11,7 @@ import { stageSelectedGeoSourceRemap } from "../shared/geo-plot-source-remap.js"
 import { geometryWithRevokedApprovals } from "../shared/geo-plot-precision-history.js";
 import { projectGeoRecoveryManifest } from "./geo-plot-recovery.mjs";
 import { handleGeoPlotCommercial } from "./geo-plot-commercial.mjs";
+import { geoPlotMappingProjectKind } from "../shared/geo-plot-project-policy.js";
 
 const json = (value, init = {}) => Response.json(value, {headers: {"Cache-Control":"no-store"}, ...init});
 const fail = (message, status = 400) => json({error:message}, {status});
@@ -388,8 +389,8 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
   try {
     const ctx=await context(env,slug);
     if (!ctx) return fail("Project not found.",404);
-    if ((ctx.project.project_kind||"legacy")!=="legacy")
-      return fail("The legacy Geo Plot Mapper is not enabled for this project type.",403);
+    if (!geoPlotMappingProjectKind(ctx.project.project_kind||"legacy"))
+      return fail("3D Geo Plot Mapper requires a Building-backed Geo project.",403);
     if (!ctx.active) return fail("Publish a verified Geo Experience before mapping plots.",409);
     if (match[2]==="source") {
       if(request.method!=="GET")return fail("Method not allowed.",405);
