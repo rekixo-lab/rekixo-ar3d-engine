@@ -92,9 +92,9 @@ export function evaluateImageModelAlignment(value,{requireCheckpoints=false}={})
   const span=Math.max(Math.hypot(
     Math.max(...anchors.map(p=>p.x))-Math.min(...anchors.map(p=>p.x)),
     Math.max(...anchors.map(p=>p.z))-Math.min(...anchors.map(p=>p.z))),1);
-  // Conservative survey review threshold: 1% of covered model span, min 0.25m.
-  // This threshold signals review, it does not assert survey-grade accuracy.
-  const limit=Math.max(0.25,span*0.01);
+  // Conservative review: 0.2% of site-spanning distance, at least 0.15m,
+  // never looser than 0.5m. It is still NOT a survey certification.
+  const limit=Math.min(0.5,Math.max(0.15,span*0.002));
   const max=list=>list.length?Math.max(...list.map(p=>p.errorMetres)):null;
   const rms=list=>list.length?Math.sqrt(list.reduce((s,p)=>s+p.errorMetres**2,0)/list.length):null;
   const maxFit=max(fit),maxIndependent=max(independent);
