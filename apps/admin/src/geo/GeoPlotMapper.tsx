@@ -13,6 +13,8 @@ import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo
 import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import {cloneUnverifiedGeoPlot,geoPlotEvidenceManifest,geoPlotQualityReport} from "../../../../shared/geo-plot-stage3-review.js";
+import {stageVerifiedImageCorner} from "../../../../shared/geo-plot-image-corner.js";
+import type {SimilarityTransform} from "../../../../shared/geo-plot-image-alignment.js";
 import {newPlotEditHistory,replacePlotEditHistory,updatePlotEditHistory,
   closeGroupedPlotEdit,undoPlotEdit,redoPlotEdit,geometryWithRevokedApprovals,nudgePlotCorner
 } from "../../../../shared/geo-plot-precision-history.js";
@@ -403,6 +405,28 @@ export default function GeoPlotMapper(){
   const chooseSibling=(direction:1|-1)=>{
     const neighbor=adjacentPlot(plots,working?.id||"",direction);
     if(neighbor)choose(neighbor);
+  };
+  const stageCornerFromVerifiedImage=(plotId:string,index:number,uv:Point,
+    transform:SimilarityTransform,alignmentRevision:number):{ok:boolean;reason?:string}=>{
+    if(!state||!geo||state.draft.stale||busy||state.alignmentRevision!==alignmentRevision)
+      return {ok:false,reason:"Mapping or alignment source is stale. Reload before editing image corners."};
+    if(!confirmUnapplied())return {ok:false,reason:"Unapplied working-plot edits were preserved; image edit cancelled."};
+    try{
+      const staged=stageVerifiedImageCorner(plots,plotId,index,uv,transform);
+      if(!window.confirm("Stage Plot "+staged.plotId+" corner "+(index+1)+
+        " from independently verified original image at model X "+
+        staged.modelPoint[0].toFixed(4)+", Z "+staged.modelPoint[1].toFixed(4)+
+        "? This changes the LOCAL DRAFT only. All spatial, road, area, facing and plane approvals reset.")){
+        return {ok:false,reason:"Image corner correction cancelled. No draft changed."};
+      }
+      setPlots(staged.plots);setDirty(true);
+      resetWorking(null);setOriginalId(null);setMode("pan");
+      setMessage("Image-mapped correction staged for Plot "+staged.plotId+
+        ". Cross-check new geometry in 3D, Apply/Save/Verify, then explicitly Publish.");
+      return {ok:true};
+    }catch(error){
+      return {ok:false,reason:error instanceof Error?error.message:String(error)};
+    }
   };
   const clonePreviousDraft=()=>{
     if(!editable||busy||!cloneFrom)return;
@@ -976,7 +1000,8 @@ export default function GeoPlotMapper(){
         {slug&&geo&&state&&<GeoPlotImageAlignmentPanel key={slug+"-alignment"}
           slug={slug} geoReleaseId={state.geoReleaseId} buildingReleaseId={state.buildingReleaseId}
           plots={plots} onCapture={captureImageAlignmentPoint}
-          onRevisionChange={onAlignmentRevisionChange}/>}
+          onRevisionChange={onAlignmentRevisionChange}
+          onStageImageCorner={stageCornerFromVerifiedImage} editable={editable&&!busy}/>}
         <details className="geo-plot-review-dashboard" open>
           <summary>03 · Data quality · {quality.summary.blockers} blockers / {quality.summary.reviews} reviews</summary>
           <p className="geo-plot-hint">Private draft diagnostics · {quality.summary.mapped} mapped /
