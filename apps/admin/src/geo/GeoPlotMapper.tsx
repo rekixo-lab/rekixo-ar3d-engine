@@ -16,6 +16,7 @@ import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-revie
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import {cloneUnverifiedGeoPlot,geoPlotEvidenceManifest,geoPlotQualityReport} from "../../../../shared/geo-plot-stage3-review.js";
 import {stageVerifiedImageCorner} from "../../../../shared/geo-plot-image-corner.js";
+import {geoPlotToolResumeAction,geoPlotPausedDrawingLabel} from "../../../../shared/geo-plot-tool-resume.js";
 import {nextCsvPlotForDrawing,assignVisiblePlotEdge,
   draftStorageKey,packLocalPlotDraft,unpackLocalPlotDraft,visibleMappingProgress
 } from "../../../../shared/geo-plot-mapper-ux.js";
@@ -1034,7 +1035,26 @@ export default function GeoPlotMapper(){
     const a=document.createElement("a");a.href=url;a.download=slug+"-geo-plots.csv";a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
+  const pauseForPan=()=>{
+    const paused=geoPlotPausedDrawingLabel({mode:"pan",plot:working,originalId,shape});
+    setMode("pan");
+    if(paused)setMessage(paused.text+". View moved without altering plot geometry.");
+  };
   const begin=(kind:"four"|"irregular")=>{
+    // Same-shape re-selection must resume or edit the SAME working polygon,
+    // matching Platform Select. Never wipe existing corners after Pan.
+    const action=geoPlotToolResumeAction({plot:working,originalId,shape,requestedShape:kind});
+    if(action==="resume"){
+      setMode("draw");setInspectorTab("plot");
+      setMessage("✓ Resumed Plot "+working!.id+" · "+working!.corners.length+
+        (kind==="four"?"/4":"")+" corners kept. Click corner "+(working!.corners.length+1)+".");
+      return;
+    }
+    if(action==="edit"){
+      setMode("edit");setInspectorTab("plot");
+      setMessage("Plot "+working!.id+" already has all required corners. Use Edit to adjust, or Confirm Plot.");
+      return;
+    }
     const selected=working&&!originalId&&!working.corners.length&&
       inventoryRows.some(p=>p.id.toLowerCase()===working.id.toLowerCase());
     const pending=nextCsvPlotForDrawing(inventoryRows,plots);
@@ -1042,7 +1062,10 @@ export default function GeoPlotMapper(){
       setMessage("ERROR: No pending approved CSV Plot ID. Import an inventory revision or edit a mapped plot; Plot 37 will not be invented.");
       setInspectorTab("sources");return;
     }
-    if(!selected&&!confirmUnapplied())return;
+    if(!selected&&working&&!originalId&&working.corners.length&&shape!==kind){
+      if(!window.confirm("Change from "+shape+" to "+kind+"? Plot "+working.id+
+        " has "+working.corners.length+" unfinished corners that will be discarded. The private saved mapping is untouched."))return;
+    }else if(!selected&&!confirmUnapplied())return;
     if(!selected)clearLocalPlotDraft();
     setShape(kind);setMode("draw");setOriginalId(null);setInspectorTab("plot");
     if(!selected&&pending)resetWorking(fromInventory(pending,groundY));
@@ -1111,7 +1134,7 @@ export default function GeoPlotMapper(){
         return;
       }
       if((k==="p"||k==="d"||k==="i"||k==="e"||k==="f")&&!editable)return;
-      if(k==="p"){setMode("pan");return;}
+      if(k==="p"){pauseForPan();return;}
       if(k==="d"){begin("four");return;}
       if(k==="i"){begin("irregular");return;}
       if(k==="e"&&working){setMode("edit");return;}
@@ -1125,6 +1148,7 @@ export default function GeoPlotMapper(){
   });
   const editable=Boolean(state&&!state.draft.stale&&geo);
   const path=(points:Point[])=>points.map(p=>project(p).join(",")).join(" ");
+  const pausedDrawing=geoPlotPausedDrawingLabel({mode,plot:working,originalId,shape});
   return <main className="geo-plot-page">
     <header className="geo-plot-top"><div><p className="eyebrow">REKIXO ENGINE · INDEPENDENT GEO MAPPING</p><h1>3D Geo Plot Mapper</h1>
       <p>Draw plot boundaries on a checksum-verified Building-local master plan. AR3D Platform remains untouched.</p></div>
