@@ -571,3 +571,24 @@
 .geo-plot-public-details strong{font-size:17px;color:#85f8d1}.geo-plot-public-details small{line-height:1.4;color:#adccd5}
 .geo-plot-public-close{position:absolute;top:5px;right:6px;font-size:19px;border:0;background:transparent;color:#f7ffff;cursor:pointer}
 @media(max-width:640px){.geo-plot-public-details{bottom:62px;left:8px;padding:11px 15px}.geo-plot-public-controls{top:52px}}
+
+
+/* Owner-approved contact strip; no blank card or private details without opt-in. */
+.jio-public-customer-contact{
+ width:min(1500px,100%);margin:0 auto 10px;box-sizing:border-box;
+ padding:12px 14px;border:1px solid #254b5b;border-radius:13px;
+ background:rgba(11,32,46,.92);display:flex;gap:12px;
+ justify-content:space-between;align-items:center;flex-wrap:wrap;
+}
+.jio-public-contact-details{display:flex;flex-wrap:wrap;gap:5px 14px;min-width:0;flex:1}
+.jio-public-contact-details span{font-size:12px;line-height:1.45;color:#d2e4ed;overflow-wrap:anywhere}
+.jio-public-contact-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.jio-public-contact-actions a{font-size:12px;min-height:42px;box-sizing:border-box;
+ display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;
+ color:#eafff5;border:1px solid #3c957a;background:#174a43;border-radius:10px;
+ font-weight:700;text-decoration:none}
+.jio-public-contact-actions a:hover,.jio-public-contact-actions a:focus-visible{
+ outline:2px solid #62dfbc;outline-offset:2px}
+@media(max-width:640px){.jio-public-customer-contact{padding:10px}
+ .jio-public-contact-details,.jio-public-contact-actions{width:100%}
+ .jio-public-contact-actions a{flex:1 1 30%;min-width:92px}}
