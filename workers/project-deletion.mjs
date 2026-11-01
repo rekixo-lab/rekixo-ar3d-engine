@@ -165,6 +165,9 @@ async function deleteProjectRecords(env, project) {
   const inventorySchema = await env.DB.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='geo_plot_inventory_3d' LIMIT 1"
   ).first();
+  const alignmentSchema = await env.DB.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='geo_plot_image_alignment_drafts_3d' LIMIT 1"
+  ).first();
   const masterplanSchema=await env.DB.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='masterplan_geo_releases_3d' LIMIT 1"
   ).first();
@@ -189,6 +192,10 @@ async function deleteProjectRecords(env, project) {
       env.DB.prepare("DELETE FROM masterplan_geo_active_3d WHERE project_id=?").bind(project.id),
       env.DB.prepare("DELETE FROM masterplan_geo_releases_3d WHERE project_id=?").bind(project.id),
       env.DB.prepare("DELETE FROM masterplan_geo_drafts_3d WHERE project_id=?").bind(project.id),
+    ] : []),
+    ...(alignmentSchema ? [
+      // Delete private calibration before its referenced source image and release.
+      env.DB.prepare("DELETE FROM geo_plot_image_alignment_drafts_3d WHERE project_id=?").bind(project.id),
     ] : []),
     ...(inventorySchema ? [
       env.DB.prepare("DELETE FROM geo_plot_inventory_3d WHERE project_id=?").bind(project.id),
