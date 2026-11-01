@@ -15,7 +15,7 @@ const text=(value,max=200)=>typeof value==="string"&&value.trim().length>0&&
 const shaPattern=/^[a-f0-9]{64}$/i;
 const recentDate=(value)=>{
   const time=typeof value==="string"?Date.parse(value):NaN;
-  return Number.isFinite(time)&&time>Date.UTC(2020,0,1)&&time<=Date.now()+300000;
+  return Number.isFinite(time)&&time>=Date.now()-45*24*60*60*1000&&time<=Date.now()+300000;
 };
 function verifyEvidenceFile(base,ref){
   required(ref&&text(ref.path,500)&&shaPattern.test(ref.sha256||""),
@@ -71,7 +71,7 @@ export function assessGeoCustomerLaunchEvidence(manifest,{surveyReport,socialRep
     surveyReport.projectSlug===slug&&surveyReport.passed===true&&
     surveyReport.failed===0&&surveyReport.inspected>=10&&
     surveyReport.independentlyVerifiedAlignment===true&&
-    surveyReport.results?.length===surveyReport.inspected&&
+    Array.isArray(surveyReport.results)&&surveyReport.results.length===surveyReport.inspected&&
     surveyReport.results.every(x=>x.passed===true&&text(x.sourceRef,250)),
     "ten independently referenced numerical survey samples must pass.");
   const shareUrl=manifest.shareUrl;
@@ -86,7 +86,8 @@ export function assessGeoCustomerLaunchEvidence(manifest,{surveyReport,socialRep
     socialReport.imageBytes>=64,
     "public Open Graph image bytes/version crawler probe must pass.");
   required(restoreReport?.schema==="rekixo-full-geo-isolated-restore-test-v1"&&
-    restoreReport.projectSlug===slug&&restoreReport.d1Restored===true&&
+    restoreReport.projectSlug===slug&&restoreReport.activeMappingReleaseId===releaseId&&
+    restoreReport.d1Restored===true&&
     restoreReport.productionChanged===false&&
     Number.isInteger(restoreReport.r2BytesVerified)&&restoreReport.r2BytesVerified>=0,
     "complete offline D1/R2 byte restore rehearsal must pass.");
@@ -124,6 +125,9 @@ export async function verifyGeoCustomerLaunchFromFiles(manifestPath,backupFolder
     "a SHA-256 pinned real-sample survey JSON file is required.");
   const surveyProof=verifyEvidenceFile(evidenceRoot,manifest.surveyEvidence);
   const survey=JSON.parse(readFileSync(resolve(evidenceRoot,surveyProof.path),"utf8"));
+  required(survey?.projectSlug===manifest.projectSlug&&
+    survey.mappingReleaseId===manifest.mappingReleaseId,
+    "survey source must match the exact project and immutable mapping release.");
   const surveyReport=reviewGeoSiteSurvey(survey);
   const socialReport=await verifyGeoSocialPreview(manifest.shareUrl,fetcher);
   const restoreReport=await rehearseFullGeoRestore(backupFolder,sqliteTarget);
