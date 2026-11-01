@@ -2,7 +2,7 @@
 // never the published/verified geometry or live commercial plot states.
 export const GEO_INVENTORY_HEADERS = Object.freeze([
   "plotId","area","areaUnit","areaSource","front","back","depthA","depthB",
-  "lengthUnit","measurementSource","road","facing","facingSource","dimensions","notes"
+  "lengthUnit","measurementSource","road","facing","facingSource","dimensions","sideDimensions","notes"
 ]);
 const alias={
   plotId:["id","plotid","plotno","plotnumber","lotno","lotid"],
@@ -16,6 +16,7 @@ const alias={
   road:["road","roadaccess"],facing:["facing","frontfacing"],
   facingSource:["facingsource"],dimensions:["dimensions","dimensiontext"],
   notes:["notes","remarks"],
+  sideDimensions:["sidedimensions","sidedimensiondetails"],
   sqft:["sqft","sqfeet","sqftarea"],
   sqm:["sqm","sqmeter","sqmetre"],
   sqyd:["sqyd","sqyard"]
@@ -31,6 +32,34 @@ const positive=(input,label)=>{
   if(!Number.isFinite(n)||n<0||n>1e7)throw Error(label+" must be zero or positive and finite.");
   return n;
 };
+// Original Platform CSV displays CAD lengths such as 23'-5". Convert them
+// numerically to decimal feet only for calculations; keep the exact written
+// strings separately in sideDimensions for human source review.
+const sourceInNotes=notes=>{
+  const line=String(notes??"").match(/(?:^|\\b)Source:\\s*([^;\\r\\n]+)/i);
+  return line?.[1]?.trim()||"";
+};
+const detail=(value,label,max)=>{
+  const text=String(value??"").trim();
+  if(text.length>max)throw Error(label+" exceeds the "+max+" character source record limit.");
+  if(/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]/.test(text))
+    throw Error(label+" has invalid control characters.");
+  return text;
+};
+function positiveLength(value,label,unit){
+  if(value===null||value===undefined||String(value).trim()==="")return 0;
+  const raw=String(value).trim();
+  const measured=raw.match(/^(\\d+)\\s*['′]\\s*(?:[-–]\\s*)?(\\d+(?:\\.\\d+)?)\\s*(?:["″])$/);
+  if(measured){
+    if(unit!=="ft")throw Error(label+": feet-inch notation requires ft unit.");
+    const feet=Number(measured[1]),inches=Number(measured[2]);
+    if(!Number.isFinite(feet)||!Number.isFinite(inches)||inches<0||inches>=12)
+      throw Error(label+": inches must be less than 12.");
+    return positive(Number((feet+inches/12).toFixed(6)),label);
+  }
+  if(/['′"″]/.test(raw))throw Error(label+": invalid feet-inch notation.");
+  return positive(raw,label);
+}
 export function parseGeoInventoryCsv(raw){
   if(typeof raw!=="string"||raw.length>2_000_000)throw Error("CSV must be smaller than 2 MB.");
   const lines=[];let field="",row=[],quoted=false;
@@ -97,16 +126,19 @@ export function normalizeGeoInventoryRows(rawRows){
       throw Error("Plot "+plotId+": areaUnit (sqm/sqft/sqyd) is required.");
     if(!area && areaUnit && !["sqm","sqft","sqyd"].includes(areaUnit))
       throw Error("Plot "+plotId+": invalid areaUnit.");
-    const areaSource=trim(raw.areaSource||raw.measurementSource,160);
+    // Source provenance is explicitly written in the Platform CSV Notes:
+    // "Source: vector CAD PDF p.1 ...; verify manually". Never synthesize it.
+    const sourceHint=sourceInNotes(raw.notes);
+    const areaSource=trim(raw.areaSource||raw.measurementSource||sourceHint,160);
     if(area&&!areaSource)throw Error("Plot "+plotId+": approved area source/reference required.");
+    const lengthUnit=trim(raw.lengthUnit,6).toLowerCase();
     const measurements={};
     let anySide=false;
     for(const name of ["front","back","depthA","depthB"]){
-      const value=positive(raw[name],"Plot "+plotId+" "+name);
+      const value=positiveLength(raw[name],"Plot "+plotId+" "+name,lengthUnit);
       measurements[name]=value;if(value)anySide=true;
     }
-    const lengthUnit=trim(raw.lengthUnit,6).toLowerCase();
-    const measurementSource=trim(raw.measurementSource,160);
+    const measurementSource=trim(raw.measurementSource||raw.areaSource||sourceHint,160);
     if(anySide&&(!["m","ft"].includes(lengthUnit)||!measurementSource))
       throw Error("Plot "+plotId+": explicit ft/m unit and source required for side measurements.");
     if(lengthUnit&&!["m","ft"].includes(lengthUnit))throw Error("Plot "+plotId+": invalid lengthUnit.");
@@ -116,7 +148,9 @@ export function normalizeGeoInventoryRows(rawRows){
     return {id:plotId,area,areaUnit:areaUnit||"",areaSource,
       ...measurements,lengthUnit,measurementSource,
       road:trim(raw.road,160),facing,facingSource:trim(raw.facingSource,160),
-      dimensions:trim(raw.dimensions,140),notes:trim(raw.notes,500)};
+      dimensions:trim(raw.dimensions,140),
+      sideDimensions:detail(raw.sideDimensions,"Plot "+plotId+" detailed side dimensions",1000),
+      notes:detail(raw.notes,"Plot "+plotId+" source notes",1000)};
   });
 }
 export function geoInventoryDiff(previous,upcoming,mappedIds=[]){
