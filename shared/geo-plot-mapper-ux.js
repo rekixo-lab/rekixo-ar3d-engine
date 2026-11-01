@@ -3,10 +3,15 @@ import {assignFourCornerRoadFront} from "./geo-plot-source-operations.js";
 const ROLES=["front","back","depthA","depthB"];
 const finite=n=>typeof n==="number"&&Number.isFinite(n);
 const clean=x=>String(x??"").trim().toLowerCase();
-export function nextCsvPlotForDrawing(rows,mapped){
+export function nextCsvPlotForDrawing(rows,mapped,afterId=null){
   if(!Array.isArray(rows)||rows.length===0)return null;
   const taken=new Set((mapped||[]).map(p=>clean(typeof p==="string"?p:p.id)));
-  return rows.find(row=>row?.id&&!taken.has(clean(row.id)))||null;
+  const index=afterId==null?-1:rows.findIndex(row=>clean(row.id)===clean(afterId));
+  for(let offset=1;offset<=rows.length;offset++){
+    const row=rows[(index+offset+rows.length)%rows.length];
+    if(row?.id&&!taken.has(clean(row.id)))return row;
+  }
+  return null;
 }
 export function positionCursorLoupe(screen,viewport,size=170,gap=18){
   if(!Array.isArray(screen)||!Array.isArray(viewport)||![...screen,...viewport,size,gap].every(finite))
