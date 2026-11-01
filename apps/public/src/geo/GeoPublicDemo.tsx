@@ -462,6 +462,9 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
     let mapTypeChanged: MapsListener | undefined;
     let mapZoomChanged: MapsListener | undefined;
     let mapClick: MapsListener | undefined;
+    let pointerHost:HTMLDivElement|null=null;
+    let onNativePointerDown:((event:PointerEvent)=>void)|null=null;
+    let onNativePointerUp:((event:PointerEvent)=>void)|null=null;
     let plotLayer:ModelPlotLayer|null=null;
     let latestProjection:THREE.Matrix4|null=null;
     const plotIds=new Map((data.plotMapping?.plots||[]).map(plot=>[plot.id,plot]));
@@ -541,24 +544,58 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           overlay?.requestRedraw();
         };
         plotRefreshRef.current=visible=>refreshPlotPolygons?.(visible);
-        // Google map supplies client coordinates; raycast against the exact
-        // GLB-local THREE meshes using the WebGL frame projection. This
-        // preserves click accuracy at every tilt, unlike terrain-clamped
-        // Google Polygon hit targets.
-        mapClick=map.addListener("click",event=>{
+        // Google Maps can swallow map "click" events inside its shared
+        // WebGL canvas (especially at high tilt) even while DOM pointer events
+        // still fire. Pick from the real DOM pointer position first, and retain
+        // map.click as a non-destructive fallback. Never disable pan/zoom.
+        const selectAtScreenPoint=(x:number,y:number)=>{
           if(cancelled||!plotLayer||!latestProjection||!showPlotsRef.current||
             !hostRef.current)return;
-          const original=event?.domEvent;
-          let x:number|undefined,y:number|undefined;
-          if(original instanceof MouseEvent){x=original.clientX;y=original.clientY;}
-          else if(typeof TouchEvent!=="undefined"&&original instanceof TouchEvent){
-            const touch=original.changedTouches[0];if(touch){x=touch.clientX;y=touch.clientY;}
-          }
-          if(x===undefined||y===undefined)return;
           const id=pickModelGeoPlot(x,y,hostRef.current.getBoundingClientRect(),
             latestProjection,plotLayer.hitMeshes);
           if(id)setSelectedPlot(plotIds.get(id)||null);
+        };
+        const clickCoordinates=(event:unknown):{x:number;y:number}|null=>{
+          if(!event||typeof event!=="object")return null;
+          const pointer=event as {clientX?:number;clientY?:number;
+            changedTouches?:ArrayLike<{clientX:number;clientY:number}>};
+          // Do not use instanceof MouseEvent: Google may wrap a PointerEvent
+          // or provide a cross-realm event object.
+          if(Number.isFinite(pointer.clientX)&&Number.isFinite(pointer.clientY))
+            return {x:pointer.clientX!,y:pointer.clientY!};
+          const touch=pointer.changedTouches?.[0];
+          return touch&&Number.isFinite(touch.clientX)&&Number.isFinite(touch.clientY)
+            ?{x:touch.clientX,y:touch.clientY}:null;
+        };
+        mapClick=map.addListener("click",event=>{
+          const coords=clickCoordinates(event?.domEvent);
+          if(coords)selectAtScreenPoint(coords.x,coords.y);
         });
+        pointerHost=hostRef.current;
+        let pressed:{id:number;x:number;y:number;time:number}|null=null;
+        const mapControlTarget=(target:EventTarget|null)=>{
+          const element=target instanceof Element?target:null;
+          return Boolean(element?.closest(
+            "button,a,input,select,textarea,[role='button'],.gmnoprint,.gm-style-mtc,.gm-control-active"
+          ));
+        };
+        onNativePointerDown=event=>{
+          pressed=null;
+          if(!event.isPrimary||event.button!==0||mapControlTarget(event.target))return;
+          pressed={id:event.pointerId,x:event.clientX,y:event.clientY,time:performance.now()};
+        };
+        onNativePointerUp=event=>{
+          const start=pressed;
+          pressed=null;
+          if(!start||event.pointerId!==start.id||!event.isPrimary||
+            mapControlTarget(event.target))return;
+          const drift=Math.hypot(event.clientX-start.x,event.clientY-start.y);
+          // A real map drag, pinch or long press is never a plot-selection tap.
+          if(drift>8||performance.now()-start.time>850)return;
+          selectAtScreenPoint(event.clientX,event.clientY);
+        };
+        pointerHost?.addEventListener("pointerdown",onNativePointerDown,true);
+        pointerHost?.addEventListener("pointerup",onNativePointerUp,true);
 
         const scene = new THREE.Scene();
         const camera = new THREE.Camera();
@@ -788,6 +825,10 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
       zoomActionRef.current = null;
       mapZoomChanged?.remove();
       mapClick?.remove();
+      if(pointerHost&&onNativePointerDown)
+        pointerHost.removeEventListener("pointerdown",onNativePointerDown,true);
+      if(pointerHost&&onNativePointerUp)
+        pointerHost.removeEventListener("pointerup",onNativePointerUp,true);
       plotLayer?.dispose();
       plotLayer=null;latestProjection=null;preparedPaths=[];
       plotRefreshRef.current=null;
