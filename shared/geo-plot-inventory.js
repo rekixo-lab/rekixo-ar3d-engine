@@ -36,20 +36,20 @@ const positive=(input,label)=>{
 // numerically to decimal feet only for calculations; keep the exact written
 // strings separately in sideDimensions for human source review.
 const sourceInNotes=notes=>{
-  const line=String(notes??"").match(/(?:^|\\b)Source:\\s*([^;\\r\\n]+)/i);
+  const line=String(notes??"").match(/(?:^|\b)Source:\s*([^;\r\n]+)/i);
   return line?.[1]?.trim()||"";
 };
 const detail=(value,label,max)=>{
   const text=String(value??"").trim();
   if(text.length>max)throw Error(label+" exceeds the "+max+" character source record limit.");
-  if(/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]/.test(text))
+  if(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text))
     throw Error(label+" has invalid control characters.");
   return text;
 };
 function positiveLength(value,label,unit){
   if(value===null||value===undefined||String(value).trim()==="")return 0;
   const raw=String(value).trim();
-  const measured=raw.match(/^(\\d+)\\s*['′]\\s*(?:[-–]\\s*)?(\\d+(?:\\.\\d+)?)\\s*(?:["″])$/);
+  const measured=raw.match(/^(\d+)\s*['′]\s*(?:[-–]\s*)?(\d+(?:\.\d+)?)\s*(?:["″])$/);
   if(measured){
     if(unit!=="ft")throw Error(label+": feet-inch notation requires ft unit.");
     const feet=Number(measured[1]),inches=Number(measured[2]);
