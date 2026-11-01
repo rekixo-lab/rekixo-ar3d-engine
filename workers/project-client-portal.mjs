@@ -3,6 +3,7 @@
 import {clientTokenHash,newClientBearer,validClientBearer} from "./project-client-access.mjs";
 import {canProjectClient} from "../shared/project-client-roles.js";
 import {handleGeoPlotCommercial} from "./geo-plot-commercial.mjs";
+import {handleGeoPlotPricingSheet} from "./geo-plot-pricing.mjs";
 import {validProjectSlug} from "../shared/project-slug-policy.js";
 const PREFIX="/3Dprojects/api/client-portal";
 const COOKIE="rekixo_3d_project_client";
@@ -101,7 +102,7 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
    ).bind(Date.now(),await clientTokenHash(value)).run();
    return response({ok:true},200,{"Set-Cookie":clear()});
   }
-  const match=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/(overview|commercial)$/);
+  const match=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/(overview|commercial|pricing)$/);
   if(!match)return response({error:"Unknown project client route."},404);
   const s=await projectClientSession(request,env);
   if(!s)return response({error:"Client sign-in required."},401);
@@ -117,7 +118,7 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
       commercialPrepare:canProjectClient(s.role,"commercial.prepare"),
       commercialApprove:canProjectClient(s.role,"commercial.approve")}});
   }
-  if(section==="commercial"){
+  if(section==="commercial"||section==="pricing"){
    if(!["GET","PUT"].includes(request.method))
     return response({error:"Method not allowed."},405);
    const permission=request.method==="GET"?"commercial.read":"commercial.prepare";
@@ -134,13 +135,17 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
     "WHERE p.id=? AND p.slug=? AND p.project_kind IN ('legacy','building_geo') LIMIT 1"
    ).bind(s.projectId,slug).first();
    if(!ctx)return response({error:"Current project Geo release is unavailable."},404);
-   return handleGeoPlotCommercial(request,env,{
+   const context={
     project:{id:ctx.project_id,slug:ctx.slug,status:ctx.status,project_kind:ctx.project_kind},
     active:{experience_id:ctx.experience_id,geo_release_id:ctx.geo_release_id,
       source_building_release_id:ctx.source_building_release_id}
-   },{email:s.email,role:s.role},{
-    allowApprove:canProjectClient(s.role,"commercial.approve")
-   });
+   };
+   const actor={email:s.email,role:s.role};
+   return section==="pricing"
+     ?handleGeoPlotPricingSheet(request,env,context,actor)
+     :handleGeoPlotCommercial(request,env,context,actor,{
+       allowApprove:canProjectClient(s.role,"commercial.approve")
+     });
   }
   return response({error:"Unknown client route."},404);
  }catch(error){
