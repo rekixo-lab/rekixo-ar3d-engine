@@ -1437,7 +1437,7 @@ export default function GeoPlotMapper(){
               Plot {issue.plotId} · {issue.field}: {issue.reason}
             </p>)}
             {!quality.issues.length&&<p className="geo-plot-hint">No diagnostic issues in the current working draft.
-              Independent physical survey acceptance is still required.</p>}
+              Source and model quality checks do not themselves certify real-world field measurements.</p>}
             {quality.issues.length>24&&<p className="geo-plot-hint">
               +{quality.issues.length-24} more. Download the complete evidence report to inspect all plots.</p>}
           </div>
