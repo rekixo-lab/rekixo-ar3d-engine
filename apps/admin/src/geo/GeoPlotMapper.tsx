@@ -16,6 +16,9 @@ import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-revie
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import {cloneUnverifiedGeoPlot,geoPlotEvidenceManifest,geoPlotQualityReport} from "../../../../shared/geo-plot-stage3-review.js";
 import {stageVerifiedImageCorner} from "../../../../shared/geo-plot-image-corner.js";
+import {nextCsvPlotForDrawing,positionCursorLoupe,assignVisiblePlotEdge,
+  draftStorageKey,packLocalPlotDraft,unpackLocalPlotDraft,visibleMappingProgress
+} from "../../../../shared/geo-plot-mapper-ux.js";
 import type {SimilarityTransform} from "../../../../shared/geo-plot-image-alignment.js";
 import {newPlotEditHistory,replacePlotEditHistory,updatePlotEditHistory,
   closeGroupedPlotEdit,undoPlotEdit,redoPlotEdit,geometryWithRevokedApprovals,nudgePlotCorner
@@ -37,7 +40,7 @@ type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | n
   releases:Array<{id:string;version:number;geoReleaseId:string}> };
 type GeoPublic = { geoRelease:{id:string}; buildingRelease:{id:string};
   model:{url:string;sha256?:string;byteSize?:number}; canonicalModel?:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number;scale:number} };
-type ToolMode = "pan" | "draw" | "edit" | "align";
+type ToolMode = "pan" | "draw" | "edit" | "align" | "side";
 type PointerPreview = {clientX:number;clientY:number;rawScreen:Point;screen:Point;
   point:Point;kind:"none"|"vertex"|"edge";pointerType:string};
 type PointerStart = {id:number;x:number;y:number;cancelled?:boolean};
@@ -165,9 +168,12 @@ export default function GeoPlotMapper(){
   const [selectedCorner,setSelectedCorner]=useState<number|null>(null);
   const [nudgeStep,setNudgeStep]=useState(0.01);
   const setWorking=useCallback((update:SetStateAction<Plot|null>)=>{
+    // Capture grouping before React batches a pointer release; a closed drag must
+    // not accidentally create one undo entry per intermediate frame.
+    const grouped=dragStartRef.current!==null;
     setWorkingHistory(history=>{
       const next=typeof update==="function"?update(history.present):update;
-      return updatePlotEditHistory(history,next,{grouped:dragStartRef.current!==null});
+      return updatePlotEditHistory(history,next,{grouped});
     });
   },[]);
   const resetWorking=useCallback((plot:Plot|null)=>{
@@ -193,6 +199,11 @@ export default function GeoPlotMapper(){
   // Like the Platform mapper, snapping is opt-in: don't silently move approved corners.
   const [snap,setSnap]=useState(false);
   const [selectedRole,setSelectedRole]=useState<Role>("front");
+  const [extendSide,setExtendSide]=useState(false);
+  const [inspectorTab,setInspectorTab]=useState<"sources"|"plot"|"quality"|"publish">("sources");
+  const [recoveredLocalDraft,setRecoveredLocalDraft]=useState<{
+    plot:Plot;originalId:string|null;shape:"four"|"irregular";checkedAt:number
+  }|null>(null);
   const [inventoryQuery,setInventoryQuery]=useState("");
   const [publishedPreview,setPublishedPreview]=useState<{
     draftRevision:number;activeReleaseId:string|null;token:string;
@@ -214,12 +225,24 @@ export default function GeoPlotMapper(){
   const rendererRef=useRef<THREE.WebGLRenderer|null>(null);
   const cameraRef=useRef<THREE.OrthographicCamera|null>(null);
   const controlsRef=useRef<OrbitControls|null>(null);
+  const pointerGeometry=useMemo(()=>({
+    raycaster:new THREE.Raycaster(),
+    plane:new THREE.Plane(new THREE.Vector3(0,1,0),0),
+    uv:new THREE.Vector2(),hit:new THREE.Vector3(),projected:new THREE.Vector3()
+  }),[]);
   const dragRef=useRef<number|null>(null);
   const alignmentPickRef=useRef<((point:Point)=>void)|null>(null);
   const pointerStartRef=useRef<PointerStart|null>(null);
   const pointerPreviewRef=useRef<PointerPreview|null>(null);
   const pointerRafRef=useRef(0);
   const pointerPendingRef=useRef<{x:number;y:number;kind:string;skip?:number}|null>(null);
+  const dragFrameRef=useRef(0);
+  const pendingDragRef=useRef<{index:number;x:number;y:number}|null>(null);
+  const pointerStatePaintRef=useRef(0);
+  const loupeLastSampleRef=useRef("");
+  const loupeRef=useRef<HTMLDivElement>(null);
+  const crosshairRef=useRef<HTMLDivElement>(null);
+  const pointerOriginRef=useRef<HTMLDivElement>(null);
   const overlayRef=useRef<SVGSVGElement>(null);
   const loupeCanvasRef=useRef<HTMLCanvasElement>(null);
   const renderFramesRef=useRef(0);
@@ -231,6 +254,8 @@ export default function GeoPlotMapper(){
     [plots,inventoryRows]);
   const selectedInventory=useMemo(()=>inventoryRows.find(p=>
     p.id.toLowerCase()===working?.id.toLowerCase()),[inventoryRows,working?.id]);
+  const savedSnapRings=useMemo(()=>plots.filter(p=>p.id!==originalId)
+    .map(p=>({points:p.corners})),[plots,originalId]);
   const quality=useMemo(()=>geoPlotQualityReport(plots,inventoryRows,{
     geoScale:geo?.placement.scale,
     mappingStale:Boolean(state?.draft.stale),
@@ -239,6 +264,7 @@ export default function GeoPlotMapper(){
     inventoryRevision:state?.inventoryRevision,
     verifiedInventoryRevision:state?.draft.verifiedInventoryRevision
   }),[plots,inventoryRows,geo?.placement.scale,state]);
+  const actionableQualityIssues=useMemo(()=>quality.issues.filter(issue=>issue.field!=="unmapped"),[quality]);
   const nextTemplateId=useMemo(()=>nextUnmappedInventory(inventoryRows,plots.map(p=>p.id))?.id||
     nextFreePlotId([...plots,...inventoryRows]),[plots,inventoryRows]);
   const onInventoryRowsChange=useCallback((rows:GeoInventoryRow[],revision:number)=>{
@@ -248,6 +274,75 @@ export default function GeoPlotMapper(){
     setState(prev=>prev?{...prev,alignmentRevision:revision}:prev);
   },[]);
   const hasUnapplied=hasPendingPlotEdits(working,originalId?plots.find(p=>p.id===originalId):null);
+  const progress=useMemo(()=>visibleMappingProgress(inventoryRows,plots),[inventoryRows,plots]);
+  useEffect(()=>{
+    const key=draftStorageKey(slug);
+    if(!key||!state?.geoReleaseId||!state?.buildingReleaseId)return;
+    try{
+      const raw=window.localStorage.getItem(key);
+      const restored=unpackLocalPlotDraft(raw,{
+        projectSlug:slug,geoReleaseId:state.geoReleaseId,
+        buildingReleaseId:state.buildingReleaseId,mappingRevision:state.draft.revision
+      }) as {plot:Plot;originalId:string|null;shape:"four"|"irregular";checkedAt:number}|null;
+      setRecoveredLocalDraft(restored);
+      if(raw&&!restored)window.localStorage.removeItem(key);
+    }catch{setRecoveredLocalDraft(null);}
+  },[slug,state?.geoReleaseId,state?.buildingReleaseId,state?.draft.revision]);
+  useEffect(()=>{
+    const key=draftStorageKey(slug);
+    if(!key||!working||!hasUnapplied||!state?.geoReleaseId||!state?.buildingReleaseId)return;
+    const timer=window.setTimeout(()=>{
+      const raw=packLocalPlotDraft({
+        projectSlug:slug,geoReleaseId:state.geoReleaseId!,buildingReleaseId:state.buildingReleaseId!,
+        mappingRevision:state.draft.revision,plot:working,originalId,shape
+      });
+      if(raw)try{window.localStorage.setItem(key,raw);}catch{/* Private browser storage optional. */}
+    },350);
+    return()=>window.clearTimeout(timer);
+  },[slug,working,originalId,shape,hasUnapplied,state?.geoReleaseId,
+    state?.buildingReleaseId,state?.draft.revision]);
+  const flushLocalDraftRef=useRef<()=>void>(()=>{});
+  flushLocalDraftRef.current=()=>{
+    const key=draftStorageKey(slug);
+    if(!key||!working||!hasUnapplied||!state?.geoReleaseId||!state?.buildingReleaseId)return;
+    const raw=packLocalPlotDraft({
+      projectSlug:slug,geoReleaseId:state.geoReleaseId,buildingReleaseId:state.buildingReleaseId,
+      mappingRevision:state.draft.revision,plot:working,originalId,shape
+    });
+    if(raw)try{window.localStorage.setItem(key,raw);}catch{/* Storage may be disabled. */}
+  };
+  useEffect(()=>{
+    // Stable browser listeners, latest data via ref. Pointer dragging must not
+    // repeatedly detach and reattach listeners on every React render.
+    const flush=()=>flushLocalDraftRef.current();
+    const onVisibility=()=>{if(document.visibilityState==="hidden")flush();};
+    window.addEventListener("pagehide",flush);
+    document.addEventListener("visibilitychange",onVisibility);
+    return()=>{
+      window.removeEventListener("pagehide",flush);
+      document.removeEventListener("visibilitychange",onVisibility);
+    };
+  },[]);
+  const clearLocalPlotDraft=()=>{
+    const key=draftStorageKey(slug);
+    if(key)try{window.localStorage.removeItem(key);}catch{/* Storage may be disabled. */}
+    setRecoveredLocalDraft(null);
+  };
+  const restoreLocalPlotDraft=()=>{
+    if(!recoveredLocalDraft||!state||dirty||busy)return;
+    const p=recoveredLocalDraft.plot;
+    const original=recoveredLocalDraft.originalId;
+    const sameSource=(!original||plots.some(x=>x.id===original))&&
+      (original||!plots.some(x=>x.id===p.id))&&
+      (!inventoryRows.length||inventoryRows.some(x=>x.id===p.id));
+    if(!sameSource){clearLocalPlotDraft();setMessage("ERROR: Local draft conflicts with current mapped inventory. Original data preserved.");return;}
+    if(!confirmUnapplied()||!window.confirm("Recover only the unfinished private Plot "+p.id+
+      " in this browser? The published customer website is unchanged."))return;
+    resetWorking(p);setOriginalId(original);setShape(recoveredLocalDraft.shape);
+    setMode(p.corners.length>=3?"edit":"draw");setInspectorTab("plot");
+    setRecoveredLocalDraft(null);
+    setMessage("Recovered unfinished local Plot "+p.id+". Review its corners and source before confirming.");
+  };
   const api=slug?`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/geo-plots`:"";
   const refresh=useCallback(async(isCurrent:()=>boolean)=>{
     if(!slug){setState(null);setGeo(null);setPlots([]);return;}
@@ -295,7 +390,11 @@ export default function GeoPlotMapper(){
       // The loupe samples this exact frame of the canonical model, not a guessed image.
       // WebGL capture must happen immediately after render (drawing buffer may be transient).
       const pointer=pointerPreviewRef.current,loupe=loupeCanvasRef.current;
-      if(pointer&&loupe&&++renderFramesRef.current%3===0){
+      if(pointer&&loupe&&++renderFramesRef.current%4===0){
+        const sampleKey=pointer.screen[0].toFixed(1)+":"+pointer.screen[1].toFixed(1)+":"+
+          camera.zoom.toFixed(3)+":"+camera.position.x.toFixed(3)+":"+camera.position.z.toFixed(3);
+        if(loupeLastSampleRef.current===sampleKey)return;
+        loupeLastSampleRef.current=sampleKey;
         const source=renderer.domElement,ctx=loupe.getContext("2d");
         if(ctx&&host.clientWidth&&host.clientHeight){
           const scaleX=source.width/host.clientWidth,scaleY=source.height/host.clientHeight;
@@ -349,15 +448,17 @@ export default function GeoPlotMapper(){
   },[geo?.canonicalModel?.url,geo?.canonicalModel?.sha256,geo?.model.url,geo?.model.sha256]);
   const project=(p:readonly [number,number]):Point=>{
     const camera=cameraRef.current;if(!camera)return [0,0];
-    const vec=new THREE.Vector3(p[0],groundY+0.02,p[1]).project(camera);
+    const vec=pointerGeometry.projected.set(p[0],groundY+0.02,p[1]).project(camera);
     return [(vec.x+1)*viewport.w/2,(1-vec.y)*viewport.h/2];
   };
   const unproject=(clientX:number,clientY:number):Point|null=>{
     const host=hostRef.current,camera=cameraRef.current;if(!host||!camera)return null;
     const rect=host.getBoundingClientRect();if(!rect.width||!rect.height)return null;
     const x=(clientX-rect.left)/rect.width*2-1,y=1-(clientY-rect.top)/rect.height*2;
-    const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2(x,y),camera);
-    const hit=ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-groundY),new THREE.Vector3());
+    const pointer=pointerGeometry;
+    pointer.uv.set(x,y);pointer.plane.constant=-groundY;
+    pointer.raycaster.setFromCamera(pointer.uv,camera);
+    const hit=pointer.raycaster.ray.intersectPlane(pointer.plane,pointer.hit);
     return hit?[Number(hit.x.toFixed(6)),Number(hit.z.toFixed(6))]:null;
   };
   const precisionPointer=(clientX:number,clientY:number,skipIndex=-1)=>{
@@ -365,17 +466,20 @@ export default function GeoPlotMapper(){
     if(!host||!raw)return null;
     const rect=host.getBoundingClientRect();
     const screen:Point=[clientX-rect.left,clientY-rect.top];
-    const rings:Array<{points:Point[];skipIndex?:number}>=
-      plots.filter(p=>p.id!==originalId).map(p=>({points:p.corners}));
-    // Platform parity: new drawing snaps to SAVED boundaries, never back onto
-    // its own incomplete polygon (which could silently create zero-length edges).
+    if(!snap)return {point:raw,screen,rawScreen:screen,kind:"none" as const};
+    const rings:Array<{points:Point[];skipIndex?:number}>=[...savedSnapRings];
+    // Snapping never pulls a new polygon onto itself and never locks a dragged
+    // handle to its own corner. Cached saved rings avoid all-plot allocation.
     if(mode==="edit"&&workingRef.current?.corners.length)
       rings.push({points:workingRef.current.corners,...(skipIndex>=0?{skipIndex}:{})});
     const target=precisionSnap(raw,screen,rings,project,{enabled:snap,thresholdPx:6});
     return {point:target.point as Point,screen:target.screen as Point,
       rawScreen:screen,kind:target.kind};
   };
-  const clearPointer=()=>{pointerPendingRef.current=null;pointerPreviewRef.current=null;setPointerPreview(null);};
+  const clearPointer=()=>{
+    pointerPendingRef.current=null;pointerPreviewRef.current=null;
+    loupeLastSampleRef.current="";setPointerPreview(null);
+  };
   const captureImageAlignmentPoint=(done:(point:Point)=>void)=>{
     if(!geo||!state||state.draft.stale)return;
     alignmentPickRef.current=done;
@@ -389,7 +493,26 @@ export default function GeoPlotMapper(){
     const location=precisionPointer(clientX,clientY,skipIndex);
     if(!location)return;
     const next:PointerPreview={clientX,clientY,pointerType,...location};
-    pointerPreviewRef.current=next;setPointerPreview(next);
+    pointerPreviewRef.current=next;
+    const loupe=positionCursorLoupe(next.screen,[host.clientWidth,host.clientHeight]);
+    if(loupeRef.current){
+      loupeRef.current.style.transform="translate3d("+loupe.left+"px,"+loupe.top+"px,0)";
+    }
+    if(crosshairRef.current){
+      crosshairRef.current.style.left=next.screen[0]+"px";
+      crosshairRef.current.style.top=next.screen[1]+"px";
+      crosshairRef.current.dataset.snapKind=next.kind;
+    }
+    if(pointerOriginRef.current){
+      pointerOriginRef.current.style.left=next.rawScreen[0]+"px";
+      pointerOriginRef.current.style.top=next.rawScreen[1]+"px";
+      pointerOriginRef.current.style.display=next.kind==="none"?"none":"";
+    }
+    const now=performance.now();
+    if(now-pointerStatePaintRef.current>=33||!loupeRef.current){
+      pointerStatePaintRef.current=now;
+      setPointerPreview(next);
+    }
   };
   const queuePointer=(clientX:number,clientY:number,pointerType:string,skipIndex=-1)=>{
     pointerPendingRef.current={x:clientX,y:clientY,kind:pointerType,skip:skipIndex};
@@ -406,9 +529,10 @@ export default function GeoPlotMapper(){
   const choose=(plot:Plot)=>{
     if(working?.id===plot.id&&originalId===plot.id)return;
     if(!confirmUnapplied())return;
-    resetWorking(structuredClone(plot));
+    clearLocalPlotDraft();resetWorking(structuredClone(plot));
     if(Number.isFinite(plot.planeY))setGroundY(plot.planeY!);
-    setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");setMode("edit");
+    setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");
+    setMode("edit");setInspectorTab("plot");
   };
   const chooseSibling=(direction:1|-1)=>{
     const neighbor=adjacentPlot(plots,working?.id||"",direction);
@@ -497,7 +621,7 @@ export default function GeoPlotMapper(){
         " using X "+cloneX+" m and Z "+cloneZ+" m translation from Plot "+previous.id+
         "? All measurement, road, facing and plane approvals will be reset. Nothing is published."))return;
       resetWorking(next);setOriginalId(null);
-      setShape(next.corners.length===4?"four":"irregular");setMode("edit");
+      setShape(next.corners.length===4?"four":"irregular");setMode("edit");setInspectorTab("plot");
       setMessage("Unverified template ready for Plot "+next.id+
         ". Check each corner, approved CSV/source and road; apply only after inspecting the new footprint.");
     }catch(error){
@@ -609,13 +733,38 @@ export default function GeoPlotMapper(){
     e.currentTarget.setPointerCapture(e.pointerId);
     queuePointer(e.clientX,e.clientY,e.pointerType);
   };
+  const queueDrag=(index:number,x:number,y:number)=>{
+    pendingDragRef.current={index,x,y};
+    if(dragFrameRef.current)return;
+    dragFrameRef.current=requestAnimationFrame(()=>{
+      dragFrameRef.current=0;
+      const latest=pendingDragRef.current;pendingDragRef.current=null;
+      if(latest&&dragRef.current===latest.index)
+        editPoint(latest.index,latest.x,latest.y);
+    });
+  };
+  const flushDrag=(index:number,x:number,y:number)=>{
+    if(dragFrameRef.current){cancelAnimationFrame(dragFrameRef.current);dragFrameRef.current=0;}
+    pendingDragRef.current=null;
+    if(dragRef.current===index)editPoint(index,x,y);
+  };
+  useEffect(()=>()=>{if(dragFrameRef.current)cancelAnimationFrame(dragFrameRef.current);},[]);
+  const latestPointer=(e:React.PointerEvent<Element>)=>{
+    const native=e.nativeEvent;
+    try{
+      const samples=typeof native.getCoalescedEvents==="function"?native.getCoalescedEvents():[];
+      const last=samples.length?samples[samples.length-1]:native;
+      return {x:last.clientX,y:last.clientY};
+    }catch{return {x:e.clientX,y:e.clientY};}
+  };
   const onOverlayPointerMove=(e:React.PointerEvent<SVGSVGElement>)=>{
+    const pointer=latestPointer(e);
     const dragging=dragRef.current;
-    if(dragging!==null)editPoint(dragging,e.clientX,e.clientY);
-    queuePointer(e.clientX,e.clientY,e.pointerType,dragging??-1);
+    if(dragging!==null)queueDrag(dragging,pointer.x,pointer.y);
+    queuePointer(pointer.x,pointer.y,e.pointerType,dragging??-1);
     const start=pointerStartRef.current;
     if(start&&start.id===e.pointerId&&
-      Math.hypot(e.clientX-start.x,e.clientY-start.y)>9)start.cancelled=true;
+      Math.hypot(pointer.x-start.x,pointer.y-start.y)>9)start.cancelled=true;
   };
   const onOverlayPointerUp=(e:React.PointerEvent<SVGSVGElement>)=>{
     const start=pointerStartRef.current;
@@ -629,11 +778,14 @@ export default function GeoPlotMapper(){
     }
     if(start?.id===e.pointerId)pointerStartRef.current=null;
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+    if(dragRef.current!==null)flushDrag(dragRef.current,e.clientX,e.clientY);
     dragRef.current=null;closeCornerDrag();
     queuePointer(e.clientX,e.clientY,e.pointerType);
   };
   const onOverlayPointerCancel=(e:React.PointerEvent<SVGSVGElement>)=>{
     if(pointerStartRef.current?.id===e.pointerId)pointerStartRef.current=null;
+    if(dragFrameRef.current){cancelAnimationFrame(dragFrameRef.current);dragFrameRef.current=0;}
+    pendingDragRef.current=null;
     dragRef.current=null;closeCornerDrag();clearPointer();
   };
   const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>{
@@ -656,6 +808,15 @@ export default function GeoPlotMapper(){
     setWorking(p=>p?applyApprovedInventoryRow(p,selectedInventory):p);
     setMessage("Plot "+working.id+": approved CSV values staged. Recheck road-facing edge, measurements and sources before applying.");
   };
+  const assignSideOnCanvas=(edge:number)=>{
+    if(!working||busy||mode!=="side"||working.corners.length<3)return;
+    try{
+      const changed=assignVisiblePlotEdge(working,selectedRole,edge,{extend:extendSide});
+      setWorking(changed);
+      setMessage("Plot "+working.id+": "+selectedRole+" edge "+(edge+1)+
+        " staged. Road, source lengths and facing need review before Verify.");
+    }catch(error){setMessage("ERROR: "+String(error));}
+  };
   const applyPlot=(openNext=false)=>{
     if(!working)return;const id=working.id.trim();if(!id||working.corners.length<3)throw Error("Plot number and at least 3 mapped corners required.");
     if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId))throw Error("Duplicate plot ID.");
@@ -672,6 +833,58 @@ export default function GeoPlotMapper(){
       setWorking(null);setOriginalId(null);setMode("pan");
       setMessage("Plot "+id+" staged. Save Mapping Draft before verification.");
     }
+  };
+  const confirmPlotAndNext=async()=>{
+    if(!state||!geo||!working||busy||!editable)return;
+    const id=working.id.trim();
+    if(!id||working.corners.length<3||
+      (shape==="four"&&working.corners.length!==4)){
+      setMessage("ERROR: Finish the plot boundary before confirming.");return;
+    }
+    if(inventoryRows.length&&!inventoryRows.some(row=>row.id.toLowerCase()===id.toLowerCase())){
+      setMessage("ERROR: Plot "+id+" is not in the approved CSV. Cancel this unconfirmed Plot 37 and select Plot 1 from Inventory.");return;
+    }
+    if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId)){
+      setMessage("ERROR: Duplicate Plot ID "+id+". Open the already mapped plot to edit.");return;
+    }
+    if(dirty&&!window.confirm("Other staged draft changes will be saved together with Plot "+
+      id+". Continue with an UNPUBLISHED draft save?"))return;
+    const proposed=[...plots.filter(p=>p.id!==(originalId||id)),{...working,id}]
+      .sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
+    let writtenRevision:number|null=null;
+    setBusy(true);
+    try{
+      const saved=await callApi<MappingState>(api,{method:"PUT",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({expectedRevision:state.draft.revision,
+          geoReleaseId:state.geoReleaseId,plots:proposed})});
+      writtenRevision=saved.draft.revision;
+      // The public release is NOT changed. Verify a second uncached D1 read
+      // before clearing the operator's in-progress corner geometry.
+      const readBack=await callApi<MappingState>(api);
+      if(activeProjectRef.current!==slug)return;
+      const recorded=readBack.draft.plots.find(p=>p.id===id);
+      if(!recorded||readBack.draft.revision!==saved.draft.revision||
+        JSON.stringify(recorded.corners)!==JSON.stringify(working.corners))
+        throw Error("Server read-back did not confirm Plot "+id+". Keep this local draft and reload before editing other plots.");
+      setState(readBack);setPlots(readBack.draft.plots);setDirty(false);setPublishedPreview(null);
+      clearLocalPlotDraft();
+      const next=nextCsvPlotForDrawing(inventoryRows,readBack.draft.plots,id);
+      if(next){
+        resetWorking(fromInventory(next,groundY));setOriginalId(null);
+        setShape("four");setMode("draw");setInspectorTab("plot");
+      }else{
+        resetWorking(null);setOriginalId(null);setMode("pan");setInspectorTab("quality");
+      }
+      setMessage("✓ Plot "+id+" SERVER SAVED in private mapping draft r"+
+        readBack.draft.revision+". "+(next?"Next CSV Plot "+next.id+" is ready.":
+        "All approved CSV IDs mapped. Review original-image alignment, data quality, then Verify and Publish."));
+    }catch(error){
+      setMessage("ERROR: "+(error instanceof Error?error.message:String(error))+
+        (writtenRevision===null
+          ?" The unsaved plot is still in this editor; correct the issue before retrying."
+          :" Server accepted draft r"+writtenRevision+
+            " but read-back is not confirmed. Do NOT press Confirm again; reload and inspect the saved mapping first."));
+    }finally{setBusy(false);}
   };
   const downloadGeoRecovery=async()=>{
     if(!state||busy||!slug)return;
@@ -866,10 +1079,16 @@ export default function GeoPlotMapper(){
   const begin=(kind:"four"|"irregular")=>{
     const selected=working&&!originalId&&!working.corners.length&&
       inventoryRows.some(p=>p.id.toLowerCase()===working.id.toLowerCase());
+    const pending=nextCsvPlotForDrawing(inventoryRows,plots);
+    if(!selected&&!pending){
+      setMessage("ERROR: No pending approved CSV Plot ID. Import an inventory revision or edit a mapped plot; Plot 37 will not be invented.");
+      setInspectorTab("sources");return;
+    }
     if(!selected&&!confirmUnapplied())return;
-    setShape(kind);setMode("draw");setOriginalId(null);
-    if(!selected)resetWorking({...blank(nextFreePlotId([...plots,...inventoryRows])),planeY:groundY,planeSource:"",planeVerified:false});
-    setMessage("Start at the road-facing Front edge, then tap corners clockwise. Complete the boundary before entering surveyed sizes.");
+    if(!selected)clearLocalPlotDraft();
+    setShape(kind);setMode("draw");setOriginalId(null);setInspectorTab("plot");
+    if(!selected&&pending)resetWorking(fromInventory(pending,groundY));
+    setMessage("Plot "+(selected?working!.id:pending?.id)+": start at the road-facing Front edge; tap corners clockwise.");
   };
   const undoCorner=()=>{
     if(!working?.corners.length||busy||originalId)return;
@@ -894,7 +1113,7 @@ export default function GeoPlotMapper(){
   },[selectedCorner,working?.corners.length]);
   const cancelWorking=()=>{
     if(!confirmUnapplied())return;
-    setWorking(null);setOriginalId(null);setMode("pan");setMessage("Unapplied plot selection cleared; saved draft unchanged.");
+    clearLocalPlotDraft();setWorking(null);setOriginalId(null);setMode("pan");setMessage("Unapplied plot selection cleared; saved draft unchanged.");
   };
   const finishBoundary=()=>{
     if(!working||working.corners.length<3){setMessage("ERROR: Mark at least 3 corners before completing the boundary.");return;}
@@ -948,6 +1167,8 @@ export default function GeoPlotMapper(){
   });
   const editable=Boolean(state&&!state.draft.stale&&geo);
   const path=(points:Point[])=>points.map(p=>project(p).join(",")).join(" ");
+  const loupePosition=pointerPreview?positionCursorLoupe(
+    pointerPreview.screen,[viewport.w,viewport.h]):{left:12,top:12};
   return <main className="geo-plot-page">
     <header className="geo-plot-top"><div><p className="eyebrow">REKIXO ENGINE · INDEPENDENT GEO MAPPING</p><h1>3D Geo Plot Mapper</h1>
       <p>Draw plot boundaries on a checksum-verified Building-local master plan. AR3D Platform remains untouched.</p></div>
@@ -983,12 +1204,36 @@ export default function GeoPlotMapper(){
         <div><strong>PRECISION PLOT STUDIO</strong>
           <span>Front-first boundaries · editable corners · source-backed measurements</span></div>
         <div className="geo-plot-editor-head-stats">
-          <span><b>{plots.length}</b> mapped</span>
+          <span><b>{progress.confirmed}</b> / {progress.inventory} confirmed</span>
+          <span><b>{progress.pending}</b> pending</span>
           <span><b>{working?.id||"—"}</b> current plot</span>
           {dirty&&<span className="geo-plot-unsaved">Unsaved mapping draft</span>}
         </div>
       </div>
       <section className="geo-plot-tools" aria-label="Plot mapper controls">
+        <div className="geo-plot-current-control">
+          <label>Current CSV Plot
+            <select aria-label="Current approved CSV plot" value={working?.id||""}
+              disabled={!editable||busy||dirty}
+              onChange={e=>{
+                const id=e.target.value;
+                if(!id||working?.id===id)return;
+                const mapped=plots.find(p=>p.id===id);
+                if(mapped){choose(mapped);return;}
+                const row=inventoryRows.find(p=>p.id===id);
+                if(!row||!confirmUnapplied())return;
+                clearLocalPlotDraft();resetWorking(fromInventory(row,groundY));setOriginalId(null);
+                setShape("four");setMode("draw");setInspectorTab("plot");
+                setMessage("Plot "+id+" selected from approved CSV. Draw the real boundary.");
+              }}>
+              <option value="">Select CSV Plot…</option>
+              {inventoryRows.map(row=><option key={row.id} value={row.id}>{row.id} · {
+                plots.some(p=>p.id===row.id)?"confirmed":"pending"}</option>)}
+              {working&&!inventoryRows.some(row=>row.id===working.id)&&
+                <option value={working.id}>{working.id} · not in CSV</option>}
+            </select>
+          </label>
+        </div>
         <div className="geo-plot-tool-group" aria-label="Boundary drawing tools">
           {mode==="align"&&<button type="button" className="active"
             onClick={()=>{alignmentPickRef.current=null;setMode("pan");}}>Cancel alignment capture</button>}
@@ -1010,6 +1255,10 @@ export default function GeoPlotMapper(){
             disabled={!editable||busy||!working||working.corners.length<3||
               (shape==="four"&&working.corners.length!==4)}
             onClick={finishBoundary}>✓ Boundary complete</button>
+          <button type="button" disabled={!editable||busy||!working||working.corners.length<3}
+            className={mode==="side"?"active":""}
+            onClick={()=>{setMode("side");setInspectorTab("plot");}}>
+            ↔ Assign Sides</button>
         </div>
         <div className="geo-plot-tool-group geo-plot-tool-group--secondary">
           <button type="button" disabled={busy||!workingHistory.past.length} aria-label="Undo working plot edit"
@@ -1035,6 +1284,15 @@ export default function GeoPlotMapper(){
           <button type="button" className="geo-plot-fullscreen-toggle" title="Show toolbar, canvas and inspector in full screen"
             aria-pressed={focused} onClick={()=>void toggleFullscreen()}>
             {focused?"⊟ Exit full screen":"⛶ Full screen"}</button>
+        </div>
+        <div className="geo-plot-tool-group geo-plot-tool-group--confirm">
+          <button type="button" className="geo-plot-confirm-primary"
+            disabled={!editable||busy||!working||working.corners.length<3||
+              (shape==="four"&&working.corners.length!==4)||
+              Boolean(inventoryRows.length&&!inventoryRows.some(row=>row.id.toLowerCase()===working.id.toLowerCase()))}
+            onClick={()=>void confirmPlotAndNext()}>
+            ✓ {busy?"Saving…":working?"Confirm Plot "+working.id+" & Next":"Confirm Plot & Next"}
+          </button>
         </div>
         <div className="geo-plot-tool-group geo-plot-tool-group--publish">
           <button type="button" className="geo-plot-publish-button"
@@ -1093,6 +1351,20 @@ export default function GeoPlotMapper(){
                  return <text key={role} className="geo-plot-map-side-label"
                    x={x} y={y-14} textAnchor="middle">{label+value}</text>;
                })}
+             {mode==="side"&&working.corners.length>=3&&working.corners.map((point,index)=>{
+                const [x1,y1]=project(point),[x2,y2]=project(working.corners[(index+1)%working.corners.length]);
+                const role=ROLES.find(item=>working.sides[item]?.edges.includes(index))||"";
+                return <g key={"side-edge-"+index} className="geo-plot-side-hit">
+                  <line x1={x1} y1={y1} x2={x2} y2={y2}
+                    stroke={role===selectedRole?"#40ffb4":"#ffdc86"} strokeWidth="5"
+                    pointerEvents="none"/>
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent"
+                    strokeWidth="22" pointerEvents="stroke"
+                    onPointerDown={e=>{e.preventDefault();e.stopPropagation();assignSideOnCanvas(index);}}
+                    onPointerUp={e=>e.stopPropagation()}
+                    aria-label={"Assign edge "+(index+1)+" to "+selectedRole}/>
+                </g>;
+              })}
              {working.corners.map((point,i)=>{const [x,y]=project(point);
               return <g key={i} className="geo-plot-precision-handle">
                 <circle className="geo-plot-handle-hit" cx={x} cy={y} r="17" fill="transparent"
@@ -1105,6 +1377,7 @@ export default function GeoPlotMapper(){
                     updatePointer(e.clientX,e.clientY,e.pointerType,i);
                   }}
                   onPointerUp={e=>{
+                    if(dragRef.current!==null)flushDrag(dragRef.current,e.clientX,e.clientY);
                     dragRef.current=null;closeCornerDrag();
                     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
                     queuePointer(e.clientX,e.clientY,e.pointerType);
@@ -1119,14 +1392,15 @@ export default function GeoPlotMapper(){
           </>}
         </svg>}
         {pointerPreview&&mode!=="pan"&&geo&&<>
-          <div className="geo-plot-precision-crosshair" data-snap-kind={pointerPreview.kind}
+          <div ref={crosshairRef} className="geo-plot-precision-crosshair" data-snap-kind={pointerPreview.kind}
             style={{left:pointerPreview.screen[0],top:pointerPreview.screen[1]}}
             aria-hidden="true"><i/><b/></div>
           {pointerPreview.kind!=="none"&&
-            <div className="geo-plot-precision-pointer-origin" aria-hidden="true"
+            <div ref={pointerOriginRef} className="geo-plot-precision-pointer-origin" aria-hidden="true"
               style={{left:pointerPreview.rawScreen[0],top:pointerPreview.rawScreen[1]}}/>}
-          <div className="geo-plot-precision-loupe" role="img"
-            aria-label="Magnified view centered on the exact mapping target">
+          <div ref={loupeRef} className="geo-plot-precision-loupe" role="img"
+            style={{transform:"translate3d("+loupePosition.left+"px,"+loupePosition.top+"px,0)"}}
+            aria-label="Magnified view follows the actual pointer and snaps inside canvas edges">
             <canvas ref={loupeCanvasRef} width={144} height={144} aria-hidden="true"/>
             <div className="geo-plot-loupe-reticle" aria-hidden="true"/>
             <strong>{pointerPreview.kind==="vertex"?"● Vertex snap":
@@ -1137,12 +1411,32 @@ export default function GeoPlotMapper(){
         {working&&<div className="geo-plot-scene-status" aria-live="polite">
            <b>Plot {working.id}</b>
            <span>{shape==="four"?working.corners.length+"/4":working.corners.length+" (irregular)"} corners</span>
-           <span>{mode==="draw"?"Mark Front edge first":mode==="edit"?"Drag numbered corner handles":"Pan / pinch to inspect"}</span>
+           <span>{mode==="draw"?"Mark Front edge first":mode==="edit"?"Drag numbered corner handles":
+             mode==="side"?"Tap highlighted boundary edges to assign "+selectedRole:"Pan / pinch to inspect"}</span>
          </div>}
          <div className="geo-plot-scene-info">{modelStatus||("Top view · model coordinates in metres · "+
            (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Click corners clockwise · wheel zoom at cursor":"Drag numbered handles · wheel zoom at cursor"))}</div>
       </div>
       <aside className="geo-plot-dock">
+        <nav className="geo-plot-dock-tabs" aria-label="Plot editor sections">
+          {(["sources","plot","quality","publish"] as const).map(tab=>
+            <button type="button" key={tab}
+              className={inspectorTab===tab?"active":""}
+              aria-pressed={inspectorTab===tab}
+              disabled={busy||(mode==="align"&&tab!=="sources")}
+              onClick={()=>setInspectorTab(tab)}>
+              {tab==="sources"?"1 · CSV / Image":tab==="plot"?"2 · Plot Details":
+                tab==="quality"?"3 · Quality":"4 · Publish"}
+            </button>)}
+        </nav>
+        {recoveredLocalDraft&&<div className="geo-plot-local-recovery" role="status">
+          <strong>Unfinished Plot {recoveredLocalDraft.plot.id} available on this browser</strong>
+          <span>Matches this project, 3D model and mapping revision. Not published.</span>
+          <div><button type="button" disabled={dirty||busy} onClick={restoreLocalPlotDraft}>
+            Restore unfinished plot</button>
+            <button type="button" onClick={clearLocalPlotDraft}>Discard local copy</button></div>
+        </div>}
+        {inspectorTab==="sources"&&<>
         <GeoPlotInventoryPanel key={slug+"-inventory-"+inventoryImportNonce}
           slug={slug} mappedIds={plots.map(p=>p.id)}
           workingId={working?.id} blocked={!editable||busy||dirty||hasUnapplied}
@@ -1153,7 +1447,8 @@ export default function GeoPlotMapper(){
               setMessage("ERROR: This plot is already mapped; use Plot Editor to change it.");
               return;
             }
-            resetWorking(fromInventory(row,groundY));setOriginalId(null);setShape("four");setMode("draw");
+            clearLocalPlotDraft();resetWorking(fromInventory(row,groundY));
+            setOriginalId(null);setShape("four");setMode("draw");setInspectorTab("plot");
             setMessage("Plot "+row.id+" loaded from CSV. Start at the road-facing Front edge, then mark corners.");
           }}/>
         {slug&&geo&&state&&<GeoPlotImageAlignmentPanel key={slug+"-alignment"}
@@ -1163,8 +1458,11 @@ export default function GeoPlotMapper(){
           onStageImageCorner={stageCornerFromVerifiedImage} editable={editable&&!busy}
           mappingStale={Boolean(state.draft.stale)}
           onRebindSource={rebindWithReviewedSource}/>}
+        </>}
+        {inspectorTab==="quality"&&<>
         <details className="geo-plot-review-dashboard" open>
-          <summary>03 · Data quality · {quality.summary.blockers} blockers / {quality.summary.reviews} reviews</summary>
+          <summary>03 · Data quality · {progress.pending} pending / {quality.summary.blockers} blockers /
+            {actionableQualityIssues.filter(issue=>issue.severity==="review").length} mapped reviews</summary>
           <p className="geo-plot-hint">Private draft diagnostics · {quality.summary.mapped} mapped /
             {quality.summary.inventory} approved inventory IDs. Source evidence and model estimates are separate;
             review findings are not a survey certificate or a publish approval.</p>
@@ -1172,19 +1470,20 @@ export default function GeoPlotMapper(){
             Download Evidence & Quality Review JSON
           </button>
           <div className="geo-plot-review-issues" aria-live="polite">
-            {quality.issues.slice(0,24).map((issue,i)=><p key={issue.plotId+issue.field+i}
+            {actionableQualityIssues.slice(0,24).map((issue,i)=><p key={issue.plotId+issue.field+i}
               className={issue.severity==="blocker"?"geo-plot-warning":"geo-plot-hint"}>
               <strong>{issue.severity==="blocker"?"Blocker":"Review"}</strong> ·
               Plot {issue.plotId} · {issue.field}: {issue.reason}
             </p>)}
-            {!quality.issues.length&&<p className="geo-plot-hint">No diagnostic issues in the current working draft.
-              Independent physical survey acceptance is still required.</p>}
-            {quality.issues.length>24&&<p className="geo-plot-hint">
-              +{quality.issues.length-24} more. Download the complete evidence report to inspect all plots.</p>}
+            {!actionableQualityIssues.length&&<p className="geo-plot-hint">No blocker/review issues in mapped plots.
+              {progress.pending>0?" "+progress.pending+" CSV plots are pending mapping.":""}
+              Source and model quality checks do not themselves certify real-world field measurements.</p>}
+            {actionableQualityIssues.length>24&&<p className="geo-plot-hint">
+              +{actionableQualityIssues.length-24} more. Download the complete evidence report to inspect all plots.</p>}
           </div>
         </details>
-        <div className="geo-plot-clone-panel">
-          <strong>Clone Previous · unverified footprint template</strong>
+        <details className="geo-plot-clone-panel">
+          <summary>Clone Previous · unverified footprint template</summary>
           <p className="geo-plot-hint">Choose a completed plot and explicit Building-local X/Z translation.
             Duplicate or overlapping footprints are blocked. All approvals reset; no source facts
             from the previous plot authorize the next plot.</p>
@@ -1204,15 +1503,38 @@ export default function GeoPlotMapper(){
             !cloneX.trim()||!cloneZ.trim()} onClick={clonePreviousDraft}>
             Clone to Unverified Draft
           </button>
-        </div>
-        {state?.activeMapping?.current&&slug&&<GeoPlotCommercialPanel
-          key={slug+"-commercial-"+state.activeMapping.id}
-          slug={slug} mappingReleaseId={state.activeMapping.id}
-          plotIds={plots.map(p=>p.id)}/>}
+        </details>
+        </>}
+        {inspectorTab==="plot"&&<>
         <div className="geo-plot-inspector-head">
            <div><small>PROJECT PLOT INVENTORY</small><h3>Plot Editor</h3></div>
            <span>{displayedPlots.length}/{plots.length}</span>
          </div>
+         {working&&!inventoryRows.some(p=>p.id.toLowerCase()===working.id.toLowerCase())&&inventoryRows.length>0&&
+          <p className="geo-plot-warning" role="alert">
+            Plot {working.id} is NOT in the approved CSV ({progress.inventory} IDs).
+            Cancel this unfinished plot and select a CSV Plot ID before Confirm.
+          </p>}
+         {working&&working.corners.length>=3&&<div className="geo-plot-visual-side-panel">
+          <strong>Assign Front / Back / Depth on the 3D boundary</strong>
+          <div className="geo-plot-side-role-buttons">
+            {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>
+              <button type="button" key={role} aria-pressed={mode==="side"&&selectedRole===role}
+                className={mode==="side"&&selectedRole===role?"active":""}
+                disabled={busy||!editable}
+                onClick={()=>{setSelectedRole(role);setMode("side");}}>
+                {role==="depthA"?"Depth A":role==="depthB"?"Depth B":role==="front"?"Front":"Back"}
+              </button>)}
+          </div>
+          {working.corners.length>4&&<label className="geo-plot-check">
+            <input type="checkbox" checked={extendSide}
+              onChange={e=>setExtendSide(e.target.checked)}/> Add connected irregular boundary segments
+          </label>}
+          <small>Select a side, then tap its actual 3D plot edge. Front must touch
+            the real road. Every change resets source/facing approvals.</small>
+          {mode==="side"&&<button type="button" onClick={()=>setMode("edit")}>
+            Done assigning sides · Edit corners</button>}
+        </div>}
          {state&&state.draft.revision>0&&state.draft.verifiedInventoryRevision!==state.inventoryRevision&&
           state.draft.verifiedRevision===state.draft.revision&&
           <p className="geo-plot-warning" role="status">Source inventory was updated after verification.
@@ -1224,7 +1546,8 @@ export default function GeoPlotMapper(){
           {inventoryIssues.slice(0,7).map((issue,i)=><p key={issue.plotId+issue.field+i}>
             Plot {issue.plotId} · {issue.field}: {issue.reason}</p>)}
           {inventoryIssues.length>7&&<small>+ {inventoryIssues.length-7} more issues. Review each mapped plot.</small>}
-          {!inventoryIssues.length&&<small>All mapped plots match the approved CSV values and source references.</small>}
+          {!inventoryIssues.length&&<small>{progress.confirmed} mapped Plot IDs match current CSV references.
+            {progress.pending>0?" "+progress.pending+" approved IDs still need mapping.":""}</small>}
         </div>}
         <label className="geo-plot-inventory-search">Find plot
            <input type="search" placeholder="Search plot number" value={inventoryQuery}
@@ -1394,6 +1717,12 @@ export default function GeoPlotMapper(){
           </div>
           </details>
         </>}
+        </>}
+        {inspectorTab==="publish"&&<>
+        {state?.activeMapping?.current&&slug&&<GeoPlotCommercialPanel
+          key={slug+"-commercial-"+state.activeMapping.id}
+          slug={slug} mappingReleaseId={state.activeMapping.id}
+          plotIds={plots.map(p=>p.id)}/>}
         <div className="geo-plot-draft-actions">
           <h3>Save, review & publish</h3>
           <button type="button" disabled={!state||busy||!slug} onClick={()=>void downloadGeoRecovery()}>
@@ -1417,6 +1746,15 @@ export default function GeoPlotMapper(){
           <p className="geo-plot-hint">Apply each plot, save the draft, reconcile the approved CSV, then verify. A new inventory revision blocks Publish until re-reviewed.</p>
         <button disabled={!editable||busy||!dirty} onClick={()=>void execute("save")}>{busy?"Saving…":"Save Mapping Draft"}</button>
         <button disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision||inventoryIssues.length>0} onClick={()=>void execute("verify")}>Verify All Plots</button>
+        <button type="button" className="geo-plot-publish-button"
+          disabled={!editable||busy||dirty||Boolean(working)||!state||
+            state.draft.verifiedRevision!==state.draft.revision||
+            state.draft.verifiedInventoryRevision!==state.inventoryRevision||
+            (state.alignmentRevision>0&&state.draft.verifiedAlignmentRevision!==state.alignmentRevision)||
+            inventoryIssues.length>0}
+          onClick={()=>void execute("publish")}>Publish Verified Mapping to Customer Site</button>
+        <small className="geo-plot-hint">Confirm Plot saves a PRIVATE draft only.
+          The public Geo site changes after separate Verify and explicit Publish.</small>
         <label className="geo-plot-import">Import Measurements CSV / Platform Plot Data CSV
           <small>Platform Plot Data is safely routed to Inventory first, even with zero mapped plots.</small>
           <input type="file" accept=".csv,text/csv" disabled={!editable||busy||dirty||hasUnapplied}
@@ -1430,6 +1768,7 @@ export default function GeoPlotMapper(){
               void execute("activate",r.id);
           }}>Activate Mapping v{r.version}</button>)}
         </div>
+        </>}
         <div className="geo-plot-shortcuts">
           <strong>Keyboard shortcuts</strong>
           <span>P Pan · D 4 corners · I Irregular · E Edit · F Fit</span>

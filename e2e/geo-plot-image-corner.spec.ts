@@ -74,6 +74,8 @@ test("independently verified image mode stages the SAME Geo Plot ID without publ
   await page.getByRole("button",{name:"Stage Image Corner to Unverified 3D Draft"}).click();
   await expect(page.getByText(/Unverified image corner correction staged/)).toBeVisible();
   await page.getByRole("button",{name:"Exit Image Plot Editor"}).click();
+  // The new focus studio keeps original image and 3D Plot Details in explicit tabs.
+  await page.getByRole("button",{name:"2 · Plot Details"}).click();
   await page.getByRole("button",{name:"Plot 1 4 corners"}).click();
   await expect(page.getByLabel("Area verified against source")).not.toBeChecked();
   await expect(page.getByLabel("Facing verified against reference")).not.toBeChecked();
