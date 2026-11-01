@@ -15,6 +15,7 @@ import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo
 import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import {cloneUnverifiedGeoPlot,geoPlotEvidenceManifest,geoPlotQualityReport} from "../../../../shared/geo-plot-stage3-review.js";
+import {geoPlotReviewQueue} from "../../../../shared/geo-plot-quality-queue.js";
 import {stageVerifiedImageCorner} from "../../../../shared/geo-plot-image-corner.js";
 import {geoPlotToolResumeAction,geoPlotPausedDrawingLabel} from "../../../../shared/geo-plot-tool-resume.js";
 import {nextCsvPlotForDrawing,assignVisiblePlotEdge,
@@ -260,6 +261,10 @@ export default function GeoPlotMapper(){
     verifiedInventoryRevision:state?.draft.verifiedInventoryRevision
   }),[plots,inventoryRows,geo?.placement.scale,state]);
   const actionableQualityIssues=useMemo(()=>quality.issues.filter(issue=>issue.field!=="unmapped"),[quality]);
+  // Group 300+ advisory findings into one actionable item per mapped Plot ID.
+  // No source approval or public release is changed by this navigation queue.
+  const reviewQueue=useMemo(()=>geoPlotReviewQueue(plots,actionableQualityIssues),
+    [plots,actionableQualityIssues]);
   const nextTemplateId=useMemo(()=>nextUnmappedInventory(inventoryRows,plots.map(p=>p.id))?.id||
     nextFreePlotId([...plots,...inventoryRows]),[plots,inventoryRows]);
   const onInventoryRowsChange=useCallback((rows:GeoInventoryRow[],revision:number)=>{
@@ -492,6 +497,14 @@ export default function GeoPlotMapper(){
     if(Number.isFinite(plot.planeY))setGroundY(plot.planeY!);
     setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");
     setMode("edit");setInspectorTab("plot");
+  };
+  const openPlotQualityReview=(id:string)=>{
+    const plot=plots.find(p=>p.id.toLowerCase()===id.toLowerCase());
+    if(!plot)return;
+    if(working?.id===plot.id&&originalId===plot.id){
+      setInspectorTab("plot");return;
+    }
+    choose(plot);
   };
   const chooseSibling=(direction:1|-1)=>{
     const neighbor=adjacentPlot(plots,working?.id||"",direction);
@@ -1444,6 +1457,40 @@ export default function GeoPlotMapper(){
           <button type="button" disabled={!state} onClick={downloadQualityEvidence}>
             Download Evidence & Quality Review JSON
           </button>
+          <div className="geo-plot-review-queue-intro">
+            <strong>{reviewQueue.affected} mapped Plot IDs need review
+              {reviewQueue.blockedPlots>0?" · "+reviewQueue.blockedPlots+" with blockers":""}</strong>
+            <p>{plots.length} mapped polygons do not mean source approvals are complete. Plot boundaries stay
+              saved while you review the actual road-facing Front, CSV dimensions,
+              model plane and source evidence. No blanket approval is applied.</p>
+            {reviewQueue.queue.length>0&&<button type="button"
+              disabled={!editable||busy}
+              onClick={()=>openPlotQualityReview(reviewQueue.queue[0].id)}>
+              Review first pending Plot {reviewQueue.queue[0].id}
+            </button>}
+          </div>
+          <div className="geo-plot-quality-queue" aria-label="Plot quality review queue">
+            {reviewQueue.queue.map(item=><article key={item.id} className="geo-plot-quality-item">
+              <div className="geo-plot-quality-item-head">
+                <strong>Plot {item.id}</strong>
+                <span>{item.blockers} blocker{item.blockers===1?"":"s"} ·
+                  {" "+item.reviews+" review"+(item.reviews===1?"":"s")}</span>
+              </div>
+              <p>{item.nextAction}</p>
+              <button type="button" disabled={!editable||busy}
+                onClick={()=>openPlotQualityReview(item.id)}>
+                Review Plot {item.id} in Editor
+              </button>
+            </article>)}
+            {reviewQueue.general.slice(0,12).map((issue,i)=><p key={issue.plotId+issue.field+i}
+              className={issue.severity==="blocker"?"geo-plot-warning":"geo-plot-hint"}>
+              <strong>{issue.severity==="blocker"?"Project blocker":"Project review"}</strong> ·
+              {issue.plotId} · {issue.field}: {issue.reason}
+            </p>)}
+          </div>
+          <details className="geo-plot-quality-raw">
+            <summary>Detailed findings · {actionableQualityIssues.length} total
+              (full JSON available above)</summary>
           <div className="geo-plot-review-issues" aria-live="polite">
             {actionableQualityIssues.slice(0,24).map((issue,i)=><p key={issue.plotId+issue.field+i}
               className={issue.severity==="blocker"?"geo-plot-warning":"geo-plot-hint"}>
@@ -1456,6 +1503,7 @@ export default function GeoPlotMapper(){
             {actionableQualityIssues.length>24&&<p className="geo-plot-hint">
               +{actionableQualityIssues.length-24} more. Download the complete evidence report to inspect all plots.</p>}
           </div>
+          </details>
         </details>
         <details className="geo-plot-clone-panel">
           <summary>Clone Previous · unverified footprint template</summary>
@@ -1546,6 +1594,14 @@ export default function GeoPlotMapper(){
              <strong>Plot {working.id}</strong>
              <small>{working.corners.length} corners · {hasUnapplied?"Not applied to draft":"Up to date"}</small>
            </div>
+          {(()=>{const saved=reviewQueue.queue.find(item=>item.id.toLowerCase()===working.id.toLowerCase());
+            return saved?<div className="geo-plot-selected-review-note" role="status">
+              <strong>Saved draft: {saved.blockers} blocker(s) · {saved.reviews} review(s)</strong>
+              <span>{saved.nextAction}</span>
+              <small>After making source-backed changes, Confirm Plot to save privately and recalculate this report.
+                A correct CSV match does not automatically approve measurements.</small>
+            </div>:null;
+          })()}
           {mode==="edit"&&working.corners.length>=3&&<div className="geo-plot-corner-nudge"
             aria-label="Precision model-local corner movement">
             <strong>Precision corner movement (metres, model X/Z)</strong>

@@ -110,6 +110,13 @@ test("legacy Geo editor reveals stale CSV evidence and offers safe road Front re
   // new canonical ID with unverified source and NO silent polygon publication.
   await expect(page.getByText("Data quality ·")).toBeVisible();
   await expect(page.getByRole("button",{name:"Download Evidence & Quality Review JSON"})).toBeVisible();
+  await expect(page.locator(".geo-plot-quality-item")).toHaveCount(1);
+  await expect(page.locator(".geo-plot-quality-item")).toContainText("Plot 1");
+  await page.getByRole("button",{name:"Review Plot 1 in Editor"}).click();
+  await expect(page.getByRole("button",{name:"2 · Plot Details"})).toHaveAttribute("aria-pressed","true");
+  await expect(page.getByLabel("Current approved CSV plot")).toHaveValue("1");
+  await expect(page.locator(".geo-plot-selected-review-note")).toBeVisible();
+  await page.getByRole("button",{name:"3 · Quality"}).click();
   await page.getByText("Clone Previous · unverified footprint template").click();
   await page.getByLabel("Previous mapped Plot ID").selectOption("1");
   await page.getByLabel("X offset (metres)").fill("10");
