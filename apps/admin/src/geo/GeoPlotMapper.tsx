@@ -38,8 +38,8 @@ type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | n
   draft: {revision:number;verifiedRevision:number|null;verifiedInventoryRevision:number|null;
     verifiedAlignmentRevision:number|null;
     stale:boolean;plots:Plot[]};
-  activeMapping:{id:string;version:number;current:boolean}|null;
-  releases:Array<{id:string;version:number;geoReleaseId:string}> };
+  activeMapping:{id:string;version:number;current:boolean;publicationMode:"verified"|"preliminary"}|null;
+  releases:Array<{id:string;version:number;geoReleaseId:string;publicationMode:"verified"|"preliminary"}> };
 type GeoPublic = { geoRelease:{id:string}; buildingRelease:{id:string};
   model:{url:string;sha256?:string;byteSize?:number}; canonicalModel?:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number;scale:number} };
 type ToolMode = "pan" | "draw" | "edit" | "align" | "side";
@@ -890,11 +890,11 @@ export default function GeoPlotMapper(){
     }catch(error){setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));}
     finally{setBusy(false);}
   };
-  const execute=async(action:"save"|"verify"|"publish"|"activate"|"rebind-reset",id?:string)=>{
+  const execute=async(action:"save"|"verify"|"publish"|"publish-preliminary"|"activate"|"rebind-reset",id?:string)=>{
     if(!state||!geo) return;setBusy(true);setMessage("");
     try{
       let approvedPreflight:NonNullable<typeof publishedPreview>|null=null;
-      if(action==="publish"){
+      if(action==="publish"||action==="publish-preliminary"){
         // Fresh server-side sealed release read: a cached diff can never approve
         // a concurrent active-version switch or an updated draft.
         approvedPreflight=await callApi<NonNullable<typeof publishedPreview>>(api+"?preview=1");
@@ -902,24 +902,33 @@ export default function GeoPlotMapper(){
           throw Error("Draft changed since the last review. Reload before publish.");
         setPublishedPreview(approvedPreflight);
         const d=approvedPreflight.diff;
-        const summary="PUBLISH CURRENT DRAFT?\n"+
+        const summary=(action==="publish-preliminary"?
+          "PUBLISH PRELIMINARY MAPPING TO LIVE CUSTOMERS?\n"+
+          "Plot boundaries and IDs will be live. Any unreviewed Area, Side, Facing or Road facts will be hidden; commercial claims will not be shown.\n"+
+          "You can edit and publish another immutable version later.\n\n":
+          "PUBLISH VERIFIED MAPPING TO LIVE CUSTOMERS?\n")+
           "Live "+d.liveCount+" → Draft "+d.draftCount+" plots.\n"+
           d.added+" ADDED, "+d.changed+" CHANGED, "+d.removed+" REMOVED.\n"+
           d.changes.slice(0,12).map(p=>p.kind.toUpperCase()+" Plot "+p.plotId+
             " ("+p.fields.join(", ")+")").join("\n")+
           (d.changes.length>12?"\n...plus "+(d.changes.length-12)+" more changes.":"")+
-          "\nPublished releases are immutable; changed facts need independent source reapproval. Continue?";
+          "\nEvery release is immutable; edit in the Mapper and publish a new version anytime. Continue?";
         if(!window.confirm(summary))return;
       }
       const body=action==="save"?{expectedRevision:state.draft.revision,geoReleaseId:state.geoReleaseId,plots}
         :{action,expectedRevision:state.draft.revision,...(id?{releaseId:id}:{}),
-          ...(action==="publish"?{expectedPreflightToken:approvedPreflight!.token,
+          ...((action==="publish"||action==="publish-preliminary")?{expectedPreflightToken:approvedPreflight!.token,
             expectedActiveReleaseId:approvedPreflight!.activeReleaseId}:{}),
           ...(action==="rebind-reset"?{confirmation:"RESET MAPPING "+slug}:{})};
       const result=await callApi<MappingState>(api,{method:action==="save"?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       if(activeProjectRef.current!==slug)return; // Never display another project’s save response.
       setState(result);setPlots(result.draft.plots);setDirty(false);setWorking(null);setPublishedPreview(null);
-      setMessage(action==="save"?"Mapping draft saved and server read-back confirmed.":action==="verify"?"All plot sources and geometry verified.":action==="publish"?"Immutable plot mapping published for this Geo release.":action==="rebind-reset"?"New empty draft created for active Geo. Historical published mapping releases remain preserved.":"Published mapping version activated.");
+      setMessage(action==="save"?"Mapping draft saved and server read-back confirmed.":
+        action==="verify"?"All plot sources and geometry verified.":
+        action==="publish"?"Verified Geo Plot Mapping published to customer site.":
+        action==="publish-preliminary"?"Preliminary Geo Plot Mapping is LIVE. Unreviewed measurements are hidden. You may edit and republish anytime.":
+        action==="rebind-reset"?"New empty draft created for active Geo. Historical published mapping releases remain preserved.":
+        "Published mapping version activated.");
     }catch(e){setMessage("ERROR: "+(e instanceof Error?e.message:"Mapping operation failed."));}
     finally{setBusy(false);}
   };
@@ -1177,7 +1186,9 @@ export default function GeoPlotMapper(){
           state.draft.verifiedInventoryRevision===state.inventoryRevision&&
           (state.alignmentRevision===0||state.draft.verifiedAlignmentRevision===state.alignmentRevision)
             ?"Yes":"Needs review"}</b></span>
-      <span>Live mapping <b>{state?.activeMapping?.current?"v"+state.activeMapping.version:"None / stale"}</b></span>
+      <span>Live mapping <b>{state?.activeMapping?.current?
+        "v"+state.activeMapping.version+(state.activeMapping.publicationMode==="preliminary"?" · Preliminary":" · Verified"):
+        "None / stale"}</b></span>
     </section>
     {state?.draft.stale&&<div className="geo-plot-warning">
       <p>Geo source has changed. Old polygon coordinates are locked to avoid wrong placement.
@@ -1296,6 +1307,10 @@ export default function GeoPlotMapper(){
           </button>
         </div>
         <div className="geo-plot-tool-group geo-plot-tool-group--publish">
+          <button type="button" className="geo-plot-preliminary-button"
+            disabled={!editable||busy||dirty||Boolean(working)||!state||plots.length===0}
+            title="Publish saved plot boundaries now; source approvals can be completed and republished later"
+            onClick={()=>void execute("publish-preliminary")}>Publish Live · Preliminary</button>
           <button type="button" className="geo-plot-publish-button"
             disabled={!editable||busy||dirty||Boolean(working)||!state||
               state.draft.verifiedRevision!==state.draft.revision||
@@ -1774,8 +1789,14 @@ export default function GeoPlotMapper(){
               +{publishedPreview.diff.changes.length-12} additional differences.
               Download private evidence/quality review before publishing.</p>}
           </div>}
-          <p className="geo-plot-hint">Apply each plot, save the draft, reconcile the approved CSV, then verify. A new inventory revision blocks Publish until re-reviewed.</p>
+          <p className="geo-plot-hint">Once the mapped boundaries are server-saved, Publish Preliminary can go live without waiting for Road, Area, Facing, Side or alignment reviews. Unapproved facts remain hidden on the customer site. Edit any Plot, save, and republish a new version whenever needed. Verified Publish still requires full source review.</p>
         <button disabled={!editable||busy||!dirty} onClick={()=>void execute("save")}>{busy?"Saving…":"Save Mapping Draft"}</button>
+        <button type="button" className="geo-plot-preliminary-button"
+          disabled={!editable||busy||dirty||Boolean(working)||!state||plots.length===0}
+          onClick={()=>void execute("publish-preliminary")}>
+          Publish Preliminary Mapping · Editable Later
+        </button>
+        <small className="geo-plot-hint">Publishes saved Plot IDs and polygon boundaries immediately with an explicit preliminary label. Unverified measurements, directions, road facts and commercial information are not claimed publicly. Corrections can be edited and republished as a new version.</small>
         <button disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision||inventoryIssues.length>0} onClick={()=>void execute("verify")}>Verify All Plots</button>
         <button type="button" className="geo-plot-publish-button"
           disabled={!editable||busy||dirty||Boolean(working)||!state||
@@ -1797,7 +1818,7 @@ export default function GeoPlotMapper(){
           onClick={()=>{
             if(window.confirm("Activate historic Mapping v"+r.version+"? This restores its sealed plot data, which may predate the current approved CSV inventory. Current draft and immutable history remain intact."))
               void execute("activate",r.id);
-          }}>Activate Mapping v{r.version}</button>)}
+          }}>Activate Mapping v{r.version}{r.publicationMode==="preliminary"?" · Preliminary":" · Verified"}</button>)}
         </div>
         </>}
         <div className="geo-plot-shortcuts">
