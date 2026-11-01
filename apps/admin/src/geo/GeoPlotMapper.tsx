@@ -8,6 +8,7 @@ import {adjacentPlot,boundedZoom,hasPendingPlotEdits,isTextEditingTarget,
   nextFreePlotId,sideLabelAnchor} from "../../../../shared/geo-plot-editor.js";
 import GeoPlotInventoryPanel from "./GeoPlotInventoryPanel";
 import GeoPlotImageAlignmentPanel from "./GeoPlotImageAlignmentPanel";
+import GeoPlotCommercialPanel from "./GeoPlotCommercialPanel";
 import {nextUnmappedInventory,type GeoInventoryRow} from "../../../../shared/geo-plot-inventory.js";
 import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
 import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
@@ -1148,6 +1149,10 @@ export default function GeoPlotMapper(){
             Clone to Unverified Draft
           </button>
         </div>
+        {state?.activeMapping?.current&&slug&&<GeoPlotCommercialPanel
+          key={slug+"-commercial-"+state.activeMapping.id}
+          slug={slug} mappingReleaseId={state.activeMapping.id}
+          plotIds={plots.map(p=>p.id)}/>}
         <div className="geo-plot-inspector-head">
            <div><small>PROJECT PLOT INVENTORY</small><h3>Plot Editor</h3></div>
            <span>{displayedPlots.length}/{plots.length}</span>
