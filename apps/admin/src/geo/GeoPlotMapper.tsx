@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -12,6 +12,9 @@ import {nextUnmappedInventory,type GeoInventoryRow} from "../../../../shared/geo
 import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
 import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
+import {newPlotEditHistory,replacePlotEditHistory,updatePlotEditHistory,
+  closeGroupedPlotEdit,undoPlotEdit,redoPlotEdit,geometryWithRevokedApprovals,nudgePlotCorner
+} from "../../../../shared/geo-plot-precision-history.js";
 import "./geo-plot-mapper.css";
 
 type Point = [number, number]; // Immutable Building-local X/Z metres.
@@ -148,7 +151,29 @@ export default function GeoPlotMapper(){
   const [geo,setGeo]=useState<GeoPublic|null>(null);
   const [plots,setPlots]=useState<Plot[]>([]);
   const [inventoryRows,setInventoryRows]=useState<GeoInventoryRow[]>([]);
-  const [working,setWorking]=useState<Plot|null>(null);
+  // Each draft plot has its own bounded, reversible local edit history.
+  // Switching plots or projects clears that history; no release is modified.
+  const dragStartRef=useRef<Plot|null>(null);
+  const [workingHistory,setWorkingHistory]=useState(()=>newPlotEditHistory<Plot>());
+  const working=workingHistory.present;
+  const [selectedCorner,setSelectedCorner]=useState<number|null>(null);
+  const [nudgeStep,setNudgeStep]=useState(0.01);
+  const setWorking=useCallback((update:SetStateAction<Plot|null>)=>{
+    setWorkingHistory(history=>{
+      const next=typeof update==="function"?update(history.present):update;
+      return updatePlotEditHistory(history,next,{grouped:dragStartRef.current!==null});
+    });
+  },[]);
+  const resetWorking=useCallback((plot:Plot|null)=>{
+    dragStartRef.current=null;setSelectedCorner(null);
+    setWorkingHistory(history=>replacePlotEditHistory(history,plot));
+  },[]);
+  const closeCornerDrag=()=>{
+    const started=dragStartRef.current;dragStartRef.current=null;
+    if(started)setWorkingHistory(history=>closeGroupedPlotEdit(history,started));
+  };
+  const undoWorkingEdit=()=>{if(dragStartRef.current)return;setWorkingHistory(undoPlotEdit);};
+  const redoWorkingEdit=()=>{if(dragStartRef.current)return;setWorkingHistory(redoPlotEdit);};
   const [originalId,setOriginalId]=useState<string|null>(null);
   const [dirty,setDirty]=useState(false);
   const [message,setMessage]=useState("");
@@ -357,7 +382,7 @@ export default function GeoPlotMapper(){
   const choose=(plot:Plot)=>{
     if(working?.id===plot.id&&originalId===plot.id)return;
     if(!confirmUnapplied())return;
-    setWorking(structuredClone(plot));
+    resetWorking(structuredClone(plot));
     if(Number.isFinite(plot.planeY))setGroundY(plot.planeY!);
     setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");setMode("edit");
   };
@@ -446,8 +471,8 @@ export default function GeoPlotMapper(){
     const target=precisionPointer(clientX,clientY,index);if(!target)return;
     setWorking(prev=>{if(!prev)return prev;
       const corners=prev.corners.map((point,i)=>i===index?target.point:point);
-      return {...prev,corners,area:{...prev.area,verified:false},facingVerified:false,
-        sides:Object.fromEntries(Object.entries(prev.sides).map(([k,v])=>[k,{...v,verified:false}]))};
+      if(corners.every((point,i)=>point[0]===prev.corners[i][0]&&point[1]===prev.corners[i][1]))return prev;
+      return geometryWithRevokedApprovals(prev,corners);
     });
   };
   const onOverlayPointerDown=(e:React.PointerEvent<SVGSVGElement>)=>{
@@ -476,12 +501,12 @@ export default function GeoPlotMapper(){
     }
     if(start?.id===e.pointerId)pointerStartRef.current=null;
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
-    dragRef.current=null;
+    dragRef.current=null;closeCornerDrag();
     queuePointer(e.clientX,e.clientY,e.pointerType);
   };
   const onOverlayPointerCancel=(e:React.PointerEvent<SVGSVGElement>)=>{
     if(pointerStartRef.current?.id===e.pointerId)pointerStartRef.current=null;
-    dragRef.current=null;clearPointer();
+    dragRef.current=null;closeCornerDrag();clearPointer();
   };
   const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>{
     if(!p)return p;
@@ -511,7 +536,7 @@ export default function GeoPlotMapper(){
     setPlots(updated);setDirty(true);
     if(openNext){
       const next=nextUnmappedInventory(inventoryRows,updated.map(p=>p.id),id);
-      setWorking(next?fromInventory(next,groundY):
+      resetWorking(next?fromInventory(next,groundY):
         {...blank(nextFreePlotId([...updated,...inventoryRows])),planeY:groundY,planeSource:"",planeVerified:false});
       setOriginalId(null);setMode("draw");
       setMessage("Plot "+id+" staged. "+(next?"Next unmapped inventory plot "+next.id+" is ready.":"No pending inventory plots.")+" Save Mapping Draft before verification.");
@@ -610,7 +635,7 @@ export default function GeoPlotMapper(){
       inventoryRows.some(p=>p.id.toLowerCase()===working.id.toLowerCase());
     if(!selected&&!confirmUnapplied())return;
     setShape(kind);setMode("draw");setOriginalId(null);
-    if(!selected)setWorking({...blank(nextFreePlotId([...plots,...inventoryRows])),planeY:groundY,planeSource:"",planeVerified:false});
+    if(!selected)resetWorking({...blank(nextFreePlotId([...plots,...inventoryRows])),planeY:groundY,planeSource:"",planeVerified:false});
     setMessage("Start at the road-facing Front edge, then tap corners clockwise. Complete the boundary before entering surveyed sizes.");
   };
   const undoCorner=()=>{
@@ -621,6 +646,19 @@ export default function GeoPlotMapper(){
         area:{...p.area,verified:false},facingVerified:false};
     });setMode("draw");
   };
+  const nudgeSelectedCorner=(dx:number,dz:number)=>{
+    if(!working||selectedCorner===null||busy||mode!=="edit"||!editable)return;
+    const result=nudgePlotCorner(working,selectedCorner,dx,dz);
+    if(result.issue){setMessage("ERROR: "+result.issue);return;}
+    if(result.plot!==working){
+      setWorking(result.plot);
+      setMessage("Moved corner "+(selectedCorner+1)+" in model-local X/Z. Area, side, road, facing and plane approvals reset. Recheck source before Publish.");
+    }
+  };
+  useEffect(()=>{
+    if(selectedCorner!==null&&(!working||selectedCorner>=working.corners.length))
+      setSelectedCorner(null);
+  },[selectedCorner,working?.corners.length]);
   const cancelWorking=()=>{
     if(!confirmUnapplied())return;
     setWorking(null);setOriginalId(null);setMode("pan");setMessage("Unapplied plot selection cleared; saved draft unchanged.");
@@ -634,15 +672,34 @@ export default function GeoPlotMapper(){
   };
   useEffect(()=>{
     const handleKey=(event:KeyboardEvent)=>{
-      if(isTextEditingTarget(event.target)||event.altKey||event.metaKey||busy)return;
-      if(event.ctrlKey&&event.key.toLowerCase()==="s"){
-        event.preventDefault();
-        if(working&&hasUnapplied)setMessage("Apply Plot to Draft before saving the mapping.");
-        else if(dirty)void execute("save");
+      if(isTextEditingTarget(event.target)||event.altKey||busy)return;
+      const k=event.key.toLowerCase();
+      if(event.ctrlKey||event.metaKey){
+        if(k==="z"||k==="y"){
+          const redo=k==="y"||(k==="z"&&event.shiftKey);
+          if(working&&!dragStartRef.current&&
+             (redo?workingHistory.future.length>0:workingHistory.past.length>0)){
+            event.preventDefault();
+            if(redo)redoWorkingEdit();else undoWorkingEdit();
+          }
+          return;
+        }
+        if(k==="s"){
+          event.preventDefault();
+          if(working&&hasUnapplied)setMessage("Apply Plot to Draft before saving the mapping.");
+          else if(dirty)void execute("save");
+        }
         return;
       }
-      if(event.ctrlKey)return;
-      const k=event.key.toLowerCase();
+      if(working&&mode==="edit"&&selectedCorner!==null&&editable&&
+         editorRef.current?.contains(document.activeElement)&&
+         ["arrowup","arrowdown","arrowleft","arrowright"].includes(k)){
+        event.preventDefault();
+        const step=nudgeStep*(event.shiftKey?10:1);
+        nudgeSelectedCorner(k==="arrowleft"?-step:k==="arrowright"?step:0,
+          k==="arrowup"?-step:k==="arrowdown"?step:0);
+        return;
+      }
       if((k==="p"||k==="d"||k==="i"||k==="e"||k==="f")&&!editable)return;
       if(k==="p"){setMode("pan");return;}
       if(k==="d"){begin("four");return;}
@@ -722,8 +779,12 @@ export default function GeoPlotMapper(){
             onClick={finishBoundary}>✓ Boundary complete</button>
         </div>
         <div className="geo-plot-tool-group geo-plot-tool-group--secondary">
+          <button type="button" disabled={busy||!workingHistory.past.length} aria-label="Undo working plot edit"
+            title="Undo draft plot field or corner edit (Ctrl/⌘+Z)" onClick={undoWorkingEdit}>↶ Undo edit</button>
+          <button type="button" disabled={busy||!workingHistory.future.length} aria-label="Redo working plot edit"
+            title="Redo draft plot field or corner edit (Ctrl/⌘+Shift+Z)" onClick={redoWorkingEdit}>↷ Redo edit</button>
           <button type="button" disabled={!working?.corners.length||busy||Boolean(originalId)}
-            title="Undo last plotted corner (Backspace)" onClick={undoCorner}>↶ Undo</button>
+            title="Remove last new-plot corner (Backspace)" onClick={undoCorner}>Remove point</button>
           <button type="button" disabled={!working||busy} onClick={cancelWorking}>Cancel</button>
           <label className="geo-plot-toggle"><input type="checkbox" checked={snap}
             onChange={e=>setSnap(e.target.checked)}/> Snap {snap?"ON":"OFF"}</label>
@@ -805,16 +866,17 @@ export default function GeoPlotMapper(){
                   onPointerDown={e=>{
                     if(mode!=="edit")return;
                     e.stopPropagation();
-                    dragRef.current=i;pointerStartRef.current=null;
+                    dragRef.current=i;dragStartRef.current=workingRef.current?structuredClone(workingRef.current):null;
+                    setSelectedCorner(i);pointerStartRef.current=null;
                     e.currentTarget.setPointerCapture(e.pointerId);
                     updatePointer(e.clientX,e.clientY,e.pointerType,i);
                   }}
                   onPointerUp={e=>{
-                    dragRef.current=null;
+                    dragRef.current=null;closeCornerDrag();
                     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
                     queuePointer(e.clientX,e.clientY,e.pointerType);
                   }}
-                  onPointerCancel={()=>{dragRef.current=null;clearPointer();}}/>
+                  onPointerCancel={()=>{dragRef.current=null;closeCornerDrag();clearPointer();}}/>
                 <circle className="geo-plot-handle-visible" cx={x} cy={y}
                   r={Math.max(4.5,10-Math.min((zoomPercent-100)/4900,1)*4)}
                   fill="#ffe49d" stroke="#182a3e" strokeWidth="2.5" pointerEvents="none"/>
@@ -857,7 +919,7 @@ export default function GeoPlotMapper(){
               setMessage("ERROR: This plot is already mapped; use Plot Editor to change it.");
               return;
             }
-            setWorking(fromInventory(row,groundY));setOriginalId(null);setShape("four");setMode("draw");
+            resetWorking(fromInventory(row,groundY));setOriginalId(null);setShape("four");setMode("draw");
             setMessage("Plot "+row.id+" loaded from CSV. Start at the road-facing Front edge, then mark corners.");
           }}/>
         {slug&&geo&&state&&<GeoPlotImageAlignmentPanel key={slug+"-alignment"}
@@ -903,6 +965,42 @@ export default function GeoPlotMapper(){
              <strong>Plot {working.id}</strong>
              <small>{working.corners.length} corners · {hasUnapplied?"Not applied to draft":"Up to date"}</small>
            </div>
+          {mode==="edit"&&working.corners.length>=3&&<div className="geo-plot-corner-nudge"
+            aria-label="Precision model-local corner movement">
+            <strong>Precision corner movement (metres, model X/Z)</strong>
+            <div className="geo-plot-nudge-settings">
+              <label>Corner
+                <select aria-label="Selected corner" value={selectedCorner??""}
+                  onChange={e=>setSelectedCorner(e.target.value===""?null:Number(e.target.value))}>
+                  <option value="">Choose corner</option>
+                  {working.corners.map((_,i)=><option key={i} value={i}>
+                    Corner {i+1} · X {working.corners[i][0].toFixed(3)}, Z {working.corners[i][1].toFixed(3)}</option>)}
+                </select>
+              </label>
+              <label>Step (metres)
+                <select aria-label="Corner movement step" value={nudgeStep}
+                  onChange={e=>setNudgeStep(Number(e.target.value))}>
+                  <option value={0.01}>0.01 m</option><option value={0.1}>0.1 m</option>
+                  <option value={0.5}>0.5 m</option>
+                </select>
+              </label>
+            </div>
+            <div className="geo-plot-nudge-buttons">
+              <button type="button" aria-label="Nudge corner model negative X"
+                disabled={!editable||busy||selectedCorner===null}
+                onClick={()=>nudgeSelectedCorner(-nudgeStep,0)}>−X</button>
+              <button type="button" aria-label="Nudge corner model negative Z"
+                disabled={!editable||busy||selectedCorner===null}
+                onClick={()=>nudgeSelectedCorner(0,-nudgeStep)}>−Z</button>
+              <button type="button" aria-label="Nudge corner model positive Z"
+                disabled={!editable||busy||selectedCorner===null}
+                onClick={()=>nudgeSelectedCorner(0,nudgeStep)}>+Z</button>
+              <button type="button" aria-label="Nudge corner model positive X"
+                disabled={!editable||busy||selectedCorner===null}
+                onClick={()=>nudgeSelectedCorner(nudgeStep,0)}>+X</button>
+            </div>
+            <small>Choose a corner above or click its handle. Arrow keys move the selected corner when editor controls are focused; Shift = 10×. Moving geometry revokes source and road-side approvals.</small>
+          </div>}
           <label>Plot Number<input readOnly={Boolean(originalId)} value={working.id} onChange={e=>setWorking({...working,id:e.target.value})}/></label>
           {selectedInventory&&<div className="geo-plot-source-review">
             <strong>Approved CSV · Plot {selectedInventory.id}</strong>
@@ -1019,7 +1117,8 @@ export default function GeoPlotMapper(){
         <div className="geo-plot-shortcuts">
           <strong>Keyboard shortcuts</strong>
           <span>P Pan · D 4 corners · I Irregular · E Edit · F Fit</span>
-          <span>+ / − Zoom · Backspace Undo (new plot) · Ctrl+S Save draft</span>
+          <span>Ctrl/⌘+Z Undo · Ctrl/⌘+Shift+Z Redo · Corner + arrow keys (Shift = 10×)</span>
+          <span>+ / − Zoom · Backspace Remove last new corner · Ctrl/⌘+S Save draft</span>
         </div>
       </aside>
       </div>
