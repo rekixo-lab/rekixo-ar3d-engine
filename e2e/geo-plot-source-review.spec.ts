@@ -68,6 +68,23 @@ test("legacy Geo editor reveals stale CSV evidence and offers safe road Front re
   await expect(front.getByLabel("Road side")).toBeChecked();
   await expect(front.getByLabel("Source verified")).not.toBeChecked();
 
+  // One-centimetre/millimetre-level editing is explicit and never retains
+  // a road-side approval after moving an approved ground footprint.
+  await page.getByLabel("Selected corner").selectOption("0");
+  await page.getByLabel("Corner movement step").selectOption("0.1");
+  await page.getByRole("button",{name:"Nudge corner model positive X"}).click();
+  await expect(page.locator(".geo-plot-nudge-settings option[value='0']"))
+    .toContainText("X 0.100");
+  await expect(front.getByLabel("Road side")).not.toBeChecked();
+  await expect(page.getByLabel("Verified model-local plot mapping plane")).not.toBeChecked();
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".geo-plot-nudge-settings option[value='0']"))
+    .toContainText("X 0.000");
+  await expect(front.getByLabel("Road side")).toBeChecked();
+  await page.keyboard.press("Control+Shift+z");
+  await expect(page.locator(".geo-plot-nudge-settings option[value='0']"))
+    .toContainText("X 0.100");
+
   await page.getByRole("button",{name:/Full screen/}).last().click();
   await expect(page.locator(".geo-plot-editor-shell")).toHaveAttribute("data-fullscreen","true");
   await page.getByRole("button",{name:/Exit full screen/}).last().click();
