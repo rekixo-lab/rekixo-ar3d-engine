@@ -14,7 +14,8 @@ test("direct Engine API routes obey independent project-type boundaries",()=>{
     assert.equal(projectKindAllowsCloudRoute("building",route),false,"building "+route);
   assert.equal(projectKindAllowsCloudRoute("building","releases"),true);
   assert.equal(projectKindAllowsCloudRoute("building_geo","geo-placement"),true);
-  assert.equal(projectKindAllowsCloudRoute("building_geo","geo-plots"),false);
+  assert.equal(projectKindAllowsCloudRoute("building_geo","geo-plots"),true,
+    "Building-backed Geo masterplan must be able to map verified 3D plots.");
   for(const kind of ["legacy","building","building_geo","masterplan_geo"])
     for(const route of ["assets","manage"])
       assert.equal(projectKindAllowsCloudRoute(kind,route),true,kind+" "+route);
