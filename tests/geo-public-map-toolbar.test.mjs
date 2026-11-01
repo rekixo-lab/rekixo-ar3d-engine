@@ -19,7 +19,7 @@ test("Geo customer header keeps only the project logo, name, and subtitle", () =
   assert.doesNotMatch(geoApp, /const mapsUrl\s*=/);
 });
 
-test("Geo map toolbar orders all camera views before the Building website link", () => {
+test("Geo map toolbar keeps only five views and omits the Building link", () => {
   const toolbarStart = geoApp.indexOf('<nav className="geo-camera-toolbar geo-camera-toolbar--normal-row"');
   const toolbarEnd = geoApp.indexOf("</nav>", toolbarStart);
   assert.ok(toolbarStart >= 0 && toolbarEnd > toolbarStart, "Geo map toolbar must exist");
@@ -33,13 +33,9 @@ test("Geo map toolbar orders all camera views before the Building website link",
     previous = position;
   }
 
-  assert.ok(toolbar.indexOf("{GEO_CAMERA_VIEWS.map") < toolbar.indexOf('className="geo-building-link"'));
-  assert.match(toolbar, /Building <span aria-hidden="true">↗<\/span>/);
+  assert.match(toolbar, /\{GEO_CAMERA_VIEWS\.map/);
+  assert.doesNotMatch(toolbar, /geo-building-link|Building <span|building website|<a[\s>]/);
   assert.doesNotMatch(geoApp.slice(geoApp.indexOf('{toolbarContainer ? createPortal(<nav className="geo-camera-toolbar') - 35, geoApp.indexOf('{toolbarContainer ? createPortal(<nav className="geo-camera-toolbar')), /!failure/);
-  assert.ok(toolbar.includes('href={`/3Dprojects/${encodeURIComponent(data.project.slug)}`}'));
-  assert.match(toolbar, /target="_blank"/);
-  assert.match(toolbar, /rel="noopener noreferrer"/);
-  assert.ok(toolbar.includes('aria-label={`Open ${data.project.name} building website in a new tab`}'));
   assert.doesNotMatch(toolbar, /Open location|Google Maps/);
 });
 
@@ -51,12 +47,12 @@ test("Geo camera controls are fixed to the viewport bottom with mobile safe-area
   assert.ok(dock.includes("safe-area-inset-bottom"));
   assert.ok(dock.includes("touch-action: none;"));
   assert.ok(dock.includes(".geo-map-quick-actions"));
-  assert.ok(geoStyles.includes("grid-template-columns: repeat(6, minmax(0, 1fr))"));
+  assert.ok(geoStyles.includes("grid-template-columns: repeat(5, minmax(0, 1fr))"));
 });
 
 test("normal camera row spans available width without a panel or button pills", () => {
   const transparentRow = geoStyles.slice(geoStyles.indexOf("/* Transparent, full-width camera controls:"));
-  assert.match(transparentRow, /grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\)/);
+  assert.match(transparentRow, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
   assert.match(transparentRow, /width:\s*100% !important/);
   assert.match(transparentRow, /border:\s*0 !important/);
   assert.match(transparentRow, /border-radius:\s*0 !important/);

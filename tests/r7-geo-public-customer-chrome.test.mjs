@@ -9,8 +9,8 @@ test("public Geo customer chrome hides authoring metadata and keeps map actions"
   assert.match(publicGeoCss, /\.jio-public-meta,\s*\.geo-runtime-note\s*\{\s*display:\s*none\s*!important;/s);
   assert.doesNotMatch(publicGeoSource, /INTEGRATED 3D GEO EXPERIENCE|Enter building|Open location/);
   assert.match(publicGeoSource, /geo-camera-toolbar--normal-row/);
-  assert.match(publicGeoSource, /className="geo-building-link"/);
-  assert.match(publicGeoSource, /Building <span aria-hidden="true">↗<\/span>/);
+  assert.doesNotMatch(publicGeoSource, /className="geo-building-link"/);
+  assert.doesNotMatch(publicGeoSource, /Building <span aria-hidden="true">↗<\/span>/);
 });
 
 test("Geo project header stays compact and borderless", () => {

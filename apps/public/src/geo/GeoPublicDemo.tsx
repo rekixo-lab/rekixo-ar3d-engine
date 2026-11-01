@@ -790,16 +790,6 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
               {view.label}
             </button>
           ))}
-          <a
-            className="geo-building-link"
-            href={`/3Dprojects/${encodeURIComponent(data.project.slug)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`Open ${data.project.name} building website in a new tab`}
-            title={`Open ${data.project.name} building website`}
-          >
-            Building <span aria-hidden="true">↗</span>
-          </a>
       </nav>, toolbarContainer) : null}
       {failure && (
         <div className="geo-integrated-fallback">

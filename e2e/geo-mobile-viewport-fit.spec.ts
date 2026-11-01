@@ -22,7 +22,6 @@ test("mobile Geo map reaches camera dock on short and tall phones",async({page})
         <div class="geo-public-toolbar-slot"><nav class="geo-camera-toolbar geo-camera-toolbar--normal-row">
           <button>Overview</button><button>Front</button><button>Corner</button>
           <button>Entry view</button><button>Aerial</button>
-          <a class="geo-building-link" href="#">Building ↗</a>
         </nav></div>
       </div></main></body></html>`);
     await page.addStyleTag({content:rootStyles});
