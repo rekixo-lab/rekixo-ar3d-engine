@@ -16,7 +16,7 @@ import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-revie
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import {cloneUnverifiedGeoPlot,geoPlotEvidenceManifest,geoPlotQualityReport} from "../../../../shared/geo-plot-stage3-review.js";
 import {stageVerifiedImageCorner} from "../../../../shared/geo-plot-image-corner.js";
-import {nextCsvPlotForDrawing,positionCursorLoupe,assignVisiblePlotEdge,
+import {nextCsvPlotForDrawing,assignVisiblePlotEdge,
   draftStorageKey,packLocalPlotDraft,unpackLocalPlotDraft,visibleMappingProgress
 } from "../../../../shared/geo-plot-mapper-ux.js";
 import type {SimilarityTransform} from "../../../../shared/geo-plot-image-alignment.js";
@@ -239,13 +239,7 @@ export default function GeoPlotMapper(){
   const dragFrameRef=useRef(0);
   const pendingDragRef=useRef<{index:number;x:number;y:number}|null>(null);
   const pointerStatePaintRef=useRef(0);
-  const loupeLastSampleRef=useRef("");
-  const loupeRef=useRef<HTMLDivElement>(null);
-  const crosshairRef=useRef<HTMLDivElement>(null);
-  const pointerOriginRef=useRef<HTMLDivElement>(null);
   const overlayRef=useRef<SVGSVGElement>(null);
-  const loupeCanvasRef=useRef<HTMLCanvasElement>(null);
-  const renderFramesRef=useRef(0);
   const workingRef=useRef(working);
   workingRef.current=working;
   const displayedPlots=useMemo(()=>plots.filter(p=>p.id.toLowerCase().includes(inventoryQuery.trim().toLowerCase())),
@@ -387,32 +381,7 @@ export default function GeoPlotMapper(){
     const render=()=>{
       frame=requestAnimationFrame(render);
       controls.update();renderer.render(scene,camera);
-      // The loupe samples this exact frame of the canonical model, not a guessed image.
-      // WebGL capture must happen immediately after render (drawing buffer may be transient).
-      const pointer=pointerPreviewRef.current,loupe=loupeCanvasRef.current;
-      if(pointer&&loupe&&++renderFramesRef.current%4===0){
-        const sampleKey=pointer.screen[0].toFixed(1)+":"+pointer.screen[1].toFixed(1)+":"+
-          camera.zoom.toFixed(3)+":"+camera.position.x.toFixed(3)+":"+camera.position.z.toFixed(3);
-        if(loupeLastSampleRef.current===sampleKey)return;
-        loupeLastSampleRef.current=sampleKey;
-        const source=renderer.domElement,ctx=loupe.getContext("2d");
-        if(ctx&&host.clientWidth&&host.clientHeight){
-          const scaleX=source.width/host.clientWidth,scaleY=source.height/host.clientHeight;
-          const sourceW=Math.min(42*scaleX,source.width),sourceH=Math.min(42*scaleY,source.height);
-          const targetX=pointer.screen[0]*scaleX,targetY=pointer.screen[1]*scaleY;
-          const sx=Math.max(0,targetX-sourceW/2),sy=Math.max(0,targetY-sourceH/2);
-          const ex=Math.min(source.width,targetX+sourceW/2),ey=Math.min(source.height,targetY+sourceH/2);
-          const dstX=(sx-targetX+sourceW/2)/sourceW*loupe.width;
-          const dstY=(sy-targetY+sourceH/2)/sourceH*loupe.height;
-          const dstW=(ex-sx)/sourceW*loupe.width,dstH=(ey-sy)/sourceH*loupe.height;
-          ctx.clearRect(0,0,loupe.width,loupe.height);
-          if(ex>sx&&ey>sy){
-            try{ctx.imageSmoothingEnabled=false;
-              ctx.drawImage(source,sx,sy,ex-sx,ey-sy,dstX,dstY,dstW,dstH);}
-            catch{/* A temporarily unavailable WebGL capture never changes mapping coordinates. */}
-          }
-        }
-      }
+
     };
     const resize=()=>{const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;
       renderer.setSize(w,h,false);setViewport({w,h});
@@ -478,7 +447,7 @@ export default function GeoPlotMapper(){
   };
   const clearPointer=()=>{
     pointerPendingRef.current=null;pointerPreviewRef.current=null;
-    loupeLastSampleRef.current="";setPointerPreview(null);
+    setPointerPreview(null);
   };
   const captureImageAlignmentPoint=(done:(point:Point)=>void)=>{
     if(!geo||!state||state.draft.stale)return;
@@ -494,22 +463,11 @@ export default function GeoPlotMapper(){
     if(!location)return;
     const next:PointerPreview={clientX,clientY,pointerType,...location};
     pointerPreviewRef.current=next;
-    const loupe=positionCursorLoupe(next.screen,[host.clientWidth,host.clientHeight]);
-    if(loupeRef.current){
-      loupeRef.current.style.transform="translate3d("+loupe.left+"px,"+loupe.top+"px,0)";
-    }
-    if(crosshairRef.current){
-      crosshairRef.current.style.left=next.screen[0]+"px";
-      crosshairRef.current.style.top=next.screen[1]+"px";
-      crosshairRef.current.dataset.snapKind=next.kind;
-    }
-    if(pointerOriginRef.current){
-      pointerOriginRef.current.style.left=next.rawScreen[0]+"px";
-      pointerOriginRef.current.style.top=next.rawScreen[1]+"px";
-      pointerOriginRef.current.style.display=next.kind==="none"?"none":"";
-    }
+    // The browser's native crosshair draws at the real cursor position.
+    // State is only for the draft rubberband; precision taps still compute
+    // exact model coordinates from each pointer event without throttling.
     const now=performance.now();
-    if(now-pointerStatePaintRef.current>=33||!loupeRef.current){
+    if(now-pointerStatePaintRef.current>=33||!pointerPreview){
       pointerStatePaintRef.current=now;
       setPointerPreview(next);
     }
@@ -1167,8 +1125,6 @@ export default function GeoPlotMapper(){
   });
   const editable=Boolean(state&&!state.draft.stale&&geo);
   const path=(points:Point[])=>points.map(p=>project(p).join(",")).join(" ");
-  const loupePosition=pointerPreview?positionCursorLoupe(
-    pointerPreview.screen,[viewport.w,viewport.h]):{left:12,top:12};
   return <main className="geo-plot-page">
     <header className="geo-plot-top"><div><p className="eyebrow">REKIXO ENGINE · INDEPENDENT GEO MAPPING</p><h1>3D Geo Plot Mapper</h1>
       <p>Draw plot boundaries on a checksum-verified Building-local master plan. AR3D Platform remains untouched.</p></div>
@@ -1391,23 +1347,6 @@ export default function GeoPlotMapper(){
             })}
           </>}
         </svg>}
-        {pointerPreview&&mode!=="pan"&&geo&&<>
-          <div ref={crosshairRef} className="geo-plot-precision-crosshair" data-snap-kind={pointerPreview.kind}
-            style={{left:pointerPreview.screen[0],top:pointerPreview.screen[1]}}
-            aria-hidden="true"><i/><b/></div>
-          {pointerPreview.kind!=="none"&&
-            <div ref={pointerOriginRef} className="geo-plot-precision-pointer-origin" aria-hidden="true"
-              style={{left:pointerPreview.rawScreen[0],top:pointerPreview.rawScreen[1]}}/>}
-          <div ref={loupeRef} className="geo-plot-precision-loupe" role="img"
-            style={{transform:"translate3d("+loupePosition.left+"px,"+loupePosition.top+"px,0)"}}
-            aria-label="Magnified view follows the actual pointer and snaps inside canvas edges">
-            <canvas ref={loupeCanvasRef} width={144} height={144} aria-hidden="true"/>
-            <div className="geo-plot-loupe-reticle" aria-hidden="true"/>
-            <strong>{pointerPreview.kind==="vertex"?"● Vertex snap":
-              pointerPreview.kind==="edge"?"━ Edge snap":"✚ Exact point"}</strong>
-            <span>Model X {pointerPreview.point[0].toFixed(4)} · Z {pointerPreview.point[1].toFixed(4)} m</span>
-          </div>
-        </>}
         {working&&<div className="geo-plot-scene-status" aria-live="polite">
            <b>Plot {working.id}</b>
            <span>{shape==="four"?working.corners.length+"/4":working.corners.length+" (irregular)"} corners</span>

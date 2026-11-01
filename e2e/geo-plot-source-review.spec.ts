@@ -56,6 +56,12 @@ test("legacy Geo editor reveals stale CSV evidence and offers safe road Front re
   await expect(page.getByText("Source inventory was updated after verification.")).toBeVisible();
   await expect(page.getByRole("button",{name:"Publish Mapping"})).toBeDisabled();
   await page.getByRole("button",{name:"Plot 1 4 corners"}).click();
+  // Platform parity: use the browser's native crosshair, not an overlay
+  // magnifier or a second synthetic cursor that can drift from the hit point.
+  const overlay=page.locator(".geo-plot-overlay");
+  await expect(overlay).toHaveAttribute("data-tool-mode","edit");
+  await expect.poll(()=>overlay.evaluate(el=>getComputedStyle(el).cursor)).toBe("crosshair");
+  await expect(page.locator(".geo-plot-precision-loupe, .geo-plot-precision-crosshair, .geo-plot-precision-pointer-origin")).toHaveCount(0);
   await expect(page.getByRole("button",{name:/Apply Latest Approved CSV/})).toBeVisible();
 
   page.once("dialog",dialog=>dialog.accept());

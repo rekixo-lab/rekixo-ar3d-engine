@@ -81,12 +81,13 @@ test("live editor uses the same snap target for hover, clicks and handle draggin
   assert.match(s,/controls\.zoomToCursor=true/);
   assert.match(s,/controls\.maxZoom=50/);
   assert.match(s,/max="5000"/);
-  assert.match(s,/geo-plot-precision-crosshair/);
-  assert.match(s,/geo-plot-precision-loupe/);
   assert.match(s,/geo-plot-handle-hit/);
   assert.match(s,/requestFullscreen/);
-  assert.match(css,/\.geo-plot-precision-crosshair/);
-  assert.match(css,/\[data-tool-mode="draw"\]/);
+  assert.match(css,/cursor:crosshair!important/);
+  assert.match(css,/\.geo-plot-overlay\[data-tool-mode="draw"\]/);
   assert.match(css,/\.geo-plot-handle-hit/);
+  assert.match(s,/precisionSnap\(raw,screen,rings,project/);
+  assert.doesNotMatch(s,/loupeCanvasRef|geo-plot-precision-loupe|geo-plot-precision-crosshair/);
+  assert.doesNotMatch(css,/cursor:none|geo-plot-precision-loupe|geo-plot-precision-crosshair|geo-plot-loupe-reticle/);
   assert.doesNotMatch(s,/const near=all\.find\(/);
 });

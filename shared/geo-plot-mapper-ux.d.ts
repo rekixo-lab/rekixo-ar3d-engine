@@ -3,9 +3,6 @@ import type {ReviewedPlot} from "./geo-plot-source-operations.js";
 export type GeoPlotSideRole="front"|"back"|"depthA"|"depthB";
 export function nextCsvPlotForDrawing<T extends {id:string}>(
   rows:readonly T[],mapped:readonly (string|{id:string})[],afterId?:string|null):T|null;
-export function positionCursorLoupe(
-  screen:readonly [number,number],viewport:readonly [number,number],
-  size?:number,gap?:number):{left:number;top:number};
 export function assignVisiblePlotEdge<T extends ReviewedPlot>(
   plot:T,role:GeoPlotSideRole,edge:number,options?:{extend?:boolean}):T;
 export function draftStorageKey(slug:string):string|null;

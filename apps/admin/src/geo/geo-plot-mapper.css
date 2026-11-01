@@ -170,64 +170,28 @@
 }
 
 
-/* Source-coordinate precision pointer, consistent CSS-pixel reticle at 100–5000%.
-   The cursor and loupe never intercept a pointerdown or move a saved polygon. */
+/* Match AR3D Platform's native CSS crosshair on the mapping surface.
+   The OS cursor tracks the real pointer at any zoom, without an overlay or
+   WebGL screenshot. Corner handles keep their independent drag hit targets. */
 .geo-plot-canvas canvas{cursor:grab}
 .geo-plot-canvas canvas:active{cursor:grabbing}
-.geo-plot-overlay[data-tool-mode="draw"],.geo-plot-overlay[data-tool-mode="edit"],
-.geo-plot-overlay[data-tool-mode="draw"] *, .geo-plot-overlay[data-tool-mode="edit"] *{
-  cursor:none!important
+.geo-plot-overlay[data-tool-mode="draw"],
+.geo-plot-overlay[data-tool-mode="edit"],
+.geo-plot-overlay[data-tool-mode="align"],
+.geo-plot-overlay[data-tool-mode="side"],
+.geo-plot-overlay[data-tool-mode="draw"] *,
+.geo-plot-overlay[data-tool-mode="edit"] *,
+.geo-plot-overlay[data-tool-mode="align"] *,
+.geo-plot-overlay[data-tool-mode="side"] *{cursor:crosshair!important}
+.geo-plot-overlay .geo-plot-handle-hit{
+  pointer-events:all;touch-action:none;cursor:grab!important
 }
-.geo-plot-overlay .geo-plot-handle-hit{pointer-events:all;touch-action:none}
+.geo-plot-overlay .geo-plot-handle-hit:active{cursor:grabbing!important}
 .geo-plot-overlay .geo-plot-handle-visible{pointer-events:none}
-.geo-plot-precision-crosshair{position:absolute;z-index:6;transform:translate(-50%,-50%);
-  width:31px;height:31px;pointer-events:none;filter:drop-shadow(0 1px 3px #06101df2);
-  --precision-color:#ffe174}
-.geo-plot-precision-crosshair[data-snap-kind="vertex"],
-.geo-plot-precision-crosshair[data-snap-kind="edge"]{--precision-color:#57ffd0}
-.geo-plot-precision-crosshair:before,.geo-plot-precision-crosshair:after{content:"";
-  position:absolute;left:50%;top:50%;background:var(--precision-color);border-radius:2px}
-.geo-plot-precision-crosshair:before{width:2px;height:31px;transform:translate(-50%,-50%)}
-.geo-plot-precision-crosshair:after{width:31px;height:2px;transform:translate(-50%,-50%)}
-.geo-plot-precision-crosshair i{position:absolute;inset:7px;display:block;border:1.5px solid
-  var(--precision-color);border-radius:50%;background:rgba(10,26,40,.22)}
-.geo-plot-precision-crosshair b{position:absolute;left:50%;top:50%;width:3px;height:3px;
-  border:1px solid #071729;border-radius:50%;background:#fff;transform:translate(-50%,-50%)}
-.geo-plot-precision-pointer-origin{position:absolute;z-index:5;width:7px;height:7px;
-  transform:translate(-50%,-50%);pointer-events:none;border-radius:50%;
-  border:1.5px solid #fff;background:#112d37;box-shadow:0 0 0 1px #081c2d}
-.geo-plot-precision-loupe{position:absolute;z-index:7;left:0;top:0;will-change:transform;
-  width:156px;display:grid;justify-items:center;gap:4px;padding:7px;
-  pointer-events:none;color:#edfff8;border:1px solid #ffe4a1;
-  border-radius:14px;background:rgba(7,19,32,.97);box-shadow:0 6px 22px #000b;
-  text-align:center}
-.geo-plot-precision-loupe canvas{display:block;width:144px;height:144px;
-  max-width:100%;border:2px solid #dcefe5;border-radius:50%;
-  image-rendering:pixelated;box-sizing:border-box;background:#0c2531}
-.geo-plot-loupe-reticle{position:absolute;top:78px;left:50%;
-  width:40px;height:40px;transform:translate(-50%,-50%);
-  border:1px solid #ffe174;border-radius:50%;filter:drop-shadow(0 1px 2px #000)}
-.geo-plot-loupe-reticle:before,.geo-plot-loupe-reticle:after{content:"";
-  position:absolute;top:50%;left:50%;background:#ffe174}
-.geo-plot-loupe-reticle:before{width:2px;height:39px;transform:translate(-50%,-50%)}
-.geo-plot-loupe-reticle:after{width:39px;height:2px;transform:translate(-50%,-50%)}
-.geo-plot-precision-loupe strong{color:#92ffe0;font-size:11px;font-weight:800}
-.geo-plot-precision-loupe span{color:#d7e7ed;font-size:10px;line-height:1.35;
-  font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .geo-plot-precision-rubberband{pointer-events:none;vector-effect:non-scaling-stroke}
-@media(max-width:760px){
-  .geo-plot-precision-loupe{width:128px;padding:5px}
-  .geo-plot-precision-loupe canvas{width:116px;height:116px}
-  .geo-plot-loupe-reticle{top:63px}
-  .geo-plot-scene-status{right:8px}
-}
 @media(pointer:coarse){
   .geo-plot-overlay .geo-plot-handle-hit{stroke:transparent;stroke-width:8px}
-  .geo-plot-precision-loupe{width:120px}
-  .geo-plot-precision-loupe canvas{width:104px;height:104px}
-  .geo-plot-loupe-reticle{top:57px}
 }
-
 
 /* Project-owned source reconciliation is visible in normal/fullscreen inspector.
    Informational until an operator explicitly applies and verifies approved CSV. */
@@ -324,11 +288,7 @@
   display:block;font-size:12px;font-weight:800;cursor:pointer;color:#a8f0da;
 }
 .geo-plot-clone-panel:not([open])>*:not(summary){display:none}
-.geo-plot-precision-loupe{
-  right:auto!important;bottom:auto!important;
-  user-select:none;touch-action:none;transform:translateZ(0);
-  contain:layout paint;max-width:min(170px,45vw);
-}
+
 @media(max-width:950px){
   .geo-plot-tool-group--confirm{order:-2}
   .geo-plot-page .geo-plot-editor-shell:fullscreen .geo-plot-tools{max-height:33vh}
