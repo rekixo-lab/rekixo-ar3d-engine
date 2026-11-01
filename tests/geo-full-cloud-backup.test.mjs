@@ -68,8 +68,8 @@ test("Full D1+R2 offline restore verifies all project bytes, immutable releases,
   const db=new DatabaseSync(target);
   assert.equal(db.prepare("SELECT slug FROM projects_3d").get().slug,"test-site");
   db.close();
-  assert.rejects(()=>rehearseFullGeoRestore(dir,target),/fresh nonexistent/);
+  await assert.rejects(()=>rehearseFullGeoRestore(dir,target),/fresh nonexistent/);
   writeFileSync(join(dir,"r2",key),"TAMPERED!");
-  assert.rejects(()=>verifyFullGeoCloudArchive(dir),/SHA|byte count|R2/i);
+  await assert.rejects(()=>verifyFullGeoCloudArchive(dir),/SHA|byte count|R2/i);
  }finally{rmSync(root,{recursive:true,force:true});}
 });
