@@ -1172,6 +1172,29 @@ export default function GeoPlotMapper(){
         </div>
       </div>
       <section className="geo-plot-tools" aria-label="Plot mapper controls">
+        <div className="geo-plot-current-control">
+          <label>Current CSV Plot
+            <select aria-label="Current approved CSV plot" value={working?.id||""}
+              disabled={!editable||busy||dirty}
+              onChange={e=>{
+                const id=e.target.value;
+                if(!id||working?.id===id)return;
+                const mapped=plots.find(p=>p.id===id);
+                if(mapped){choose(mapped);return;}
+                const row=inventoryRows.find(p=>p.id===id);
+                if(!row||!confirmUnapplied())return;
+                resetWorking(fromInventory(row,groundY));setOriginalId(null);
+                setShape("four");setMode("draw");setInspectorTab("plot");
+                setMessage("Plot "+id+" selected from approved CSV. Draw the real boundary.");
+              }}>
+              <option value="">Select CSV Plot…</option>
+              {inventoryRows.map(row=><option key={row.id} value={row.id}>{row.id} · {
+                plots.some(p=>p.id===row.id)?"confirmed":"pending"}</option>)}
+              {working&&!inventoryRows.some(row=>row.id===working.id)&&
+                <option value={working.id}>{working.id} · not in CSV</option>}
+            </select>
+          </label>
+        </div>
         <div className="geo-plot-tool-group" aria-label="Boundary drawing tools">
           {mode==="align"&&<button type="button" className="active"
             onClick={()=>{alignmentPickRef.current=null;setMode("pan");}}>Cancel alignment capture</button>}
@@ -1193,6 +1216,10 @@ export default function GeoPlotMapper(){
             disabled={!editable||busy||!working||working.corners.length<3||
               (shape==="four"&&working.corners.length!==4)}
             onClick={finishBoundary}>✓ Boundary complete</button>
+          <button type="button" disabled={!editable||busy||!working||working.corners.length<3}
+            className={mode==="side"?"active":""}
+            onClick={()=>{setMode("side");setInspectorTab("plot");}}>
+            ↔ Assign Sides</button>
         </div>
         <div className="geo-plot-tool-group geo-plot-tool-group--secondary">
           <button type="button" disabled={busy||!workingHistory.past.length} aria-label="Undo working plot edit"
@@ -1218,6 +1245,15 @@ export default function GeoPlotMapper(){
           <button type="button" className="geo-plot-fullscreen-toggle" title="Show toolbar, canvas and inspector in full screen"
             aria-pressed={focused} onClick={()=>void toggleFullscreen()}>
             {focused?"⊟ Exit full screen":"⛶ Full screen"}</button>
+        </div>
+        <div className="geo-plot-tool-group geo-plot-tool-group--confirm">
+          <button type="button" className="geo-plot-confirm-primary"
+            disabled={!editable||busy||!working||working.corners.length<3||
+              (shape==="four"&&working.corners.length!==4)||
+              Boolean(inventoryRows.length&&!inventoryRows.some(row=>row.id.toLowerCase()===working.id.toLowerCase()))}
+            onClick={()=>void confirmPlotAndNext()}>
+            ✓ {busy?"Saving…":working?"Confirm Plot "+working.id+" & Next":"Confirm Plot & Next"}
+          </button>
         </div>
         <div className="geo-plot-tool-group geo-plot-tool-group--publish">
           <button type="button" className="geo-plot-publish-button"
@@ -1276,6 +1312,20 @@ export default function GeoPlotMapper(){
                  return <text key={role} className="geo-plot-map-side-label"
                    x={x} y={y-14} textAnchor="middle">{label+value}</text>;
                })}
+             {mode==="side"&&working.corners.length>=3&&working.corners.map((point,index)=>{
+                const [x1,y1]=project(point),[x2,y2]=project(working.corners[(index+1)%working.corners.length]);
+                const role=ROLES.find(item=>working.sides[item]?.edges.includes(index))||"";
+                return <g key={"side-edge-"+index} className="geo-plot-side-hit">
+                  <line x1={x1} y1={y1} x2={x2} y2={y2}
+                    stroke={role===selectedRole?"#40ffb4":"#ffdc86"} strokeWidth="5"
+                    pointerEvents="none"/>
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent"
+                    strokeWidth="22" pointerEvents="stroke"
+                    onPointerDown={e=>{e.preventDefault();e.stopPropagation();assignSideOnCanvas(index);}}
+                    onPointerUp={e=>e.stopPropagation()}
+                    aria-label={"Assign edge "+(index+1)+" to "+selectedRole}/>
+                </g>;
+              })}
              {working.corners.map((point,i)=>{const [x,y]=project(point);
               return <g key={i} className="geo-plot-precision-handle">
                 <circle className="geo-plot-handle-hit" cx={x} cy={y} r="17" fill="transparent"
@@ -1303,14 +1353,15 @@ export default function GeoPlotMapper(){
           </>}
         </svg>}
         {pointerPreview&&mode!=="pan"&&geo&&<>
-          <div className="geo-plot-precision-crosshair" data-snap-kind={pointerPreview.kind}
+          <div ref={crosshairRef} className="geo-plot-precision-crosshair" data-snap-kind={pointerPreview.kind}
             style={{left:pointerPreview.screen[0],top:pointerPreview.screen[1]}}
             aria-hidden="true"><i/><b/></div>
           {pointerPreview.kind!=="none"&&
-            <div className="geo-plot-precision-pointer-origin" aria-hidden="true"
+            <div ref={pointerOriginRef} className="geo-plot-precision-pointer-origin" aria-hidden="true"
               style={{left:pointerPreview.rawScreen[0],top:pointerPreview.rawScreen[1]}}/>}
-          <div className="geo-plot-precision-loupe" role="img"
-            aria-label="Magnified view centered on the exact mapping target">
+          <div ref={loupeRef} className="geo-plot-precision-loupe" role="img"
+            style={positionCursorLoupe(pointerPreview.screen,[viewport.w,viewport.h])}
+            aria-label="Magnified view follows the actual pointer and snaps inside canvas edges">
             <canvas ref={loupeCanvasRef} width={144} height={144} aria-hidden="true"/>
             <div className="geo-plot-loupe-reticle" aria-hidden="true"/>
             <strong>{pointerPreview.kind==="vertex"?"● Vertex snap":
@@ -1321,7 +1372,8 @@ export default function GeoPlotMapper(){
         {working&&<div className="geo-plot-scene-status" aria-live="polite">
            <b>Plot {working.id}</b>
            <span>{shape==="four"?working.corners.length+"/4":working.corners.length+" (irregular)"} corners</span>
-           <span>{mode==="draw"?"Mark Front edge first":mode==="edit"?"Drag numbered corner handles":"Pan / pinch to inspect"}</span>
+           <span>{mode==="draw"?"Mark Front edge first":mode==="edit"?"Drag numbered corner handles":
+             mode==="side"?"Tap highlighted boundary edges to assign "+selectedRole:"Pan / pinch to inspect"}</span>
          </div>}
          <div className="geo-plot-scene-info">{modelStatus||("Top view · model coordinates in metres · "+
            (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Click corners clockwise · wheel zoom at cursor":"Drag numbered handles · wheel zoom at cursor"))}</div>
