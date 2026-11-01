@@ -5,7 +5,7 @@ export function updatePlotEditHistory<T>(history:History<T>,next:T|null,options?
 export function closeGroupedPlotEdit<T>(history:History<T>,started:T|null):History<T>;
 export function undoPlotEdit<T>(history:History<T>):History<T>;
 export function redoPlotEdit<T>(history:History<T>):History<T>;
-export type GeometryPlot={corners:[number,number][];area:{verified:boolean;[key:string]:unknown};
- facingVerified:boolean;planeVerified?:boolean;sides:Record<string,{verified?:boolean;roadFacing?:boolean;[key:string]:unknown}|undefined>;[key:string]:unknown};
+export type GeometryPlot={corners:[number,number][];area:{verified:boolean};
+ facingVerified:boolean;planeVerified?:boolean;sides:object};
 export function geometryWithRevokedApprovals<T extends GeometryPlot>(plot:T,corners:[number,number][]):T;
 export function nudgePlotCorner<T extends GeometryPlot>(plot:T,index:number,dx:number,dz:number):{plot:T;issue:string|null};
