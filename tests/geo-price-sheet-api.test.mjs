@@ -73,7 +73,7 @@ test("price sheet preflight is read-only, source-version bound, audited and stal
   const pre=await handleGeoPlotPricingSheet(request("POST",{
    action:"preflight",csv,sourceRef:"Signed rate register page 1"
   }),f.env,f.ctx,actor);
-  assert.equal(pre.status,200,await pre.text());
+  assert.equal(pre.status,200);
   const data=(await pre.json()).preflight;
   assert.equal(data.count,1);assert.equal(data.added,1);
   assert.equal(data.mappingReleaseId,"map1");assert.equal(data.revision,0);
@@ -82,7 +82,7 @@ test("price sheet preflight is read-only, source-version bound, audited and stal
    action:"import",csv,sourceRef:"Signed rate register page 1",
    expectedRevision:data.revision,previewSha256:data.previewSha256
   }),f.env,f.ctx,actor);
-  assert.equal(imp.status,200,await imp.text());
+  assert.equal(imp.status,200);
   const state=await imp.json();
   assert.equal(state.rows.length,1);
   assert.equal(state.rows[0].plotId,"1");
