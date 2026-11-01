@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { Viewer3D } from "../viewer/Viewer3D";
@@ -311,110 +310,6 @@ function cameraPreset(view: GeoCameraView, buildingHeading: number) {
 }
 
 
-// Inspect the immutable site model independently of the satellite imagery ceiling.
-// Only mounted on demand; the Google Map stays mounted so the Geo camera is preserved.
-function GeoModelInspector({ model }: { model: GeoPayload["model"] }) {
-  const hostRef = useRef<HTMLDivElement | null>(null);
-  const [message, setMessage] = useState("Preparing verified 3D detail…");
-
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    let disposed = false;
-    let frame = 0;
-    let loadedModel: THREE.Object3D | undefined;
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x081421);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x708294, 2.1));
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.6);
-    keyLight.position.set(40, 90, 65);
-    scene.add(keyLight);
-    const camera = new THREE.PerspectiveCamera(48, 1, 0.001, 10000);
-    let renderer: THREE.WebGLRenderer;
-    try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    } catch {
-      setMessage("This device cannot start the 3D detail renderer.");
-      return;
-    }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    host.appendChild(renderer.domElement);
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.07;
-    controls.enablePan = true;
-    controls.rotateSpeed = 0.7;
-    controls.zoomSpeed = 0.85;
-    controls.touches.ONE = THREE.TOUCH.ROTATE;
-    controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
-
-    const resize = () => {
-      const width = host.clientWidth;
-      const height = host.clientHeight;
-      if (!width || !height) return;
-      renderer.setSize(width, height, false);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-    };
-    const observer = new ResizeObserver(resize);
-    observer.observe(host);
-    resize();
-
-    const render = () => {
-      frame = window.requestAnimationFrame(render);
-      controls.update();
-      renderer.render(scene, camera);
-    };
-    render();
-
-    void loadVerifiedModel(model).then((object) => {
-      if (disposed) {
-        disposeObject(object);
-        return;
-      }
-      loadedModel = object;
-      const bounds = new THREE.Box3().setFromObject(object);
-      if (bounds.isEmpty()) {
-        setMessage("The verified model contains no visible geometry.");
-        return;
-      }
-      const sphere = bounds.getBoundingSphere(new THREE.Sphere());
-      const radius = Math.max(sphere.radius, 0.1);
-      camera.near = Math.max(radius / 100000, 0.0001);
-      camera.far = Math.max(radius * 100, 1000);
-      camera.position.copy(sphere.center).add(new THREE.Vector3(radius * 1.6, radius * 1.0, radius * 1.6));
-      camera.updateProjectionMatrix();
-      controls.target.copy(sphere.center);
-      controls.minDistance = Math.max(radius * 0.01, 0.001);
-      controls.maxDistance = Math.max(radius * 50, 10);
-      controls.update();
-      scene.add(object);
-      setMessage("");
-    }).catch((reason: unknown) => {
-      if (!disposed) setMessage(reason instanceof Error ? reason.message : "3D detail could not load.");
-    });
-
-    return () => {
-      disposed = true;
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-      controls.dispose();
-      renderer.forceContextLoss();
-      renderer.dispose();
-      renderer.domElement.remove();
-      if (loadedModel) disposeObject(loadedModel);
-    };
-  }, [model.url, model.sha256, model.byteSize]);
-
-  return (
-    <div ref={hostRef} className="geo-model-inspector" aria-label="Verified site model 3D detail viewer">
-      {message ? <div className="geo-inspector-status" role="status">{message}</div> : null}
-    </div>
-  );
-}
-
 function geoPlotWorldPath(plot:GeoMappedPlot,data:GeoPayload,groundY:number) {
   const wrapper=new THREE.Group();
   const model=new THREE.Group();
@@ -439,16 +334,9 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const cameraActionRef = useRef<((view: GeoCameraView) => void) | null>(null);
   const zoomActionRef = useRef<((step: number) => void) | null>(null);
-  const [inspectMode, setInspectMode] = useState(false);
+  // Published plot boundaries are always interactive. Public chrome can be
+  // minimal without removing the canonical GLB plot picker or detail panel.
   const [selectedPlot, setSelectedPlot] = useState<GeoMappedPlot|null>(null);
-  const [showPlotBoundaries, setShowPlotBoundaries] = useState(true);
-  const showPlotsRef=useRef(showPlotBoundaries);
-  showPlotsRef.current=showPlotBoundaries;
-  const plotRefreshRef=useRef<((visible:boolean)=>void)|null>(null);
-  useEffect(() => {
-    plotRefreshRef.current?.(showPlotBoundaries);
-    if(!showPlotBoundaries)setSelectedPlot(null);
-  },[showPlotBoundaries]);
   const [cameraView, setCameraView] = useState<GeoCameraView>("overview");
   const [satelliteMaxZoom, setSatelliteMaxZoom] = useState<number | null>(null);
   const [zoomNotice, setZoomNotice] = useState("");
@@ -513,10 +401,15 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           isFractionalZoomEnabled: true,
           tiltInteractionEnabled: true,
           headingInteractionEnabled: true,
-          mapTypeControl: true,
+          // Keep satellite imagery by default; remove Google's optional
+          // controls, NOT its mandatory map-logo/copyright attributions.
+          mapTypeId: "satellite",
+          disableDefaultUI: true,
+          keyboardShortcuts: false,
+          mapTypeControl: false,
           streetViewControl: false,
-          fullscreenControl: false, // Fullscreen the complete scene, including the detail viewer.
-          zoomControl: false, // Dedicated zoom buttons stay usable in normal and fullscreen layouts.
+          fullscreenControl: false,
+          zoomControl: false, // The customer's own minus/plus remain visible.
           draggable: true,
           gestureHandling: "greedy",
           clickableIcons: false,
@@ -543,13 +436,12 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           for(const [id,group] of plotLayer.groupsById)group.visible=visible.has(id);
           overlay?.requestRedraw();
         };
-        plotRefreshRef.current=visible=>refreshPlotPolygons?.(visible);
         // Google Maps can swallow map "click" events inside its shared
         // WebGL canvas (especially at high tilt) even while DOM pointer events
         // still fire. Pick from the real DOM pointer position first, and retain
         // map.click as a non-destructive fallback. Never disable pan/zoom.
         const selectAtScreenPoint=(x:number,y:number)=>{
-          if(cancelled||!plotLayer||!latestProjection||!showPlotsRef.current||
+          if(cancelled||!plotLayer||!latestProjection||
             !hostRef.current)return;
           const id=pickModelGeoPlot(x,y,hostRef.current.getBoundingClientRect(),
             latestProjection,plotLayer.hitMeshes);
@@ -723,7 +615,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
                   Number.isFinite(plot.planeY)?plot.planeY!:modelGroundY);
                 return {plot,path,bounds:geoPathBounds(path)};
               });
-              refreshPlotPolygons?.(showPlotsRef.current);
+              refreshPlotPolygons?.(true);
               overlay?.requestRedraw();
             }
             model.traverse((node) => {
@@ -797,7 +689,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         });
         mapIdle = map.addListener("idle", () => {
           overlay?.requestRedraw();
-          refreshPlotPolygons?.(showPlotsRef.current);
+          refreshPlotPolygons?.(true);
         });
         mapTypeChanged = map.addListener("maptypeid_changed", () => {
           if (isSatelliteMapType(map.getMapTypeId?.())) void refreshSatelliteLimit();
@@ -836,7 +728,6 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         window.removeEventListener("pointerup",onNativePointerUp,true);
       plotLayer?.dispose();
       plotLayer=null;latestProjection=null;preparedPaths=[];
-      plotRefreshRef.current=null;
       mapIdle?.remove();
       mapTypeChanged?.remove();
       overlay?.setMap(null);
@@ -849,14 +740,9 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
   return (
     <div ref={sceneRef} className="geo-integrated-scene">
       <div ref={hostRef} className="geo-integrated-map" aria-label={`${data.project.name} integrated 3D geographic scene`} />
-      {inspectMode ? <GeoModelInspector model={data.model} /> : null}
-      <nav className="geo-map-quick-actions" aria-label="Geo zoom and 3D detail controls">
-        <button type="button" aria-pressed={inspectMode} onClick={() => setInspectMode((value) => !value)} title="Switch between satellite map and close-up 3D model">{inspectMode ? "Map view" : "3D Detail"}</button>
-        {!inspectMode ? <>
-          <button type="button" aria-label="Zoom out 2×" title="Zoom out 2×" onClick={() => zoomActionRef.current?.(-1)}>−</button>
-          <button type="button" aria-label="Zoom in 2×" title="Zoom in 2× (one full map zoom level)" onClick={() => zoomActionRef.current?.(1)}>+</button>
-        </> : null}
-        <button type="button" aria-label="Reset Geo camera" title="Return to overview" onClick={() => { setInspectMode(false); cameraActionRef.current?.("overview"); }}>⌖</button>
+      <nav className="geo-map-quick-actions" aria-label="Geo zoom and fullscreen controls">
+        <button type="button" aria-label="Zoom out 2×" title="Zoom out 2×" onClick={() => zoomActionRef.current?.(-1)}>−</button>
+        <button type="button" aria-label="Zoom in 2×" title="Zoom in 2× (one full map zoom level)" onClick={() => zoomActionRef.current?.(1)}>+</button>
         <button type="button" aria-label="Toggle Geo fullscreen" title="Fullscreen" onClick={() => {
           const scene = sceneRef.current;
           if (!scene) return;
@@ -864,25 +750,6 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           else void scene.requestFullscreen?.().catch(() => undefined);
         }}>⛶</button>
       </nav>
-      {data.plotMapping?.plots.length ? <div className="geo-plot-public-controls">
-        <button type="button" onClick={() => setShowPlotBoundaries(v=>!v)}
-          aria-pressed={showPlotBoundaries}>Plots {showPlotBoundaries?"ON":"OFF"}</button>
-        <span>{data.plotMapping.plots.length} mapped</span>
-        <select aria-label="Select a mapped plot" value={selectedPlot?.id||""}
-          disabled={!showPlotBoundaries}
-          onChange={event=>setSelectedPlot(data.plotMapping?.plots.find(
-            plot=>plot.id===event.target.value
-          )||null)}>
-          <option value="">Select plot</option>
-          {data.plotMapping.plots.map(plot=><option key={plot.id} value={plot.id}>
-            Plot {plot.id}
-          </option>)}
-        </select>
-        {data.plotMapping.publicationMode==="preliminary"&&
-          <span className="geo-plot-preliminary-notice" role="status">
-            Preliminary plot mapping · Details pending source review
-          </span>}
-      </div> : null}
       {selectedPlot && <aside className="geo-plot-public-details" aria-label="Selected plot details">
         <button type="button" className="geo-plot-public-close" aria-label="Close plot details" onClick={()=>setSelectedPlot(null)}>×</button>
         <strong>Plot {selectedPlot.id}</strong>
@@ -905,7 +772,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           <small>Unreviewed measurements and directions are not publicly asserted.</small>}
         {selectedPlot.notes&&<small>{selectedPlot.notes}</small>}
       </aside>}
-      {zoomNotice && !inspectMode ? <div className="geo-zoom-notice" role="status">{zoomNotice}</div> : null}
+      {zoomNotice ? <div className="geo-zoom-notice" role="status">{zoomNotice}</div> : null}
       {toolbarContainer ? createPortal(<nav className="geo-camera-toolbar geo-camera-toolbar--normal-row" aria-label="Geo map navigation">
           {GEO_CAMERA_VIEWS.map((view) => (
             <button
@@ -918,7 +785,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
                   ? `Closest available satellite detail at this site is zoom ${satelliteMaxZoom}`
                   : `${view.label} camera view`
               }
-              onClick={() => { setInspectMode(false); cameraActionRef.current?.(view.id); }}
+              onClick={() => cameraActionRef.current?.(view.id)}
             >
               {view.label}
             </button>
