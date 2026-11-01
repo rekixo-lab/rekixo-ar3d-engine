@@ -120,13 +120,10 @@ export function assessGeoCustomerLaunchEvidence(manifest,{surveyReport,socialRep
 export async function verifyGeoCustomerLaunchFromFiles(manifestPath,backupFolder,sqliteTarget,evidenceRoot,
   fetcher=fetch){
   const manifest=JSON.parse(readFileSync(resolve(manifestPath),"utf8"));
-  required(manifest&&text(manifest.surveyFile,500),
-    "a real-sample survey JSON file is required.");
-  const surveyFile=resolve(evidenceRoot,manifest.surveyFile);
-  const rel=relative(resolve(evidenceRoot),surveyFile);
-  required(!isAbsolute(manifest.surveyFile)&&rel!==""&&!rel.startsWith("..")&&!isAbsolute(rel),
-    "survey input must reside in the evidence folder.");
-  const survey=JSON.parse(readFileSync(surveyFile,"utf8"));
+  required(manifest?.surveyEvidence,
+    "a SHA-256 pinned real-sample survey JSON file is required.");
+  const surveyProof=verifyEvidenceFile(evidenceRoot,manifest.surveyEvidence);
+  const survey=JSON.parse(readFileSync(resolve(evidenceRoot,surveyProof.path),"utf8"));
   const surveyReport=reviewGeoSiteSurvey(survey);
   const socialReport=await verifyGeoSocialPreview(manifest.shareUrl,fetcher);
   const restoreReport=await rehearseFullGeoRestore(backupFolder,sqliteTarget);
