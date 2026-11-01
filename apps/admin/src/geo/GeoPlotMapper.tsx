@@ -12,6 +12,7 @@ import {nextUnmappedInventory,type GeoInventoryRow} from "../../../../shared/geo
 import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
 import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
+import {cloneUnverifiedGeoPlot,geoPlotEvidenceManifest,geoPlotQualityReport} from "../../../../shared/geo-plot-stage3-review.js";
 import {newPlotEditHistory,replacePlotEditHistory,updatePlotEditHistory,
   closeGroupedPlotEdit,undoPlotEdit,redoPlotEdit,geometryWithRevokedApprovals,nudgePlotCorner
 } from "../../../../shared/geo-plot-precision-history.js";
@@ -188,6 +189,9 @@ export default function GeoPlotMapper(){
   const [snap,setSnap]=useState(false);
   const [selectedRole,setSelectedRole]=useState<Role>("front");
   const [inventoryQuery,setInventoryQuery]=useState("");
+  const [cloneFrom,setCloneFrom]=useState("");
+  const [cloneX,setCloneX]=useState("");
+  const [cloneZ,setCloneZ]=useState("");
   const [focused,setFocused]=useState(false);
   const [zoomPercent,setZoomPercent]=useState(100);
   const [showGuides,setShowGuides]=useState(true);
@@ -217,6 +221,16 @@ export default function GeoPlotMapper(){
     [plots,inventoryRows]);
   const selectedInventory=useMemo(()=>inventoryRows.find(p=>
     p.id.toLowerCase()===working?.id.toLowerCase()),[inventoryRows,working?.id]);
+  const quality=useMemo(()=>geoPlotQualityReport(plots,inventoryRows,{
+    geoScale:geo?.placement.scale,
+    mappingStale:Boolean(state?.draft.stale),
+    alignmentRevision:state?.alignmentRevision||0,
+    verifiedAlignmentRevision:state?.draft.verifiedAlignmentRevision,
+    inventoryRevision:state?.inventoryRevision,
+    verifiedInventoryRevision:state?.draft.verifiedInventoryRevision
+  }),[plots,inventoryRows,geo?.placement.scale,state]);
+  const nextTemplateId=useMemo(()=>nextUnmappedInventory(inventoryRows,plots.map(p=>p.id))?.id||
+    nextFreePlotId([...plots,...inventoryRows]),[plots,inventoryRows]);
   const onInventoryRowsChange=useCallback((rows:GeoInventoryRow[],revision:number)=>{
     setInventoryRows(rows);setState(prev=>prev?{...prev,inventoryRevision:revision}:prev);
   },[]);
@@ -389,6 +403,43 @@ export default function GeoPlotMapper(){
   const chooseSibling=(direction:1|-1)=>{
     const neighbor=adjacentPlot(plots,working?.id||"",direction);
     if(neighbor)choose(neighbor);
+  };
+  const clonePreviousDraft=()=>{
+    if(!editable||busy||!cloneFrom)return;
+    if(!cloneX.trim()||!cloneZ.trim()){
+      setMessage("ERROR: Enter explicit model-local X and Z offset values before cloning.");
+      return;
+    }
+    if(!confirmUnapplied())return;
+    const previous=plots.find(p=>p.id===cloneFrom);
+    if(!previous){setMessage("ERROR: Select a mapped plot to clone.");return;}
+    try{
+      const next=cloneUnverifiedGeoPlot(previous,nextTemplateId,Number(cloneX),Number(cloneZ),
+        inventoryRows,plots);
+      if(!window.confirm("Create an UNVERIFIED draft footprint for Plot "+next.id+
+        " using X "+cloneX+" m and Z "+cloneZ+" m translation from Plot "+previous.id+
+        "? All measurement, road, facing and plane approvals will be reset. Nothing is published."))return;
+      resetWorking(next);setOriginalId(null);
+      setShape(next.corners.length===4?"four":"irregular");setMode("edit");
+      setMessage("Unverified template ready for Plot "+next.id+
+        ". Check each corner, approved CSV/source and road; apply only after inspecting the new footprint.");
+    }catch(error){
+      setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));
+    }
+  };
+  const downloadQualityEvidence=()=>{
+    if(!state)return;
+    const manifest=geoPlotEvidenceManifest(plots,inventoryRows,geo?.placement.scale||1,{
+      inventoryRevision:state.inventoryRevision,mappingRevision:state.draft.revision,
+      alignmentRevision:state.alignmentRevision
+    });
+    const body=JSON.stringify({schema:"geo-plot-operator-review-package-v1",
+      projectSlug:slug,createdAt:new Date().toISOString(),quality,
+      evidence:manifest,notice:"Owner-private diagnostic only. NOT a backup, certified survey or publish approval."},null,2);
+    const href=URL.createObjectURL(new Blob([body],{type:"application/json;charset=utf-8"}));
+    const link=document.createElement("a");link.href=href;
+    link.download=slug+"-geo-plot-evidence-quality-review.json";link.click();
+    window.setTimeout(()=>URL.revokeObjectURL(href),2000);
   };
   const fitView=()=>{
     const camera=cameraRef.current,controls=controlsRef.current,bounds=modelBoundsRef.current;
@@ -926,6 +977,48 @@ export default function GeoPlotMapper(){
           slug={slug} geoReleaseId={state.geoReleaseId} buildingReleaseId={state.buildingReleaseId}
           plots={plots} onCapture={captureImageAlignmentPoint}
           onRevisionChange={onAlignmentRevisionChange}/>}
+        <details className="geo-plot-review-dashboard" open>
+          <summary>03 · Data quality · {quality.summary.blockers} blockers / {quality.summary.reviews} reviews</summary>
+          <p className="geo-plot-hint">Private draft diagnostics · {quality.summary.mapped} mapped /
+            {quality.summary.inventory} approved inventory IDs. Source evidence and model estimates are separate;
+            review findings are not a survey certificate or a publish approval.</p>
+          <button type="button" disabled={!state} onClick={downloadQualityEvidence}>
+            Download Evidence & Quality Review JSON
+          </button>
+          <div className="geo-plot-review-issues" aria-live="polite">
+            {quality.issues.slice(0,24).map((issue,i)=><p key={issue.plotId+issue.field+i}
+              className={issue.severity==="blocker"?"geo-plot-warning":"geo-plot-hint"}>
+              <strong>{issue.severity==="blocker"?"Blocker":"Review"}</strong> ·
+              Plot {issue.plotId} · {issue.field}: {issue.reason}
+            </p>)}
+            {!quality.issues.length&&<p className="geo-plot-hint">No diagnostic issues in the current working draft.
+              Independent physical survey acceptance is still required.</p>}
+            {quality.issues.length>24&&<p className="geo-plot-hint">
+              +{quality.issues.length-24} more. Download the complete evidence report to inspect all plots.</p>}
+          </div>
+        </details>
+        <div className="geo-plot-clone-panel">
+          <strong>Clone Previous · unverified footprint template</strong>
+          <p className="geo-plot-hint">Choose a completed plot and explicit Building-local X/Z translation.
+            Duplicate or overlapping footprints are blocked. All approvals reset; no source facts
+            from the previous plot authorize the next plot.</p>
+          <label>Previous mapped Plot ID<select value={cloneFrom} onChange={e=>setCloneFrom(e.target.value)}
+            disabled={!editable||busy}>
+            <option value="">Select previous plot</option>
+            {plots.map(p=><option key={p.id} value={p.id}>Plot {p.id}</option>)}
+          </select></label>
+          <strong>New Plot ID · {nextTemplateId} {inventoryRows.some(r=>r.id.toLowerCase()===nextTemplateId.toLowerCase())?"(approved inventory)":"(requires inventory review)"}</strong>
+          <div className="geo-plot-clone-offsets">
+            <label>X offset (metres)<input type="number" step="any" value={cloneX}
+              onChange={e=>setCloneX(e.target.value)} placeholder="Enter surveyed X translation"/></label>
+            <label>Z offset (metres)<input type="number" step="any" value={cloneZ}
+              onChange={e=>setCloneZ(e.target.value)} placeholder="Enter surveyed Z translation"/></label>
+          </div>
+          <button type="button" disabled={!editable||busy||!plots.length||!cloneFrom||
+            !cloneX.trim()||!cloneZ.trim()} onClick={clonePreviousDraft}>
+            Clone to Unverified Draft
+          </button>
+        </div>
         <div className="geo-plot-inspector-head">
            <div><small>PROJECT PLOT INVENTORY</small><h3>Plot Editor</h3></div>
            <span>{displayedPlots.length}/{plots.length}</span>
