@@ -1,0 +1,36 @@
+/* Owner-private image↔GLB calibration in the same Geo studio inspector.
+   Display/interaction only: never changes the public 3D map. */
+.geo-align-panel{margin:12px 0;border:1px solid #477d87;border-radius:12px;
+  background:#102a38;color:#f0fbff;overflow:hidden;min-width:0}
+.geo-align-panel>summary{padding:12px;cursor:pointer;font-size:13px;font-weight:800;
+  display:flex;align-items:center;justify-content:space-between;gap:8px}
+.geo-align-panel>summary small{color:#c1e0df;font-size:11px;font-weight:600}
+.geo-align-body{padding:12px;border-top:1px solid #315363;display:grid;gap:10px;font-size:12px;
+  overflow-wrap:anywhere}
+.geo-align-body label{display:grid;gap:5px;font-size:12px;color:#d8eafa}
+.geo-align-body input:not([type="checkbox"]),.geo-align-body select{
+  width:100%;min-width:0;border-radius:7px;padding:8px;color:#112335;background:#f7fdff;
+  border:1px solid #84a5b6}
+.geo-align-body button{border-radius:7px;border:1px solid #6599ac;background:#193e52;
+  color:#f0ffff;padding:7px 9px;font-size:11px;cursor:pointer}
+.geo-align-body button:disabled{opacity:.45;cursor:not-allowed}
+.geo-align-actions{display:flex;flex-wrap:wrap;gap:7px}
+.geo-align-image-stage{position:relative;width:100%;max-height:420px;overflow:auto;
+  border:1px solid #527685;border-radius:8px;background:#e8edf0}
+.geo-align-image-stage>img{display:block;width:100%;height:auto;max-width:none}
+.geo-align-image-stage>svg{position:absolute;inset:0;width:100%;height:100%;
+  cursor:crosshair;touch-action:manipulation}
+.geo-align-image{display:grid;gap:8px}
+.geo-align-image strong{font-size:12px}
+.geo-align-points{display:grid;gap:10px}
+.geo-align-points>div{display:grid;gap:6px}
+.geo-align-point{display:flex;justify-content:space-between;align-items:start;
+  gap:10px;padding:6px;border:1px solid #426272;border-radius:6px}
+.geo-align-point span{min-width:0}
+.geo-align-point small{display:block;color:#bfceda;margin-top:3px}
+.geo-align-point button{flex-shrink:0}
+.geo-align-checksum{color:#bbd9e4;font-size:11px;overflow-wrap:anywhere}
+.geo-align-qa{border-top:1px solid #476676;padding-top:10px;display:grid;gap:8px}
+.geo-align-qa>p{margin:0}
+.geo-align-qa label{display:flex;align-items:center;gap:8px}
+.geo-align-qa label input{width:auto}
