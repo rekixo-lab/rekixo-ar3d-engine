@@ -6,7 +6,7 @@ export const ENGINE_PROJECT_KINDS = Object.freeze([
 export const PROJECT_KIND_LABELS = Object.freeze({
   legacy: "Existing Engine project",
   building: "3D Building Customer Website",
-  building_geo: "3D Building on Geo Map",
+  building_geo: "3D Geo Masterplan + Plot Mapping",
   masterplan_geo: "Geo Masterplan / Plot Mapping",
 });
 export function isEngineProjectKind(kind) {
@@ -24,7 +24,7 @@ export function projectModuleVisible(kind, module) {
   if (common.includes(module)) return true;
   if (k === "legacy") return ["source","building","geo","geo-plots","releases","branding"].includes(module);
   if (k === "masterplan_geo") return ["masterplan","masterplan-plots","mapping-controls","sales","branding"].includes(module);
-  if (k === "building_geo") return ["source","building","geo","releases","branding"].includes(module);
+  if (k === "building_geo") return ["source","building","geo","geo-plots","releases","branding"].includes(module);
   return ["source","building","releases","branding"].includes(module);
 }
 
@@ -35,6 +35,6 @@ export function projectKindAllowsCloudRoute(kind,route) {
   if(k==="legacy")return true;
   const geoRoutes=["geo-draft","geo-releases","geo-placement","geo-plots"];
   if(k==="building")return !geoRoutes.includes(route);
-  if(k==="building_geo")return route!=="geo-plots";
+  if(k==="building_geo")return true;
   return !["draft","releases","experiences","branding",...geoRoutes].includes(route);
 }
