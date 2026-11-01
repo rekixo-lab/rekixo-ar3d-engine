@@ -18,7 +18,7 @@ const api=async<T,>(endpoint:string,body?:unknown):Promise<T>=>{
  if(!result.ok)throw Error(data.error||"Pricing sheet request failed.");
  return data;
 };
-const display=paise=>(paise/100).toLocaleString("en-IN",{style:"currency",currency:"INR"});
+const display=(paise:number)=>(paise/100).toLocaleString("en-IN",{style:"currency",currency:"INR"});
 export default function GeoBulkPricingPanel({endpoint,mappingReleaseId,canEdit=true,onQuotes}:Props){
  const [state,setState]=useState<State|null>(null);
  const [csv,setCsv]=useState("");
