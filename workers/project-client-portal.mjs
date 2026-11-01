@@ -119,7 +119,7 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
       commercialApprove:canProjectClient(s.role,"commercial.approve")}});
   }
   if(section==="commercial"||section==="pricing"){
-   if(!["GET","PUT"].includes(request.method))
+   if(!(section==="pricing"?["GET","POST"]:["GET","PUT"]).includes(request.method))
     return response({error:"Method not allowed."},405);
    const permission=request.method==="GET"?"commercial.read":"commercial.prepare";
    if(!canProjectClient(s.role,permission))
