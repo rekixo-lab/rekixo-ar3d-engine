@@ -173,21 +173,16 @@ test("Platform-format 36-plot BOM CSV imports as source inventory with exact fee
   assert.deepEqual(normalizeGeoInventoryRows(original),original,
     "Server revalidation must not lose conversion precision or source details");
 });
-test("Platform feet-inch parser rejects fabricated sources, impossible inches and contrary area units",()=>{
-  const head="Plot No,Sqft,Sqm,Front,Back,Depth,Depth 2,Dimension Unit,Notes\n";
-  const notes='"Source: signed CAD PDF p.1; verify mapping"';
-  assert.throws(()=>normalizeGeoInventoryRows(parseGeoInventoryCsv(head+
-    "1,1000,92.9,\"23'-12\\\"\",\"20'-0\\\"\",\"30'-0\\\"\",\"30'-0\\\"\",ft,"+notes)),
+test("Platform feet-inch parser rejects missing source, impossible inches and contrary area units",()=>{
+  const row={plotId:"1",sqft:"1000",sqm:"92.9",front:"23'-5\"",back:"20'-0\"",
+    depthA:"30'-0\"",depthB:"30'-0\"",lengthUnit:"ft",
+    notes:"Source: signed CAD PDF p.1; verify mapping"};
+  assert.throws(()=>normalizeGeoInventoryRows([{...row,front:"23'-12\""}]),
     /inches must be less than 12/);
-  assert.throws(()=>normalizeGeoInventoryRows(parseGeoInventoryCsv(head+
-    "1,1000,92.9,\"23'-5\\\"\",\"20'-0\\\"\",\"30'-0\\\"\",\"30'-0\\\"\",m,"+notes)),
-    /requires ft unit/);
-  assert.throws(()=>normalizeGeoInventoryRows(parseGeoInventoryCsv(head+
-    "1,1000,92.9,\"23'-5\\\"\",\"20'-0\\\"\",\"30'-0\\\"\",\"30'-0\\\"\",ft,No signed source)),
-    /source\/reference required|source required/);
-  assert.throws(()=>normalizeGeoInventoryRows(parseGeoInventoryCsv(head+
-    "1,1000,50,\"23'-5\\\"\",\"20'-0\\\"\",\"30'-0\\\"\",\"30'-0\\\"\",ft,"+notes)),
-    /contradictory/);
+  assert.throws(()=>normalizeGeoInventoryRows([{...row,lengthUnit:"m"}]),/requires ft unit/);
+  assert.throws(()=>normalizeGeoInventoryRows([{...row,notes:"No signed source"}]),
+    /source\\/reference required|source required/);
+  assert.throws(()=>normalizeGeoInventoryRows([{...row,sqm:"50"}]),/contradictory/);
 });
 test("Mapper routes Platform CSV to source inventory preflight before attempting polygon-only measurement import",()=>{
   const source=readFileSync(new URL("../apps/admin/src/geo/GeoPlotMapper.tsx",import.meta.url),"utf8");
