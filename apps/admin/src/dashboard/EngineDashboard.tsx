@@ -270,9 +270,10 @@ export default function EngineDashboard() {
       // New Building-backed Geo plot projects first collect the approved
       // project number, owner, address and contact consent in Profile.
       // Source/Building/Geo/Plots remain independent verifiable stages.
-      window.location.assign(createKind==="building_geo"
-        ? `/3Dprojects/profile?project=${encodeURIComponent(result.project.slug)}`
-        : projectHref(newProjectStartPath(createKind), result.project.slug));
+      if(createKind==="building_geo")
+        window.location.assign(`/3Dprojects/profile?project=${encodeURIComponent(result.project.slug)}`);
+      else
+        window.location.assign(projectHref(newProjectStartPath(createKind), result.project.slug));
     } catch (reason) {
       setCreateError(reason instanceof Error ? reason.message : "Project create nahi ho saka.");
     } finally {
