@@ -56,7 +56,7 @@ async function listState(env,ctx,source){
     rows:(rows.results||[]).map(r=>({...r,publicApproved:r.publicApproved===1})),
     notice:"Owner-reviewed commercial facts only. No buyer/payment ledger equivalence is implied."};
 }
-export async function handleGeoPlotCommercial(request,env,ctx,actor){
+export async function handleGeoPlotCommercial(request,env,ctx,actor,{allowApprove=true}={}){
   if(!["GET","PUT"].includes(request.method))
     return reply({error:"Method not allowed."},405);
   try{
@@ -67,6 +67,8 @@ export async function handleGeoPlotCommercial(request,env,ctx,actor){
     const raw=await request.text();
     if(raw.length>8192)throw Error("Commercial change exceeds request safety limit.");
     const info=normalizeGeoCommercialChange(JSON.parse(raw));
+    if(info.publicApproved&&!allowApprove)
+      return reply({error:"Only an owner or designated approver may approve public commercial facts."},403);
     const target=source.plots.find(p=>p.id.toLowerCase()===info.plotId.toLowerCase());
     if(!target)throw Error("Commercial Plot ID is not in the active immutable mapping.");
     const existing=await env.DB.prepare(`SELECT revision FROM geo_plot_commercial_3d
