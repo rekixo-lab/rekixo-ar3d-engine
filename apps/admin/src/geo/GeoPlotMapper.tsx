@@ -225,6 +225,11 @@ export default function GeoPlotMapper(){
   const rendererRef=useRef<THREE.WebGLRenderer|null>(null);
   const cameraRef=useRef<THREE.OrthographicCamera|null>(null);
   const controlsRef=useRef<OrbitControls|null>(null);
+  const pointerGeometryRef=useRef({
+    raycaster:new THREE.Raycaster(),
+    plane:new THREE.Plane(new THREE.Vector3(0,1,0),0),
+    uv:new THREE.Vector2(),hit:new THREE.Vector3(),projected:new THREE.Vector3()
+  });
   const dragRef=useRef<number|null>(null);
   const alignmentPickRef=useRef<((point:Point)=>void)|null>(null);
   const pointerStartRef=useRef<PointerStart|null>(null);
@@ -249,6 +254,8 @@ export default function GeoPlotMapper(){
     [plots,inventoryRows]);
   const selectedInventory=useMemo(()=>inventoryRows.find(p=>
     p.id.toLowerCase()===working?.id.toLowerCase()),[inventoryRows,working?.id]);
+  const savedSnapRings=useMemo(()=>plots.filter(p=>p.id!==originalId)
+    .map(p=>({points:p.corners})),[plots,originalId]);
   const quality=useMemo(()=>geoPlotQualityReport(plots,inventoryRows,{
     geoScale:geo?.placement.scale,
     mappingStale:Boolean(state?.draft.stale),
@@ -438,15 +445,17 @@ export default function GeoPlotMapper(){
   },[geo?.canonicalModel?.url,geo?.canonicalModel?.sha256,geo?.model.url,geo?.model.sha256]);
   const project=(p:readonly [number,number]):Point=>{
     const camera=cameraRef.current;if(!camera)return [0,0];
-    const vec=new THREE.Vector3(p[0],groundY+0.02,p[1]).project(camera);
+    const vec=pointerGeometryRef.current.projected.set(p[0],groundY+0.02,p[1]).project(camera);
     return [(vec.x+1)*viewport.w/2,(1-vec.y)*viewport.h/2];
   };
   const unproject=(clientX:number,clientY:number):Point|null=>{
     const host=hostRef.current,camera=cameraRef.current;if(!host||!camera)return null;
     const rect=host.getBoundingClientRect();if(!rect.width||!rect.height)return null;
     const x=(clientX-rect.left)/rect.width*2-1,y=1-(clientY-rect.top)/rect.height*2;
-    const ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2(x,y),camera);
-    const hit=ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-groundY),new THREE.Vector3());
+    const pointer=pointerGeometryRef.current;
+    pointer.uv.set(x,y);pointer.plane.constant=-groundY;
+    pointer.raycaster.setFromCamera(pointer.uv,camera);
+    const hit=pointer.raycaster.ray.intersectPlane(pointer.plane,pointer.hit);
     return hit?[Number(hit.x.toFixed(6)),Number(hit.z.toFixed(6))]:null;
   };
   const precisionPointer=(clientX:number,clientY:number,skipIndex=-1)=>{
@@ -454,10 +463,10 @@ export default function GeoPlotMapper(){
     if(!host||!raw)return null;
     const rect=host.getBoundingClientRect();
     const screen:Point=[clientX-rect.left,clientY-rect.top];
-    const rings:Array<{points:Point[];skipIndex?:number}>=
-      plots.filter(p=>p.id!==originalId).map(p=>({points:p.corners}));
-    // Platform parity: new drawing snaps to SAVED boundaries, never back onto
-    // its own incomplete polygon (which could silently create zero-length edges).
+    if(!snap)return {point:raw,screen,rawScreen:screen,kind:"none" as const};
+    const rings:Array<{points:Point[];skipIndex?:number}>=[...savedSnapRings];
+    // Snapping never pulls a new polygon onto itself and never locks a dragged
+    // handle to its own corner. Cached saved rings avoid all-plot allocation.
     if(mode==="edit"&&workingRef.current?.corners.length)
       rings.push({points:workingRef.current.corners,...(skipIndex>=0?{skipIndex}:{})});
     const target=precisionSnap(raw,screen,rings,project,{enabled:snap,thresholdPx:6});
