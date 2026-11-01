@@ -129,3 +129,74 @@ test("API and mapper route remain authenticated and mapping release independent"
   assert.match(migration,/REFERENCES projects_3d\(id\) ON DELETE CASCADE/);
   assert.doesNotMatch(migration,/ALTER TABLE geo_plot_mapping_releases_3d/);
 });
+
+test("Platform-format 36-plot BOM CSV imports as source inventory with exact feet-inch conversion and preserved irregular notes",()=>{
+  const headings=["Plot No","Sqft","Sqm","Sqyd","Dimensions","Road Access",
+    "Front","Back","Depth","Depth 2","Dimension Unit",
+    "Front Edge","Back Edge","Depth Edge","Depth 2 Edge",
+    "Front Label","Back Label","Depth Label","Depth 2 Label","Side Dimensions","Notes"];
+  const cell=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+  const records=Array.from({length:36},(_,i)=>{
+    const plotNo=String(i+1),irregular=i===7;
+    const front=irregular?"20'-0\"":"23'-5\"";
+    const back=irregular?"33'-8\"":"23'-3\"";
+    const depth=irregular?"":"38'-0\"";
+    const depth2=irregular?"43'-11\"":"37'-3\"";
+    return [plotNo,"878","81.59","",irregular?"Irregular boundary with local body setback":
+      "Four-side plot (CAD measured)","30 FEET WIDE ROAD",front,back,depth,depth2,"ft",
+      "","","","",front,back,depth,depth2,
+      irregular?"Front (WEST) 20'-0\" | LOCAL BODY recess horizontal 26'-3\" | "+
+        "LOCAL BODY recess vertical 12'-1\" | North side has no continuous depth segment":
+        "Front (WEST) 23'-5\" | Back (EAST) 23'-3\"",
+      "Source: vector CAD PDF p.1 area statement and annotated plan; "+
+      (irregular?"Irregular plot: map polygon edges manually. ":"")+
+      "Verify plot geometry during manual mapping."];
+  });
+  const csv="\uFEFF"+[headings,...records].map(row=>row.map(cell).join(",")).join("\r\n");
+  const original=normalizeGeoInventoryRows(parseGeoInventoryCsv(csv));
+  assert.equal(original.length,36);
+  assert.deepEqual(original.map(r=>r.id),Array.from({length:36},(_,i)=>String(i+1)));
+  assert.equal(original[0].areaUnit,"sqm");
+  assert.equal(original[0].area,81.59);
+  assert.equal(original[0].front,23.416667);
+  assert.equal(original[0].back,23.25);
+  assert.equal(original[0].depthA,38);
+  assert.equal(original[0].depthB,37.25);
+  assert.equal(original[0].lengthUnit,"ft");
+  assert.equal(original[0].areaSource,"vector CAD PDF p.1 area statement and annotated plan");
+  assert.equal(original[0].measurementSource,original[0].areaSource);
+  assert.match(original[0].sideDimensions,/Front \(WEST\)/);
+  assert.equal(original[7].depthA,0,"Missing Plot 8 depth is never invented");
+  assert.equal(original[7].depthB,43.916667);
+  assert.match(original[7].sideDimensions,/LOCAL BODY recess/);
+  assert.match(original[7].notes,/map polygon edges manually/);
+  assert.deepEqual(normalizeGeoInventoryRows(original),original,
+    "Server revalidation must not lose conversion precision or source details");
+});
+test("Platform feet-inch parser rejects fabricated sources, impossible inches and contrary area units",()=>{
+  const head="Plot No,Sqft,Sqm,Front,Back,Depth,Depth 2,Dimension Unit,Notes\n";
+  const notes='"Source: signed CAD PDF p.1; verify mapping"';
+  assert.throws(()=>normalizeGeoInventoryRows(parseGeoInventoryCsv(head+
+    "1,1000,92.9,\"23'-12\\\"\",\"20'-0\\\"\",\"30'-0\\\"\",\"30'-0\\\"\",ft,"+notes)),
+    /inches must be less than 12/);
+  assert.throws(()=>normalizeGeoInventoryRows(parseGeoInventoryCsv(head+
+    "1,1000,92.9,\"23'-5\\\"\",\"20'-0\\\"\",\"30'-0\\\"\",\"30'-0\\\"\",m,"+notes)),
+    /requires ft unit/);
+  assert.throws(()=>normalizeGeoInventoryRows(parseGeoInventoryCsv(head+
+    "1,1000,92.9,\"23'-5\\\"\",\"20'-0\\\"\",\"30'-0\\\"\",\"30'-0\\\"\",ft,No signed source)),
+    /source\/reference required|source required/);
+  assert.throws(()=>normalizeGeoInventoryRows(parseGeoInventoryCsv(head+
+    "1,1000,50,\"23'-5\\\"\",\"20'-0\\\"\",\"30'-0\\\"\",\"30'-0\\\"\",ft,"+notes)),
+    /contradictory/);
+});
+test("Mapper routes Platform CSV to source inventory preflight before attempting polygon-only measurement import",()=>{
+  const source=readFileSync(new URL("../apps/admin/src/geo/GeoPlotMapper.tsx",import.meta.url),"utf8");
+  assert.match(source,/parseGeoInventoryCsv\(raw\)/);
+  assert.match(source,/normalizeGeoInventoryRows/);
+  assert.match(source,/keys.includes\("plotno"\)/);
+  assert.match(source,/await importSourceInventory\(raw,file.name\)/);
+  assert.match(source,/action:"preflight"/);
+  assert.match(source,/action:"import"/);
+  assert.match(source,/setInventoryImportNonce/);
+  assert.match(source,/will NOT invent any 3D polygon/);
+});
