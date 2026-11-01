@@ -36,6 +36,7 @@ export default function GeoPlotImageAlignmentPanel({
   const [draft,setDraft]=useState<ImageModelAlignmentDraft|null>(null);
   const [assets,setAssets]=useState<CloudAssetSummary[]>([]);
   const [imageUrl,setImageUrl]=useState("");
+  const [actualImage,setActualImage]=useState<{width:number;height:number}|null>(null);
   const [pending,setPending]=useState<Point|null>(null);
   const [evidence,setEvidence]=useState("");
   const [dirty,setDirty]=useState(false);
@@ -61,7 +62,7 @@ export default function GeoPlotImageAlignmentPanel({
   },[load]);
   useEffect(()=>{
     let valid=true;let currentUrl="";
-    setImageUrl("");
+    setImageUrl("");setActualImage(null);
     if(!selected)return;
     void downloadAsset(selected).then(asset=>{
       if(!valid)return;
@@ -70,13 +71,19 @@ export default function GeoPlotImageAlignmentPanel({
     }).catch(err=>{if(valid)setError("Original image checksum verification failed: "+String(err));});
     return()=>{valid=false;if(currentUrl)URL.revokeObjectURL(currentUrl);};
   },[selected?.id,selected?.sha256]);
+  const dimensionalDraft=useMemo(()=>draft&&actualImage?
+    {...draft,imageWidth:actualImage.width,imageHeight:actualImage.height}:draft,
+    [draft,actualImage]);
+  const dimensionMismatch=Boolean(draft&&actualImage&&
+    (draft.imageWidth!==actualImage.width||draft.imageHeight!==actualImage.height));
   const assessed=useMemo(()=>{
-    if(!draft||draft.anchors.length<3)return {result:null,error:"Add three non-collinear fit anchors."};
-    try{return {result:evaluateImageModelAlignment(draft),error:""};}
+    if(!dimensionalDraft||dimensionalDraft.anchors.length<3)
+      return {result:null,error:"Add three non-collinear fit anchors."};
+    try{return {result:evaluateImageModelAlignment(dimensionalDraft),error:""};}
     catch(err){return {result:null,error:err instanceof Error?err.message:String(err)};}
-  },[draft]);
+  },[dimensionalDraft]);
   const isVerified=Boolean(snapshot&&snapshot.revision>0&&
-    snapshot.verifiedRevision===snapshot.revision&&!snapshot.stale&&!dirty&&
+    snapshot.verifiedRevision===snapshot.revision&&!snapshot.stale&&!dirty&&!dimensionMismatch&&
     assessed.result?.verifiedReady);
   const stale=Boolean(snapshot?.stale||draft&&(
     draft.geoReleaseId!==geoReleaseId||draft.buildingReleaseId!==buildingReleaseId||
@@ -100,7 +107,9 @@ export default function GeoPlotImageAlignmentPanel({
       exportReview(slug,snapshot,old);
     }
     if(!old||switched){
+      setActualImage(null);
       setDraft({imageAssetId:asset.id,imageSha256:asset.sha256.toLowerCase(),
+        imageWidth:0,imageHeight:0,
         geoReleaseId,buildingReleaseId,modelSha256:snapshot.modelSha256,
         anchors:[],checkpoints:[]});
       setDirty(true);setPending(null);setMessage("New original image selected. Pair fresh points and Save before Verify.");
@@ -135,18 +144,18 @@ export default function GeoPlotImageAlignmentPanel({
     setDraft(old=>old?{...old,[kind]:old[kind].filter(p=>p.id!==id)}:old);setDirty(true);
   };
   const save=async()=>{
-    if(!snapshot||!draft||!selected||busy)return;
+    if(!snapshot||!dimensionalDraft||!selected||!actualImage||busy)return;
     setBusy("save");setError("");
     try{
       const switched=Boolean(snapshot.draft&&(
-        snapshot.draft.imageAssetId!==draft.imageAssetId||
-        snapshot.draft.imageSha256!==draft.imageSha256||
-        snapshot.draft.geoReleaseId!==draft.geoReleaseId||
-        snapshot.draft.buildingReleaseId!==draft.buildingReleaseId||
-        snapshot.draft.modelSha256!==draft.modelSha256));
+        snapshot.draft.imageAssetId!==dimensionalDraft.imageAssetId||
+        snapshot.draft.imageSha256!==dimensionalDraft.imageSha256||
+        snapshot.draft.geoReleaseId!==dimensionalDraft.geoReleaseId||
+        snapshot.draft.buildingReleaseId!==dimensionalDraft.buildingReleaseId||
+        snapshot.draft.modelSha256!==dimensionalDraft.modelSha256));
       const next=await api<Snapshot>(url(slug),{
         method:"PUT",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({expectedRevision:snapshot.revision,draft,confirmSourceChange:switched})
+        body:JSON.stringify({expectedRevision:snapshot.revision,draft:dimensionalDraft,confirmSourceChange:switched})
       });
       setSnapshot(next);setDraft(next.draft);setDirty(false);
       setMessage("Private image/model alignment draft saved. No published plot geometry changed.");
@@ -154,7 +163,7 @@ export default function GeoPlotImageAlignmentPanel({
     finally{setBusy("");}
   };
   const verify=async()=>{
-    if(!snapshot||dirty||!draft||!assessed.result?.verifiedReady||stale||busy)return;
+    if(!snapshot||dirty||dimensionMismatch||!draft||!assessed.result?.verifiedReady||stale||busy)return;
     setBusy("verify");setError("");
     try{
       const next=await api<Snapshot>(url(slug),{
@@ -202,7 +211,13 @@ export default function GeoPlotImageAlignmentPanel({
         Model SHA-256: {snapshot?.modelSha256.slice(0,20)}…</p>}
       {draft&&<div className="geo-align-image">
         {imageUrl?<div className="geo-align-image-stage">
-          <img src={imageUrl} alt="Checksum-verified original masterplan source used for image to model alignment"/>
+          <img src={imageUrl} alt="Checksum-verified original masterplan source used for image to model alignment"
+            onLoad={event=>{
+              const width=event.currentTarget.naturalWidth,height=event.currentTarget.naturalHeight;
+              if(width<1||height<1||width*height>80_000_000){
+                setActualImage(null);setError("Original image dimensions exceed the 80-megapixel alignment safety limit.");
+              }else setActualImage({width,height});
+            }}/>
           <svg viewBox="0 0 1 1" preserveAspectRatio="none"
             aria-label="Select a checkpoint on the original masterplan image"
             onPointerDown={markImage}>
@@ -220,6 +235,8 @@ export default function GeoPlotImageAlignmentPanel({
         </div>:<p className="geo-plot-hint">Loading and verifying original image bytes…</p>}
         <p className="geo-plot-hint">Click a precise landmark on the image. Then capture its matching location on the 3D canvas.
           Use at least 3 distributed fit anchors and 2 different withheld survey checkpoints.</p>
+        {actualImage&&<small>Original resolution {actualImage.width} × {actualImage.height} pixels · aspect-correct 3D fit</small>}
+        {dimensionMismatch&&<p className="geo-plot-warning">Original image dimensions differ from the saved draft. Save and reverify this corrected image aspect before any overlay.</p>}
         {pending&&<strong>Image point U {pending[0].toFixed(5)} · V {pending[1].toFixed(5)}</strong>}
         <label>Signed drawing / survey evidence for new pair
           <input value={evidence} maxLength={160} placeholder="Approved plan, page and surveyed landmark"
@@ -254,9 +271,9 @@ export default function GeoPlotImageAlignmentPanel({
         <label><input type="checkbox" checked={showOverlay}
           onChange={e=>setShowOverlay(e.target.checked)}/> Show verified plot outline overlay</label>
         <div className="geo-align-actions">
-          <button type="button" disabled={!canEdit||!dirty||!!busy||!selected}
+          <button type="button" disabled={!canEdit||(!dirty&&!dimensionMismatch)||!!busy||!selected||!actualImage}
             onClick={()=>void save()}>{busy==="save"?"Saving…":"Save Alignment Draft"}</button>
-          <button type="button" disabled={!canEdit||dirty||!!busy||!assessed.result?.verifiedReady}
+          <button type="button" disabled={!canEdit||dirty||dimensionMismatch||!!busy||!assessed.result?.verifiedReady}
             onClick={()=>void verify()}>{busy==="verify"?"Verifying…":"Verify Independent Checkpoints"}</button>
         </div>
       </div>}
