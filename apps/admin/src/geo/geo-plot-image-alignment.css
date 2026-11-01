@@ -15,7 +15,7 @@
   color:#f0ffff;padding:7px 9px;font-size:11px;cursor:pointer}
 .geo-align-body button:disabled{opacity:.45;cursor:not-allowed}
 .geo-align-actions{display:flex;flex-wrap:wrap;gap:7px}
-.geo-align-image-stage{position:relative;width:100%;max-height:420px;overflow:auto;
+.geo-align-image-stage{position:relative;width:100%;overflow:hidden;
   border:1px solid #527685;border-radius:8px;background:#e8edf0}
 .geo-align-image-stage>img{display:block;width:100%;height:auto;max-width:none}
 .geo-align-image-stage>svg{position:absolute;inset:0;width:100%;height:100%;
