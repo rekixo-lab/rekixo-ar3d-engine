@@ -411,6 +411,51 @@ export default function GeoPlotMapper(){
     const neighbor=adjacentPlot(plots,working?.id||"",direction);
     if(neighbor)choose(neighbor);
   };
+  const rebindWithReviewedSource=async(
+    oldAlignment:import("../../../../shared/geo-plot-image-alignment.js").ImageModelAlignmentDraft,
+    selectedIds:string[]):Promise<{ok:boolean;reason?:string}>=>{
+    if(!state||!geo||!state.draft.stale||busy||dirty||working)
+      return {ok:false,reason:"Only a clean, source-stale mapping may be selectively remapped. Save/discard local edits first."};
+    if(selectedIds.length<1)return {ok:false,reason:"Select at least one Plot ID for reviewed remapping."};
+    setBusy(true);
+    try{
+      const body={expectedRevision:state.draft.revision,previousAlignment:oldAlignment,selectedIds};
+      const reviewed=await callApi<{
+        plan:{rows:Array<{plotId:string;selected:boolean;maxModelCoordinateMovementM:number}>;
+          unreviewedIds:string[]};
+        token:string;expectedRevision:number;verifiedAlignmentRevision:number
+      }>(api,{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...body,action:"remap-preflight"})
+      });
+      if(activeProjectRef.current!==slug)throw Error("Project switched while reviewing source remap.");
+      const selected=reviewed.plan.rows.filter(p=>p.selected);
+      const maximum=Math.max(...selected.map(p=>p.maxModelCoordinateMovementM));
+      const prompt="SELECTIVE SOURCE REMAP\n"+
+        selected.length+" selected polygons; "+reviewed.plan.unreviewedIds.length+
+        " others keep old coordinates but ALL approvals and model plane approvals reset.\n"+
+        "Largest selected model X/Z move: "+maximum.toFixed(3)+" m.\n"+
+        "NO published map/sales will change. Continue, then recheck EVERY plot against new signed survey?";
+      if(!window.confirm(prompt))
+        return {ok:false,reason:"Selective remap cancelled; no source draft was changed."};
+      const next=await callApi<MappingState>(api,{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...body,action:"rebind-remap",
+          expectedPreflightToken:reviewed.token,confirmation:"REMAP SOURCE "+slug})
+      });
+      if(activeProjectRef.current!==slug)throw Error("Project changed; reload mapping before editing.");
+      setState(next);setPlots(next.draft.plots);setDirty(false);resetWorking(null);
+      setOriginalId(null);setMode("pan");setPublishedPreview(null);
+      setMessage("Reviewed selective remap saved as UNVERIFIED mapping draft. "+
+        reviewed.plan.unreviewedIds.length+" plots still need manual source coordinate review. "+
+        "Nothing published. Review every plot and re-verify before Publish.");
+      return {ok:true};
+    }catch(error){
+      const message=error instanceof Error?error.message:String(error);
+      setMessage("ERROR: "+message);
+      return {ok:false,reason:message};
+    }finally{setBusy(false);}
+  };
   const stageCornerFromVerifiedImage=(plotId:string,index:number,uv:Point,
     transform:SimilarityTransform,alignmentRevision:number):{ok:boolean;reason?:string}=>{
     if(!state||!geo||state.draft.stale||busy||state.alignmentRevision!==alignmentRevision)
@@ -1040,7 +1085,9 @@ export default function GeoPlotMapper(){
           slug={slug} geoReleaseId={state.geoReleaseId} buildingReleaseId={state.buildingReleaseId}
           plots={plots} onCapture={captureImageAlignmentPoint}
           onRevisionChange={onAlignmentRevisionChange}
-          onStageImageCorner={stageCornerFromVerifiedImage} editable={editable&&!busy}/>}
+          onStageImageCorner={stageCornerFromVerifiedImage} editable={editable&&!busy}
+          mappingStale={Boolean(state.draft.stale)}
+          onRebindSource={rebindWithReviewedSource}/>}
         <details className="geo-plot-review-dashboard" open>
           <summary>03 · Data quality · {quality.summary.blockers} blockers / {quality.summary.reviews} reviews</summary>
           <p className="geo-plot-hint">Private draft diagnostics · {quality.summary.mapped} mapped /
