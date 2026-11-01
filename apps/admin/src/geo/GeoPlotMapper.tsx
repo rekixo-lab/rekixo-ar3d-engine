@@ -670,6 +670,24 @@ export default function GeoPlotMapper(){
       setMessage("Plot "+id+" staged. Save Mapping Draft before verification.");
     }
   };
+  const downloadGeoRecovery=async()=>{
+    if(!state||busy||!slug)return;
+    setBusy(true);
+    try{
+      const document=await callApi<{schema:string;sha256:string;warnings:string[];
+        completeness:string;payload:unknown}>(api+"?recovery=1");
+      if(activeProjectRef.current!==slug)return;
+      if(document.completeness!=="METADATA_AND_R2_REFERENCES_ONLY")
+        throw Error("Unexpected recovery export scope.");
+      const url=URL.createObjectURL(new Blob([JSON.stringify(document,null,2)],
+        {type:"application/json;charset=utf-8"}));
+      const a=window.document.createElement("a");a.href=url;
+      a.download=slug+"-geo-recovery-manifest.json";a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),2000);
+      setMessage("Owner-private recovery manifest downloaded. Verify sealed SHAs and independently export R2 object bytes. This is NOT a complete D1/R2 backup.");
+    }catch(error){setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));}
+    finally{setBusy(false);}
+  };
   const inspectPublish=async()=>{
     if(!state||!geo||dirty||working||busy)return;
     setBusy(true);
@@ -1310,6 +1328,12 @@ export default function GeoPlotMapper(){
         </>}
         <div className="geo-plot-draft-actions">
           <h3>Save, review & publish</h3>
+          <button type="button" disabled={!state||busy||!slug} onClick={()=>void downloadGeoRecovery()}>
+            Download Geo Recovery Manifest (private)
+          </button>
+          <p className="geo-plot-hint">Sealed D1 mapping history + SHA-pinned R2 references.
+            Rehearse restore offline; independently export R2 bytes and payment-ledger backup
+            before calling any project fully recoverable.</p>
           <button type="button" disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision}
             onClick={()=>void inspectPublish()}>Preview Live vs Draft Plot Changes</button>
           {publishedPreview&&<div className="geo-plot-review-dashboard" role="status">
