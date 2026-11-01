@@ -1000,7 +1000,7 @@ export default function GeoPlotMapper(){
                 onClick={()=>nudgeSelectedCorner(nudgeStep,0)}>+X</button>
             </div>
             <small>Choose a corner above or click its handle. Arrow keys move the selected corner when editor controls are focused; Shift = 10×. Moving geometry revokes source and road-side approvals.</small>
-          </div>
+          </div>}
           <label>Plot Number<input readOnly={Boolean(originalId)} value={working.id} onChange={e=>setWorking({...working,id:e.target.value})}/></label>
           {selectedInventory&&<div className="geo-plot-source-review">
             <strong>Approved CSV · Plot {selectedInventory.id}</strong>
