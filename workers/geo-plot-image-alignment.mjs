@@ -148,6 +148,26 @@ async function verify(env,ctx,actor,body,modelHash){
      maxCheckpointMetres:assessment.maxCheckpointMetres,reviewLimitMetres:assessment.limitMetres});
   return snapshot(env,ctx,modelHash);
 }
+// Existing published mapping releases stay readable and reactivatable.
+// Once a private calibration draft exists, every NEW legacy Geo mapping verify
+// and publish must be tied to a current, independently checked image/model fit.
+export async function requireCurrentImageAlignmentReview(env,ctx){
+  const row=await readRow(env,ctx.project.id);
+  if(!row)return {revision:0};
+  if(row.verified_revision!==row.revision)
+    throw Error("Image/model alignment changed or is not yet verified. Complete independent checkpoint review before mapping Verify/Publish.");
+  const modelHash=await publishedModel(env,ctx);
+  const draft=normalizeImageModelAlignment(asDraft(row));
+  if(draft.geoReleaseId!==ctx.active.geo_release_id||
+     draft.buildingReleaseId!==ctx.active.source_building_release_id||
+     draft.modelSha256!==modelHash)
+    throw Error("Image alignment was verified for a different Geo/Building model.");
+  const image=await ownedImage(env,ctx.project.id,draft.imageAssetId);
+  if(image.sha256.toLowerCase()!==draft.imageSha256)
+    throw Error("The original image source changed after alignment verification.");
+  evaluateImageModelAlignment(draft,{requireCheckpoints:true});
+  return {revision:row.revision};
+}
 export async function handleGeoPlotAlignment(request,env,ctx,actor){
   if(request.method!=="GET"&&request.method!=="PUT"&&request.method!=="POST")
     return reply({error:"Method not allowed."},405);
