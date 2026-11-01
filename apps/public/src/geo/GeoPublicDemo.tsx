@@ -72,7 +72,8 @@ type GeoPayload = {
     sha256?: string;
     sourceSha256?: string;
   };
-  plotMapping?: {version:number;geoReleaseId:string;plots:GeoMappedPlot[]};
+  plotMapping?: {version:number;geoReleaseId:string;plots:GeoMappedPlot[];
+    commercial?:Record<string,{status:"available"|"booked"|"sold";pricePaise:number|null;currency:"INR"}>};
   error?: string;
 };
 
@@ -746,6 +747,15 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
       {selectedPlot && <aside className="geo-plot-public-details" aria-label="Selected verified plot details">
         <button type="button" className="geo-plot-public-close" aria-label="Close plot details" onClick={()=>setSelectedPlot(null)}>×</button>
         <strong>Plot {selectedPlot.id}</strong>
+        {(()=>{
+          const commercial=data.plotMapping?.commercial?.[selectedPlot.id];
+          return commercial?<span>
+            {commercial.status==="available"?"Available":commercial.status==="booked"?"Booked":"Sold"}
+            {Number.isSafeInteger(commercial.pricePaise)&&commercial.pricePaise!==null
+              ?" · "+new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR"})
+                .format(commercial.pricePaise/100):""}
+          </span>:<small>Commercial status/price not independently approved for this mapping release.</small>;
+        })()}
         <span>{selectedPlot.area.value} {selectedPlot.area.unit} · {selectedPlot.facing}</span>
         {selectedPlot.road && <span>Road: {selectedPlot.road}</span>}
         {Object.entries(selectedPlot.sides).map(([role,side])=><span key={role}>{role}: {side.length} {side.unit}{side.roadFacing?" · Road":""}</span>)}
