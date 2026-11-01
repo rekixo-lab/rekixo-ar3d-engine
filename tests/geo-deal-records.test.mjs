@@ -129,7 +129,7 @@ test("private deal write appends audit, conflicts fail and no commercial/public 
    {allowWrite:false});
   assert.equal(forbidden.status,403);
   const first=await handleGeoPlotDeals(request("PUT",normal),f.env,f.ctx,actor);
-  assert.equal(first.status,200,await first.text());
+  assert.equal(first.status,200);
   const payload=await first.json();
   assert.equal(payload.rows[0].stage,"booked");
   assert.equal(payload.rows[0].buyerName,"Demo Customer");
@@ -141,7 +141,7 @@ test("private deal write appends audit, conflicts fail and no commercial/public 
   const update=await handleGeoPlotDeals(request("PUT",{
    ...normal,stage:"agreement_done",agreementReference:"Signed agreement DOC-1",expectedRevision:1
   }),f.env,f.ctx,actor);
-  assert.equal(update.status,200,await update.text());
+  assert.equal(update.status,200);
   assert.equal((await update.json()).rows[0].revision,2);
   assert.equal(f.db.prepare("SELECT count(*) as n FROM geo_plot_deal_events_3d").get().n,2);
   assert.doesNotMatch(read("workers/geo-plot-deals.mjs"),/UPDATE geo_plot_commercial_3d/);
