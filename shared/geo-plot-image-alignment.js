@@ -11,8 +11,8 @@ function normalizePoints(items,label){
   return items.map((raw,i)=>{
     if(!raw||typeof raw!=="object"||Array.isArray(raw))throw Error(label+" point "+(i+1)+" is invalid.");
     const key=trim(raw.id);
-    if(!id(key)||ids.has(key))throw Error(label+" points need unique, valid IDs.");
-    ids.add(key);
+    if(!id(key)||ids.has(key.toLowerCase()))throw Error(label+" points need unique, valid IDs.");
+    ids.add(key.toLowerCase());
     if(![raw.u,raw.v,raw.x,raw.z].every(finite)||raw.u<0||raw.u>1||raw.v<0||raw.v>1||
        Math.abs(raw.x)>100000||Math.abs(raw.z)>100000)
       throw Error(label+" "+key+": finite image U/V (0..1) and model X/Z required.");
@@ -82,7 +82,6 @@ export function evaluateImageModelAlignment(value,{requireCheckpoints=false}={})
     return {id:p.id,errorMetres:Math.hypot(px-p.x,pz-p.z)};
   });
   const fit=errors(anchors),independent=errors(checks);
-  const extents=anchors.flatMap(p=>[p.x,p.z]);
   const span=Math.max(Math.hypot(
     Math.max(...anchors.map(p=>p.x))-Math.min(...anchors.map(p=>p.x)),
     Math.max(...anchors.map(p=>p.z))-Math.min(...anchors.map(p=>p.z))),1);
