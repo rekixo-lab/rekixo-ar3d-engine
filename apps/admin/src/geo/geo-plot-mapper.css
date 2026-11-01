@@ -351,3 +351,16 @@
 .geo-plot-selected-review-note span{font-size:11px;line-height:1.5}
 .geo-plot-selected-review-note small{font-size:10px;line-height:1.5;color:#b3d2ce}
 @media(max-width:620px){.geo-plot-quality-queue{max-height:50vh}}
+
+/* Preliminary publication is a deliberate live action; source review remains visible. */
+.geo-plot-page .geo-plot-preliminary-button{
+  background:#105c6c;border:1px solid #56c6c9;color:#e1ffff;
+  font-size:12px;font-weight:900;padding:9px 12px;min-height:40px;
+  white-space:normal;line-height:1.3;
+}
+.geo-plot-page .geo-plot-preliminary-button:hover:not(:disabled){
+  background:#13788b;border-color:#8ff5f0;
+}
+.geo-plot-page .geo-plot-preliminary-button:disabled{
+  opacity:.58;cursor:not-allowed;
+}
