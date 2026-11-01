@@ -820,11 +820,13 @@ export default function GeoPlotMapper(){
       id+". Continue with an UNPUBLISHED draft save?"))return;
     const proposed=[...plots.filter(p=>p.id!==(originalId||id)),{...working,id}]
       .sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
+    let writtenRevision:number|null=null;
     setBusy(true);
     try{
       const saved=await callApi<MappingState>(api,{method:"PUT",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({expectedRevision:state.draft.revision,
           geoReleaseId:state.geoReleaseId,plots:proposed})});
+      writtenRevision=saved.draft.revision;
       // The public release is NOT changed. Verify a second uncached D1 read
       // before clearing the operator's in-progress corner geometry.
       const readBack=await callApi<MappingState>(api);
@@ -847,7 +849,10 @@ export default function GeoPlotMapper(){
         "All approved CSV IDs mapped. Review original-image alignment, data quality, then Verify and Publish."));
     }catch(error){
       setMessage("ERROR: "+(error instanceof Error?error.message:String(error))+
-        " The unsaved plot is still in this editor.");
+        (writtenRevision===null
+          ?" The unsaved plot is still in this editor; correct the issue before retrying."
+          :" Server accepted draft r"+writtenRevision+
+            " but read-back is not confirmed. Do NOT press Confirm again; reload and inspect the saved mapping first."));
     }finally{setBusy(false);}
   };
   const downloadGeoRecovery=async()=>{
@@ -1184,7 +1189,7 @@ export default function GeoPlotMapper(){
                 if(mapped){choose(mapped);return;}
                 const row=inventoryRows.find(p=>p.id===id);
                 if(!row||!confirmUnapplied())return;
-                resetWorking(fromInventory(row,groundY));setOriginalId(null);
+                clearLocalPlotDraft();resetWorking(fromInventory(row,groundY));setOriginalId(null);
                 setShape("four");setMode("draw");setInspectorTab("plot");
                 setMessage("Plot "+id+" selected from approved CSV. Draw the real boundary.");
               }}>
