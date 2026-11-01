@@ -141,7 +141,9 @@ test("canonical Building and Geo URLs remain separate and stable", () => {
   assert.match(core, /geoPublicProjectPath/);
   assert.match(publicMain, /geoRoute/);
   assert.match(page, /\/3Dprojects\/api\/projects\/\$\{encodeURIComponent\(slug\)\}\/geo-placement/);
-  assert.match(page, /href=\{\`\/3Dprojects\/\$\{encodeURIComponent\(data\.project\.slug\)\}\`\}/);
+  assert.match(publicMain, /const geoRoute =/);
+  assert.match(publicMain, /geoRoute \? <GeoPublicDemo \/> : <App \/>/);
+  assert.doesNotMatch(page, /className="geo-building-link"/);
 });
 
 test("legacy mutable Geo placement is retained only as non-runtime compatibility data", () => {
