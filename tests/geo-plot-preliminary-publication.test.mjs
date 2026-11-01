@@ -36,7 +36,7 @@ test("preliminary public plot hides all unverified site facts and commercial not
   assert.equal(pub.road,null);
   assert.deepEqual(pub.sides,{});
   assert.equal(pub.notes,"");
-  assert.equal(pub.planeY,0);
+  assert.equal(Object.hasOwn(pub,"planeY"),false,"unreviewed Y must use canonical model-ground fallback");
   assert.equal(normalizeGeoPlotPublicationMode("verified"),"verified");
   assert.throws(()=>normalizeGeoPlotPublicationMode("mislabeled"),/Unknown/);
 });
