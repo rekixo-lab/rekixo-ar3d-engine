@@ -654,6 +654,12 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
             loadedModel = model;
             // Measure canonical model-local ground BEFORE Geo placement converts its axes.
             const modelGroundY = new THREE.Box3().setFromObject(model).min.y;
+            // Sample GLB surface elevations while its coordinates are still
+            // canonical model-local. After placement its world matrix is ENU;
+            // mixing those coordinates with saved X/Z plot points would drift.
+            const candidateLayer=data.plotMapping?.geoReleaseId===data.geoRelease.id &&
+              data.plotMapping.plots.length>0
+              ?buildModelGeoPlotLayer(model,data.plotMapping.plots):null;
             const placement=applyRigidBuildingPlacement(
               modelRoot,
               model,
@@ -668,12 +674,9 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
                 scale: data.placement.scale,
               },
             );
-            if(data.plotMapping?.geoReleaseId===data.geoRelease.id &&
-              data.plotMapping.plots.length>0){
-              // Build the overlay in original model-local X/Z BEFORE any
-              // extra map projection is applied; it inherits precisely the
-              // same anchor/scale/rotation as the immutable source GLB.
-              plotLayer=buildModelGeoPlotLayer(model,data.plotMapping.plots);
+            if(candidateLayer){
+              // Same original X/Z frame as the model; placement is shared.
+              plotLayer=candidateLayer;
               placement.anchorOffset.add(plotLayer.group);
               preparedPaths=data.plotMapping.plots.map(plot=>{
                 const path=geoPlotWorldPath(plot,data,
