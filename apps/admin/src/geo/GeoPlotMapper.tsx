@@ -498,7 +498,7 @@ export default function GeoPlotMapper(){
   const choose=(plot:Plot)=>{
     if(working?.id===plot.id&&originalId===plot.id)return;
     if(!confirmUnapplied())return;
-    resetWorking(structuredClone(plot));
+    clearLocalPlotDraft();resetWorking(structuredClone(plot));
     if(Number.isFinite(plot.planeY))setGroundY(plot.planeY!);
     setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");
     setMode("edit");setInspectorTab("plot");
@@ -1049,6 +1049,7 @@ export default function GeoPlotMapper(){
       setInspectorTab("sources");return;
     }
     if(!selected&&!confirmUnapplied())return;
+    if(!selected)clearLocalPlotDraft();
     setShape(kind);setMode("draw");setOriginalId(null);setInspectorTab("plot");
     if(!selected&&pending)resetWorking(fromInventory(pending,groundY));
     setMessage("Plot "+(selected?working!.id:pending?.id)+": start at the road-facing Front edge; tap corners clockwise.");
@@ -1076,7 +1077,7 @@ export default function GeoPlotMapper(){
   },[selectedCorner,working?.corners.length]);
   const cancelWorking=()=>{
     if(!confirmUnapplied())return;
-    setWorking(null);setOriginalId(null);setMode("pan");setMessage("Unapplied plot selection cleared; saved draft unchanged.");
+    clearLocalPlotDraft();setWorking(null);setOriginalId(null);setMode("pan");setMessage("Unapplied plot selection cleared; saved draft unchanged.");
   };
   const finishBoundary=()=>{
     if(!working||working.corners.length<3){setMessage("ERROR: Mark at least 3 corners before completing the boundary.");return;}
@@ -1705,6 +1706,15 @@ export default function GeoPlotMapper(){
           <p className="geo-plot-hint">Apply each plot, save the draft, reconcile the approved CSV, then verify. A new inventory revision blocks Publish until re-reviewed.</p>
         <button disabled={!editable||busy||!dirty} onClick={()=>void execute("save")}>{busy?"Saving…":"Save Mapping Draft"}</button>
         <button disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision||inventoryIssues.length>0} onClick={()=>void execute("verify")}>Verify All Plots</button>
+        <button type="button" className="geo-plot-publish-button"
+          disabled={!editable||busy||dirty||Boolean(working)||!state||
+            state.draft.verifiedRevision!==state.draft.revision||
+            state.draft.verifiedInventoryRevision!==state.inventoryRevision||
+            (state.alignmentRevision>0&&state.draft.verifiedAlignmentRevision!==state.alignmentRevision)||
+            inventoryIssues.length>0}
+          onClick={()=>void execute("publish")}>Publish Verified Mapping to Customer Site</button>
+        <small className="geo-plot-hint">Confirm Plot saves a PRIVATE draft only.
+          The public Geo site changes after separate Verify and explicit Publish.</small>
         <label className="geo-plot-import">Import Measurements CSV / Platform Plot Data CSV
           <small>Platform Plot Data is safely routed to Inventory first, even with zero mapped plots.</small>
           <input type="file" accept=".csv,text/csv" disabled={!editable||busy||dirty||hasUnapplied}
