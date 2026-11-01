@@ -3,6 +3,7 @@ import {readFile} from "node:fs/promises";
 
 const rootStyles=await readFile(new URL("../apps/public/src/styles.css",import.meta.url),"utf8");
 const geoStyles=await readFile(new URL("../apps/public/src/geo/geo-public-demo.css",import.meta.url),"utf8");
+const fullscreenStyles=await readFile(new URL("../apps/public/src/geo/fullscreen-controls.css",import.meta.url),"utf8");
 
 test("mobile Geo map reaches camera dock on short and tall phones",async({page})=>{
   for(const viewport of [
@@ -25,6 +26,9 @@ test("mobile Geo map reaches camera dock on short and tall phones",async({page})
         </nav></div>
       </div></main></body></html>`);
     await page.addStyleTag({content:rootStyles});
+    // Same order as the customer website: legacy fullscreen CSS in the
+    // document head, then the Geo component's imported styles.
+    await page.addStyleTag({content:fullscreenStyles});
     await page.addStyleTag({content:geoStyles});
 
     const measured=await page.evaluate(()=>{
@@ -34,6 +38,13 @@ test("mobile Geo map reaches camera dock on short and tall phones",async({page})
       };
       return {
         header:rect(".jio-public-header"),
+        title:rect(".jio-public-header h1"),
+        subtitle:rect(".jio-public-header p"),
+        titleText:document.querySelector(".jio-public-header h1")?.textContent?.trim(),
+        subtitleText:document.querySelector(".jio-public-header p")?.textContent?.trim(),
+        headerDisplay:getComputedStyle(document.querySelector(".jio-public-header")!).display,
+        headerVisibility:getComputedStyle(document.querySelector(".jio-public-header")!).visibility,
+        shellPosition:getComputedStyle(document.querySelector(".jio-public-shell")!).position,
         scene:rect(".geo-integrated-scene"),
         dock:rect(".geo-public-toolbar-slot"),
         viewportHeight:window.innerHeight,
@@ -43,6 +54,15 @@ test("mobile Geo map reaches camera dock on short and tall phones",async({page})
       };
     });
     const label=`${viewport.width}x${viewport.height}`;
+    expect(measured.titleText,label+" title restored").toBe("satharai");
+    expect(measured.subtitleText,label+" subtitle restored").toContain("Thiruvallur");
+    expect(measured.headerDisplay,label+" mobile title row is not legacy fullscreen grid").toBe("flex");
+    expect(measured.headerVisibility,label+" header visible").toBe("visible");
+    expect(measured.shellPosition,label+" shell spans the browser viewport").toBe("fixed");
+    expect(measured.title.height,label+" title has visible height").toBeGreaterThan(15);
+    expect(measured.subtitle.height,label+" subtitle has visible height").toBeGreaterThan(10);
+    expect(measured.title.top,label+" heading not clipped above viewport").toBeGreaterThanOrEqual(0);
+    expect(measured.subtitle.bottom,label+" subtitle not covered by the map").toBeLessThanOrEqual(measured.scene.top);
     expect(measured.dock.top-measured.scene.bottom,label+" no gap above dock").toBeGreaterThanOrEqual(-1);
     expect(measured.dock.top-measured.scene.bottom,label+" no gap above dock").toBeLessThan(2);
     expect(Math.abs(measured.viewportHeight-measured.dock.bottom),label+" dock meets viewport bottom").toBeLessThan(2);
@@ -62,6 +82,7 @@ test("desktop Geo keeps existing dock and site sizing rules",async({page})=>{
       <div class="geo-public-toolbar-slot"><nav class="geo-camera-toolbar geo-camera-toolbar--normal-row">Overview</nav></div>
     </div></main>`);
   await page.addStyleTag({content:rootStyles});
+  await page.addStyleTag({content:fullscreenStyles});
   await page.addStyleTag({content:geoStyles});
   const result=await page.evaluate(()=>({
     dockPosition:getComputedStyle(document.querySelector(".geo-public-toolbar-slot")!).position,
