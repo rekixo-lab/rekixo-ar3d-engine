@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import {pointInScreenTriangle} from "../../../../shared/geo-plot-screen-hit.js";
 
 /**
  * Render clickable Geo Plot outlines INSIDE the canonical GLB's own local
@@ -158,15 +159,56 @@ export function pickModelGeoPlot(
   const ndcX=(clientX-rect.left)/rect.width*2-1;
   const ndcY=1-(clientY-rect.top)/rect.height*2;
   if(ndcX < -1||ndcX>1||ndcY < -1||ndcY>1)return null;
+
+  const meshes=hitMeshes.filter(mesh=>mesh.visible&&mesh.parent?.visible&&mesh.parent.parent?.visible);
+  if(!meshes.length)return null;
+  // Model placement and its GLB-local hit meshes must share the *current* world
+  // matrices, including zoom/tilt changes and the placement anchor transform.
+  for(const mesh of meshes)mesh.updateWorldMatrix(true,false);
+
+  // First try the native Three.js ray. On some Google WebGLOverlayView camera
+  // configurations, far-plane unprojection is numerically unstable even
+  // though the plot triangles render perfectly on the same canvas.
   const inverse=projection.clone().invert();
   const near=new THREE.Vector3(ndcX,ndcY,-1).applyMatrix4(inverse);
   const far=new THREE.Vector3(ndcX,ndcY,1).applyMatrix4(inverse);
-  if(!near.toArray().every(Number.isFinite)||!far.toArray().every(Number.isFinite))return null;
-  const direction=far.sub(near).normalize();
-  const ray=new THREE.Raycaster(near,direction);
-  ray.near=0;
-  const meshes=hitMeshes.filter(mesh=>mesh.visible&&mesh.parent?.visible&&mesh.parent.parent?.visible);
-  const hits=ray.intersectObjects(meshes,false);
-  return typeof hits[0]?.object.userData.plotId==="string"
-    ?hits[0].object.userData.plotId:null;
+  if(near.toArray().every(Number.isFinite)&&far.toArray().every(Number.isFinite)){
+    const direction=far.sub(near).normalize();
+    if(direction.toArray().every(Number.isFinite)){
+      const ray=new THREE.Raycaster(near,direction);
+      ray.near=0;
+      const hits=ray.intersectObjects(meshes,false);
+      if(typeof hits[0]?.object.userData.plotId==="string")
+        return hits[0].object.userData.plotId;
+    }
+  }
+
+  // Fallback: hit-test the *actual rendered GLB-attached plot triangles* in
+  // screen space. Do not project plot corners onto Google terrain: that would
+  // drift away from raised masterplans at pitched camera angles.
+  let closest:{id:string;depth:number}|null=null;
+  for(const mesh of meshes){
+    const id=mesh.userData.plotId;
+    if(typeof id!=="string")continue;
+    const positions=mesh.geometry.getAttribute("position");
+    if(!positions||positions.itemSize<3)continue;
+    const index=mesh.geometry.index;
+    const triangleVertexCount=index?index.count:positions.count;
+    const modelToClip=projection.clone().multiply(mesh.matrixWorld);
+    const vertex=(slot:number)=>{
+      const offset=index?index.getX(slot):slot;
+      return new THREE.Vector4(
+        positions.getX(offset),positions.getY(offset),positions.getZ(offset),1
+      ).applyMatrix4(modelToClip);
+    };
+    for(let i=0;i+2<triangleVertexCount;i+=3){
+      const a=vertex(i),b=vertex(i+1),c=vertex(i+2);
+      if(a.w<=0||b.w<=0||c.w<=0)continue;
+      if(!pointInScreenTriangle(ndcX,ndcY,
+        a.x/a.w,a.y/a.w,b.x/b.w,b.y/b.w,c.x/c.w,c.y/c.w))continue;
+      const depth=(a.z/a.w+b.z/b.w+c.z/c.w)/3;
+      if(!closest||depth<closest.depth)closest={id,depth};
+    }
+  }
+  return closest?.id||null;
 }

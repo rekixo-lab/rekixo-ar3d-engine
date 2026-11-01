@@ -596,6 +596,9 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         };
         pointerHost?.addEventListener("pointerdown",onNativePointerDown,true);
         pointerHost?.addEventListener("pointerup",onNativePointerUp,true);
+        // Google can capture/reparent pointerup outside the map subtree.
+        // Window capture still sees the release without interrupting pan/zoom.
+        window.addEventListener("pointerup",onNativePointerUp,true);
 
         const scene = new THREE.Scene();
         const camera = new THREE.Camera();
@@ -829,6 +832,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         pointerHost.removeEventListener("pointerdown",onNativePointerDown,true);
       if(pointerHost&&onNativePointerUp)
         pointerHost.removeEventListener("pointerup",onNativePointerUp,true);
+      if(onNativePointerUp)
+        window.removeEventListener("pointerup",onNativePointerUp,true);
       plotLayer?.dispose();
       plotLayer=null;latestProjection=null;preparedPaths=[];
       plotRefreshRef.current=null;
@@ -863,6 +868,16 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         <button type="button" onClick={() => setShowPlotBoundaries(v=>!v)}
           aria-pressed={showPlotBoundaries}>Plots {showPlotBoundaries?"ON":"OFF"}</button>
         <span>{data.plotMapping.plots.length} mapped</span>
+        <select aria-label="Select a mapped plot" value={selectedPlot?.id||""}
+          disabled={!showPlotBoundaries}
+          onChange={event=>setSelectedPlot(data.plotMapping?.plots.find(
+            plot=>plot.id===event.target.value
+          )||null)}>
+          <option value="">Select plot</option>
+          {data.plotMapping.plots.map(plot=><option key={plot.id} value={plot.id}>
+            Plot {plot.id}
+          </option>)}
+        </select>
         {data.plotMapping.publicationMode==="preliminary"&&
           <span className="geo-plot-preliminary-notice" role="status">
             Preliminary plot mapping · Details pending source review
