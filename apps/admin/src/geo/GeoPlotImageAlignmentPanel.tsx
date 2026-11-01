@@ -213,7 +213,10 @@ export default function GeoPlotImageAlignmentPanel({
   },[plots,assessed.result,showOverlay,isVerified]);
   const canEdit=Boolean(geoReleaseId&&buildingReleaseId&&snapshot);
   return <details className={"geo-align-panel"+(expanded?" geo-align-panel--expanded":"")}
-    open={open} onToggle={event=>setOpen(event.currentTarget.open)}>
+    open={open} onToggle={event=>{
+      const next=event.currentTarget.open;setOpen(next);
+      if(!next){setExpanded(false);setImageEditMode(false);setPendingEdit(null);}
+    }}>
     <summary>02 · Original image ↔ verified 3D alignment
       <small> · {isVerified?"independent QA passed":snapshot?.draft?"needs review":"not set"}</small>
     </summary>
