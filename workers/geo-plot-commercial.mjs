@@ -19,7 +19,8 @@ export function normalizeGeoCommercialChange(body){
     throw Error("Price must be a non-negative integer in INR paise, or null.");
   if(body.currency!==undefined&&body.currency!=="INR")
     throw Error("Commercial pricing must be in INR.");
-  const evidenceRef=String(body.evidenceRef||"").trim();
+  if(typeof body.evidenceRef!=="string")throw Error("Evidence reference must be text from a reviewed source.");
+  const evidenceRef=body.evidenceRef.trim();
   if(evidenceRef.length<3||evidenceRef.length>250||/[\x00-\x1f\x7f]/.test(evidenceRef))
     throw Error("Current signed/source evidence reference (3–250 characters) is required.");
   if(typeof body.publicApproved!=="boolean")
