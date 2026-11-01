@@ -8,7 +8,8 @@ type Point=[number,number];
 type Snapshot={revision:number;verifiedRevision:number|null;stale:boolean;
   modelSha256:string;draft:ImageModelAlignmentDraft|null};
 type Props={slug:string;geoReleaseId:string|null;buildingReleaseId:string|null;
-  plots:Array<{id:string;corners:Point[]}>;onCapture:(done:(point:Point)=>void)=>void};
+  plots:Array<{id:string;corners:Point[]}>;onCapture:(done:(point:Point)=>void)=>void;
+  onRevisionChange:(revision:number)=>void};
 const url=(slug:string)=>"/3Dprojects/api/cloud/projects/"+encodeURIComponent(slug)+"/geo-plots/alignment";
 async function api<T>(path:string,init?:RequestInit):Promise<T>{
   const r=await fetch(path,{cache:"no-store",...init,headers:{
@@ -30,7 +31,7 @@ function exportReview(slug:string,snapshot:Snapshot,draft:ImageModelAlignmentDra
   window.setTimeout(()=>URL.revokeObjectURL(address),2000);
 }
 export default function GeoPlotImageAlignmentPanel({
-  slug,geoReleaseId,buildingReleaseId,plots,onCapture
+  slug,geoReleaseId,buildingReleaseId,plots,onCapture,onRevisionChange
 }:Props){
   const [snapshot,setSnapshot]=useState<Snapshot|null>(null);
   const [draft,setDraft]=useState<ImageModelAlignmentDraft|null>(null);
@@ -158,6 +159,7 @@ export default function GeoPlotImageAlignmentPanel({
         body:JSON.stringify({expectedRevision:snapshot.revision,draft:dimensionalDraft,confirmSourceChange:switched})
       });
       setSnapshot(next);setDraft(next.draft);setDirty(false);
+      onRevisionChange(next.revision);
       setMessage("Private image/model alignment draft saved. No published plot geometry changed.");
     }catch(err){setError(err instanceof Error?err.message:String(err));}
     finally{setBusy("");}
