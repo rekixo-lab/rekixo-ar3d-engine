@@ -20,7 +20,6 @@ export type ModelPlotLayer = {
 
 const PLOT_COLOR=0x20d8a5;
 const SURFACE_OFFSET_M=0.015;
-const UP=new THREE.Vector3(0,1,0);
 const DOWN=new THREE.Vector3(0,-1,0);
 
 function averagePoint(plot:ModelGeoPlot):[number,number] {
@@ -34,7 +33,6 @@ function averagePoint(plot:ModelGeoPlot):[number,number] {
 /** Find an actual GLB surface under the mapped footprint, not Google terrain. */
 function modelPlotElevation(
   plot:ModelGeoPlot,
-  model:THREE.Object3D,
   bounds:THREE.Box3,
   ray:THREE.Raycaster,
   candidates:Array<{mesh:THREE.Mesh;bounds:THREE.Box3}>,
@@ -109,7 +107,7 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
   });
   for(const plot of plots){
     if(!Array.isArray(plot.corners)||plot.corners.length<3)continue;
-    const surfaceY=modelPlotElevation(plot,model,bounds,ray,candidateMeshes,plots.length<=120?5:1);
+    const surfaceY=modelPlotElevation(plot,bounds,ray,candidateMeshes,plots.length<=120?5:1);
     const plotGroup=new THREE.Group();
     plotGroup.name="geo-plot-"+plot.id;
     const mesh=new THREE.Mesh(plotShapeGeometry(plot.corners,surfaceY),fillMaterial);
