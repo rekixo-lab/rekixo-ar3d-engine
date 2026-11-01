@@ -496,8 +496,7 @@ export default function GeoPlotMapper(){
     pointerPreviewRef.current=next;
     const loupe=positionCursorLoupe(next.screen,[host.clientWidth,host.clientHeight]);
     if(loupeRef.current){
-      loupeRef.current.style.left=loupe.left+"px";
-      loupeRef.current.style.top=loupe.top+"px";
+      loupeRef.current.style.transform="translate3d("+loupe.left+"px,"+loupe.top+"px,0)";
     }
     if(crosshairRef.current){
       crosshairRef.current.style.left=next.screen[0]+"px";
@@ -1168,6 +1167,8 @@ export default function GeoPlotMapper(){
   });
   const editable=Boolean(state&&!state.draft.stale&&geo);
   const path=(points:Point[])=>points.map(p=>project(p).join(",")).join(" ");
+  const loupePosition=pointerPreview?positionCursorLoupe(
+    pointerPreview.screen,[viewport.w,viewport.h]):{left:12,top:12};
   return <main className="geo-plot-page">
     <header className="geo-plot-top"><div><p className="eyebrow">REKIXO ENGINE · INDEPENDENT GEO MAPPING</p><h1>3D Geo Plot Mapper</h1>
       <p>Draw plot boundaries on a checksum-verified Building-local master plan. AR3D Platform remains untouched.</p></div>
@@ -1398,7 +1399,7 @@ export default function GeoPlotMapper(){
             <div ref={pointerOriginRef} className="geo-plot-precision-pointer-origin" aria-hidden="true"
               style={{left:pointerPreview.rawScreen[0],top:pointerPreview.rawScreen[1]}}/>}
           <div ref={loupeRef} className="geo-plot-precision-loupe" role="img"
-            style={positionCursorLoupe(pointerPreview.screen,[viewport.w,viewport.h])}
+            style={{transform:"translate3d("+loupePosition.left+"px,"+loupePosition.top+"px,0)"}}
             aria-label="Magnified view follows the actual pointer and snaps inside canvas edges">
             <canvas ref={loupeCanvasRef} width={144} height={144} aria-hidden="true"/>
             <div className="geo-plot-loupe-reticle" aria-hidden="true"/>
