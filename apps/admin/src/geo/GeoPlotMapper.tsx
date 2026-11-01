@@ -1468,7 +1468,7 @@ export default function GeoPlotMapper(){
             {actionableQualityIssues.filter(issue=>issue.severity==="review").length} mapped reviews</summary>
           <p className="geo-plot-hint">Private draft diagnostics · {quality.summary.mapped} mapped /
             {quality.summary.inventory} approved inventory IDs. Source evidence and model estimates are separate;
-            review findings are not a survey certificate or a publish approval.</p>
+            review findings are not a survey certificate. These Quality issues block Verified status, not a clearly labeled Preliminary Mapping publication.</p>
           <button type="button" disabled={!state} onClick={downloadQualityEvidence}>
             Download Evidence & Quality Review JSON
           </button>
@@ -1721,7 +1721,7 @@ export default function GeoPlotMapper(){
             </select>
           </label>}
           {working.road&&working.sides.front?.roadFacing!==true&&
-            <p className="geo-plot-warning">Road/access is entered but Front has not been marked Road side. Publishing requires explicit road-front confirmation.</p>}
+            <p className="geo-plot-warning">Road/access is entered but Front is not confirmed as the road side. Verified Publish requires source review; Preliminary Publish remains available and will hide unapproved Road details.</p>}
           {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{const side=working.sides[role]||emptySide();
             const localM=geometrySideLengthMetres(working.corners,side.edges,1);
             const scaledM=geometrySideLengthMetres(working.corners,side.edges,geo?.placement.scale||1);
