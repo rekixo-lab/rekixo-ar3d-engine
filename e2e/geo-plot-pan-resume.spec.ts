@@ -76,6 +76,7 @@ for(const {shape,cornerCount,toolKey,toolLabel} of [
     await page.keyboard.press(toolKey);
     await expect(overlay).toHaveAttribute("data-tool-mode","draw");
     await expect(status).toContainText(countText);
-    await expect(page.getByRole("button",{name:"Confirm Plot 1 & Next"})).toBeDisabled();
+    if(shape==="four")await expect(page.getByRole("button",{name:"Confirm Plot 1 & Next"})).toBeDisabled();
+    else await expect(page.getByRole("button",{name:"Confirm Plot 1 & Next"})).toBeEnabled();
   });
 }
