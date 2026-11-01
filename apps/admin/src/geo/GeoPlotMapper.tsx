@@ -293,6 +293,25 @@ export default function GeoPlotMapper(){
     return()=>window.clearTimeout(timer);
   },[slug,working,originalId,shape,hasUnapplied,state?.geoReleaseId,
     state?.buildingReleaseId,state?.draft.revision]);
+  useEffect(()=>{
+    const key=draftStorageKey(slug);
+    if(!key||!working||!hasUnapplied||!state?.geoReleaseId||!state?.buildingReleaseId)return;
+    const flush=()=>{
+      const raw=packLocalPlotDraft({
+        projectSlug:slug,geoReleaseId:state.geoReleaseId!,buildingReleaseId:state.buildingReleaseId!,
+        mappingRevision:state.draft.revision,plot:working,originalId,shape
+      });
+      if(raw)try{window.localStorage.setItem(key,raw);}catch{/* Storage may be disabled. */}
+    };
+    const onVisibility=()=>{if(document.visibilityState==="hidden")flush();};
+    window.addEventListener("pagehide",flush);
+    document.addEventListener("visibilitychange",onVisibility);
+    return()=>{
+      window.removeEventListener("pagehide",flush);
+      document.removeEventListener("visibilitychange",onVisibility);
+    };
+  },[slug,working,originalId,shape,hasUnapplied,state?.geoReleaseId,
+    state?.buildingReleaseId,state?.draft.revision]);
   const clearLocalPlotDraft=()=>{
     const key=draftStorageKey(slug);
     if(key)try{window.localStorage.removeItem(key);}catch{/* Storage may be disabled. */}
