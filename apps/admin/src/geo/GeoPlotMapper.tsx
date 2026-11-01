@@ -1379,6 +1379,25 @@ export default function GeoPlotMapper(){
            (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Click corners clockwise · wheel zoom at cursor":"Drag numbered handles · wheel zoom at cursor"))}</div>
       </div>
       <aside className="geo-plot-dock">
+        <nav className="geo-plot-dock-tabs" aria-label="Plot editor sections">
+          {(["sources","plot","quality","publish"] as const).map(tab=>
+            <button type="button" key={tab}
+              className={inspectorTab===tab?"active":""}
+              aria-pressed={inspectorTab===tab}
+              disabled={busy||(mode==="align"&&tab!=="sources")}
+              onClick={()=>setInspectorTab(tab)}>
+              {tab==="sources"?"1 · CSV / Image":tab==="plot"?"2 · Plot Details":
+                tab==="quality"?"3 · Quality":"4 · Publish"}
+            </button>)}
+        </nav>
+        {recoveredLocalDraft&&<div className="geo-plot-local-recovery" role="status">
+          <strong>Unfinished Plot {recoveredLocalDraft.plot.id} available on this browser</strong>
+          <span>Matches this project, 3D model and mapping revision. Not published.</span>
+          <div><button type="button" disabled={dirty||busy} onClick={restoreLocalPlotDraft}>
+            Restore unfinished plot</button>
+            <button type="button" onClick={clearLocalPlotDraft}>Discard local copy</button></div>
+        </div>}
+        {inspectorTab==="sources"&&<>
         <GeoPlotInventoryPanel key={slug+"-inventory-"+inventoryImportNonce}
           slug={slug} mappedIds={plots.map(p=>p.id)}
           workingId={working?.id} blocked={!editable||busy||dirty||hasUnapplied}
@@ -1389,7 +1408,8 @@ export default function GeoPlotMapper(){
               setMessage("ERROR: This plot is already mapped; use Plot Editor to change it.");
               return;
             }
-            resetWorking(fromInventory(row,groundY));setOriginalId(null);setShape("four");setMode("draw");
+            clearLocalPlotDraft();resetWorking(fromInventory(row,groundY));
+            setOriginalId(null);setShape("four");setMode("draw");setInspectorTab("plot");
             setMessage("Plot "+row.id+" loaded from CSV. Start at the road-facing Front edge, then mark corners.");
           }}/>
         {slug&&geo&&state&&<GeoPlotImageAlignmentPanel key={slug+"-alignment"}
@@ -1399,6 +1419,8 @@ export default function GeoPlotMapper(){
           onStageImageCorner={stageCornerFromVerifiedImage} editable={editable&&!busy}
           mappingStale={Boolean(state.draft.stale)}
           onRebindSource={rebindWithReviewedSource}/>}
+        </>}
+        {inspectorTab==="quality"&&<>
         <details className="geo-plot-review-dashboard" open>
           <summary>03 · Data quality · {quality.summary.blockers} blockers / {quality.summary.reviews} reviews</summary>
           <p className="geo-plot-hint">Private draft diagnostics · {quality.summary.mapped} mapped /
@@ -1419,8 +1441,8 @@ export default function GeoPlotMapper(){
               +{quality.issues.length-24} more. Download the complete evidence report to inspect all plots.</p>}
           </div>
         </details>
-        <div className="geo-plot-clone-panel">
-          <strong>Clone Previous · unverified footprint template</strong>
+        <details className="geo-plot-clone-panel">
+          <summary>Clone Previous · unverified footprint template</summary>
           <p className="geo-plot-hint">Choose a completed plot and explicit Building-local X/Z translation.
             Duplicate or overlapping footprints are blocked. All approvals reset; no source facts
             from the previous plot authorize the next plot.</p>
@@ -1440,11 +1462,9 @@ export default function GeoPlotMapper(){
             !cloneX.trim()||!cloneZ.trim()} onClick={clonePreviousDraft}>
             Clone to Unverified Draft
           </button>
-        </div>
-        {state?.activeMapping?.current&&slug&&<GeoPlotCommercialPanel
-          key={slug+"-commercial-"+state.activeMapping.id}
-          slug={slug} mappingReleaseId={state.activeMapping.id}
-          plotIds={plots.map(p=>p.id)}/>}
+        </details>
+        </>}
+        {inspectorTab==="plot"&&<>
         <div className="geo-plot-inspector-head">
            <div><small>PROJECT PLOT INVENTORY</small><h3>Plot Editor</h3></div>
            <span>{displayedPlots.length}/{plots.length}</span>
