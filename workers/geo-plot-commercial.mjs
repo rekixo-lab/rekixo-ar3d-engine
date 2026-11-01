@@ -1,5 +1,5 @@
-// Release-bound legacy Geo plot commercial facts. Owner-only writes; no buyer,
-// receipt, phone, private agreement amounts or unverified default statuses leaked.
+// Release-bound legacy Geo plot commercial facts. Owner-only writes;
+// no identifying buyer details or unsupported listing claims are made public.
 import {validateGeoPlotCollection} from "./geo-plot-geometry.mjs";
 const sha=async text=>Array.from(new Uint8Array(await crypto.subtle.digest(
  "SHA-256",new TextEncoder().encode(text)))).map(b=>b.toString(16).padStart(2,"0")).join("");
