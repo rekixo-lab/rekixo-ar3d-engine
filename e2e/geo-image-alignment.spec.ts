@@ -1,7 +1,34 @@
 import {expect,test} from "@playwright/test";
+import {createHash} from "node:crypto";
+import {deflateSync} from "node:zlib";
 const slug="e2e-geo";
-const sha="00cbf4aed459027a84b7bdc22a1d15cc25fba49dc4119ffa594379718cde863f";
-const img=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAZAAAADICAIAAABJdyC1AAACUElEQVR42u3XwY3EQAwDQc1h8haV+YZw/hkyqkLgowGeJAWwwa2q7jbEEzNjK1vZ6sWh/qwAbCFYgGABCBYgWACCBSBYgGABCBaAYAGCBSBYAIIFCBaAYAEIFiBYAIIFIFiAYAEIFoBgAYIFIFiAYAEIFoBgAQgWIFgAggUIFoBgAQgWIFgAggUIlgkAwQIQLECwAAQLQLAAwQIQLADBAgQLQLAABAsQLADBAhAsQLAABAtAsIAPOUmsAKxwq6q7DfHEzNjKVrZ6cSiXEFhDsADBAhAsQLAABAtAsADBAhAsAMECBAtAsAAECxAsAMECECwAwQIEC0CwAMECECxAsAAEC0CwAMECECxAsEwACBaAYAGCBSBYAIIFCBaAYAEIFiBYAIIFIFiAYAEIFoBgAYIFIFgAggUIFoBgAQgWgGABH3KSWAFY4VZVdxviiZmxla1s9eJQLiGwhmABggUgWIBgAQgWgGABggUgWACCBYgWACCBSBYgGABCBaAYAGCBSBYAIIFCBaAYAEIFiBYAIIFIFiAYAEIFiBYJgAEC0CwAMECECwAwQIEC0CwAAQLECwAwQIQLECwAAQLQLAAwQIQLADBAj7kJLECsMKtqu42xBMzYytb2erFoVxCYA3BAgQLQLAAwQIQLADBAgQLQLAABAsQLADBAhAsQLAABAtAsADBAhAsAMECBAtAsAAECxAsAMECECxAsAAEC0CwAMECECxAsEwACBaAYAGCBSBYAIIFCBaAYAEIFiBYAIIFIFiAYAEIFoBgAYIFIFgA/ztJrACs8AMvozkUOdN+cwAAAABJRU5ErkJggg==","base64");
+// Generate the PNG deterministically instead of hand-copying encoded bytes.
+// This guarantees the fixture source SHA always matches its image payload.
+function crc32(buf:Buffer){
+  let c=0xffffffff;
+  for(const byte of buf){
+    c^=byte;
+    for(let k=0;k<8;k++)c=(c&1)?0xedb88320^(c>>>1):c>>>1;
+  }
+  return (c^0xffffffff)>>>0;
+}
+function pngChunk(type:string,body:Buffer){
+  const tag=Buffer.from(type,"ascii"),header=Buffer.alloc(4),crc=Buffer.alloc(4);
+  header.writeUInt32BE(body.length,0);
+  crc.writeUInt32BE(crc32(Buffer.concat([tag,body])),0);
+  return Buffer.concat([header,tag,body,crc]);
+}
+function makePng(){
+  const ihdr=Buffer.alloc(13);
+  ihdr.writeUInt32BE(400,0);ihdr.writeUInt32BE(200,4);
+  ihdr[8]=8;ihdr[9]=0; // 8-bit grayscale
+  const rows=Buffer.alloc(200*(400+1),255);
+  for(let row=0;row<200;row++)rows[row*401]=0; // PNG filter: none
+  return Buffer.concat([Buffer.from("89504e470d0a1a0a","hex"),
+    pngChunk("IHDR",ihdr),pngChunk("IDAT",deflateSync(rows)),pngChunk("IEND",Buffer.alloc(0))]);
+}
+const img=makePng();
+const sha=createHash("sha256").update(img).digest("hex");
 // A real, self-contained GLB ground mesh; browser tests capture model-local X/Z
 // rather than just switching a mocked toolbar state.
 function makeGlb(){
