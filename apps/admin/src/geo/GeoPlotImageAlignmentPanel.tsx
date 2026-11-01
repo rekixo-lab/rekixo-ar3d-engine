@@ -9,7 +9,8 @@ type Snapshot={revision:number;verifiedRevision:number|null;stale:boolean;
   modelSha256:string;draft:ImageModelAlignmentDraft|null};
 type Props={slug:string;geoReleaseId:string|null;buildingReleaseId:string|null;
   plots:Array<{id:string;corners:Point[]}>;onCapture:(done:(point:Point)=>void)=>void;
-  onRevisionChange:(revision:number)=>void;editable:boolean;
+  onRevisionChange:(revision:number)=>void;editable:boolean;mappingStale:boolean;
+  onRebindSource:(old:ImageModelAlignmentDraft,ids:string[])=>Promise<{ok:boolean;reason?:string}>;
   onStageImageCorner:(id:string,index:number,uv:Point,transform:SimilarityTransform,
     alignmentRevision:number)=>{ok:boolean;reason?:string}};
 const url=(slug:string)=>"/3Dprojects/api/cloud/projects/"+encodeURIComponent(slug)+"/geo-plots/alignment";
@@ -34,7 +35,7 @@ function exportReview(slug:string,snapshot:Snapshot,draft:ImageModelAlignmentDra
 }
 export default function GeoPlotImageAlignmentPanel({
   slug,geoReleaseId,buildingReleaseId,plots,onCapture,onRevisionChange,
-  onStageImageCorner,editable
+  onStageImageCorner,editable,mappingStale,onRebindSource
 }:Props){
   const [snapshot,setSnapshot]=useState<Snapshot|null>(null);
   const [draft,setDraft]=useState<ImageModelAlignmentDraft|null>(null);
@@ -54,6 +55,9 @@ export default function GeoPlotImageAlignmentPanel({
   const [imagePlotId,setImagePlotId]=useState("");
   const [imageCornerIndex,setImageCornerIndex]=useState(0);
   const [pendingEdit,setPendingEdit]=useState<Point|null>(null);
+  const [archivedReview,setArchivedReview]=useState<ImageModelAlignmentDraft|null>(null);
+  const [remapIds,setRemapIds]=useState<string[]>([]);
+  const [remapBusy,setRemapBusy]=useState(false);
   const sources=useMemo(()=>assets.filter(a=>a.kind==="reference"&&
     ["image/jpeg","image/png","image/webp"].includes(a.mimeType)),[assets]);
   const selected=useMemo(()=>sources.find(a=>a.id===draft?.imageAssetId),[sources,draft?.imageAssetId]);
@@ -104,6 +108,30 @@ export default function GeoPlotImageAlignmentPanel({
   const newModelCorner=useMemo(()=>pendingEdit&&assessed.result?
     imagePointToModel(assessed.result.transform,pendingEdit):null,
     [pendingEdit,assessed.result]);
+  const importArchivedSource=async(file:File)=>{
+    if(file.size>100_000)throw Error("Archived image alignment review exceeds 100 KB.");
+    const raw=JSON.parse(await file.text()) as {
+      format?:string;savedRevision?:number;savedVerifiedRevision?:number;
+      draft?:ImageModelAlignmentDraft};
+    if(raw.format!=="geo-image-alignment-review-v1"||
+       raw.savedRevision!==raw.savedVerifiedRevision||!raw.draft)
+      throw Error("A previously VERIFIED exported source review is required.");
+    if(!draft||raw.draft.imageSha256!==draft.imageSha256)
+      throw Error("Old and new model remap must use the SAME immutable original-image SHA-256. Otherwise map from signed source manually.");
+    setArchivedReview(raw.draft);setRemapIds([]);
+    setMessage("Verified archived old model review loaded. Select exactly the Plot IDs to remap against the NEW independently verified alignment.");
+  };
+  const submitSourceRebind=async()=>{
+    if(!archivedReview||!mappingStale||!isVerified||remapIds.length===0||remapBusy)return;
+    setRemapBusy(true);setError("");
+    try{
+      const result=await onRebindSource(archivedReview,remapIds);
+      if(!result.ok)throw Error(result.reason||"Selective source remap failed.");
+      setArchivedReview(null);setRemapIds([]);
+      setMessage("New Geo mapping draft rebound without destroying previous history. Review every Plot ID and source before verification.");
+    }catch(error){setError(error instanceof Error?error.message:String(error));}
+    finally{setRemapBusy(false);}
+  };
   const reload=async()=>{
     if(dirty&&!window.confirm("Discard unapplied image alignment point edits and reload saved revision?"))return;
     setBusy("reload");try{await load();}catch(err){setError(String(err));}
@@ -246,6 +274,41 @@ export default function GeoPlotImageAlignmentPanel({
       {!sources.length&&<p className="geo-plot-hint">First archive the original masterplan PNG/JPG/WebP in the Plot Inventory section, then Reload Sources.</p>}
       {selected&&<p className="geo-align-checksum">Image SHA-256: {selected.sha256.slice(0,20)}…
         Model SHA-256: {snapshot?.modelSha256.slice(0,20)}…</p>}
+      {mappingStale&&draft&&<div className="geo-align-edit-controls" aria-label="Selective source change review">
+        <strong>Source replacement · selective remapping (UNVERIFIED)</strong>
+        <p className="geo-plot-hint">Use an archived, independently verified OLD source review JSON and a verified
+          NEW alignment against the SAME original image checksum. This remaps selected canonical Plot IDs
+          through source image U/V. Every plot loses old approvals, including unselected plots.
+          No customer release is changed until separately verified and published.</p>
+        <label>Previous verified image/model review JSON
+          <input type="file" accept=".json,application/json" disabled={remapBusy}
+            onChange={e=>{const file=e.target.files?.[0];e.target.value="";
+              if(file)void importArchivedSource(file).catch(err=>setError(String(err)));}}/>
+        </label>
+        {archivedReview&&<>
+          <p>Old Geo release: {archivedReview.geoReleaseId.slice(0,20)} ·
+            New Geo release: {geoReleaseId?.slice(0,20)} ·
+            {remapIds.length} of {plots.length} selected</p>
+          <div className="geo-align-actions">
+            <button type="button" onClick={()=>setRemapIds(plots.map(p=>p.id))}>
+              Select All Plot IDs</button>
+            <button type="button" onClick={()=>setRemapIds([])}>Clear Selection</button>
+          </div>
+          <div className="geo-align-remap-list">
+            {plots.map(p=><label key={p.id}>
+              <input type="checkbox" checked={remapIds.includes(p.id)}
+                onChange={e=>setRemapIds(prev=>e.target.checked?[...prev,p.id]:
+                  prev.filter(x=>x!==p.id))}/>
+              Plot {p.id}</label>)}
+          </div>
+          <button type="button" disabled={!isVerified||remapBusy||remapIds.length===0}
+            onClick={()=>void submitSourceRebind()}>
+            Preview Changes and Stage Selected Source Remap (unverified)
+          </button>
+        </>}
+        {!isVerified&&<p className="geo-plot-warning">
+          Save and independently verify the NEW original image/model checkpoint calibration first.</p>}
+      </div>}
       {draft&&<div className="geo-align-edit-controls">
         <strong>Image / 3D Unified Plot Corner Editor</strong>
         <p className="geo-plot-hint">Only independently verified original image alignment may reposition a mapped Plot ID.
