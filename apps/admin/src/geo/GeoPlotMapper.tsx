@@ -868,7 +868,7 @@ export default function GeoPlotMapper(){
         throw Error("Server read-back did not confirm Plot "+id+". Keep this local draft and reload before editing other plots.");
       setState(readBack);setPlots(readBack.draft.plots);setDirty(false);setPublishedPreview(null);
       clearLocalPlotDraft();
-      const next=nextCsvPlotForDrawing(inventoryRows,readBack.draft.plots);
+      const next=nextCsvPlotForDrawing(inventoryRows,readBack.draft.plots,id);
       if(next){
         resetWorking(fromInventory(next,groundY));setOriginalId(null);
         setShape("four");setMode("draw");setInspectorTab("plot");
