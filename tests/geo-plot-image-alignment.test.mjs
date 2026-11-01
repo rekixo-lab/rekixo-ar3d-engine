@@ -78,7 +78,7 @@ test("Stage 2 alignment does not alter existing releases or commercial plot data
   assert.match(worker,/verified_revision=revision/);
   assert.match(worker,/requireCheckpoints:true/);
   assert.match(worker,/Changing source requires an explicit/);
-  assert.match(worker,/image_sha256=geo_plot_image_alignment_drafts_3d.image_sha256/);
+  assert.match(worker,/a\.sha256=geo_plot_image_alignment_drafts_3d\.image_sha256/);
   assert.doesNotMatch(worker,/UPDATE geo_plot_mapping_active_3d|INSERT INTO geo_plot_mapping_releases_3d|UPDATE masterplan_sales_3d/);
   assert.match(route,/source\|inventory\|alignment/);
   assert.match(route,/requireCurrentImageAlignmentReview\(env,ctx\)/);
