@@ -239,6 +239,12 @@ export default function EngineDashboard() {
         href:`/3Dprojects/geo-plots?project=${encodeURIComponent(selectedProject.slug)}`,
         action:"link" as const,
       };
+    if (selectedProject.projectKind === "building_geo") return {
+      label: "Geo published · field acceptance required",
+      help: "Source-backed mapping is published, not field-certified. Before customer handoff, check ten surveyed plots, real Android/iPhone, WhatsApp card, and isolated restore; obtain owner signoff.",
+      href: `/3Dprojects/geo-plots?project=${encodeURIComponent(selectedProject.slug)}`,
+      action: "link" as const,
+    };
     return {
       label: "Everything is live",
       help: "Building aur Geo dono active immutable releases par hain.",

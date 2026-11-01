@@ -71,6 +71,7 @@ export async function rehearseFullGeoRestore(folder,sqliteTarget){
   }
   return {schema:"rekixo-full-geo-isolated-restore-test-v1",
    projectSlug:check.projectSlug,isolatedSqlite:file,
+   activeMappingReleaseId:check.sourceManifest.payload.activeMapping?.mapping_release_id||null,
    d1Restored:true,r2BytesVerified:check.objectCount,
    immutableReleaseCount:check.sourceManifest.payload.mappingReleases.length,
    productionChanged:false};
