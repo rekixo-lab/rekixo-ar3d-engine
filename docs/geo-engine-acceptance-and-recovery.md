@@ -36,3 +36,30 @@ Run `node scripts/geo-site-acceptance.mjs verified-field-samples.json` with **at
 Automated generated fixtures test 500, 1,000 and 2,500 plot geometry, viewport culling and approximate processing cost. This **does not measure mobile frame rate, real device GPU load or real network/data latency**. Separately test Android Chrome, iOS Safari, pointer/mouse, keyboard, screen-reader ergonomics, physical site survey GPS and production browser WhatsApp preview fetch, cached image dimensions and version-bound link metadata.
 
 **Acceptance remains OPEN** until: independent 10-site plot review, remote D1+R2 backup and isolated full restore, device checks, mobile 500/1k/2.5k performance measurements, live WhatsApp crawler verification and scoped client-admin auth are backed by retained evidence.
+
+
+## Pre-real-test hardening: scoped client sessions
+- **Owner** opens `/3Dprojects/clients?project=<slug>`, first creates an explicitly reviewed directory contact with a valid email, then selects **Issue scoped invitation**. A one-time 256-bit random secret appears exactly once, inside a URL fragment; it is stored only as a SHA-256 hash and expires in 24h.
+- Owner must verify identity independently and hand off this link privately. The Engine does **not** send or verify email ownership and must not claim to do so.
+- Client opens `https://admin.rekixo.com/3Dprojects/client-portal#invite=<token>`, enters their invited email and accepts. The server redeems the single-use token, then sets a Secure, HttpOnly, SameSite=Strict 8h project-scoped cookie. Each API call checks grant epoch, role, project identity, directory state and session expiry.
+- Viewer: project/listing read. Editor: prepare private commercial values. Approver/Client Admin: source-backed listing edits and explicit public commercial approval. No client role receives Engine Owner, release publishing, cloud asset deletion, buyer-payment ledger or cross-project permissions. A genuine geometry-edit permission can be added only with a separately reviewed draft authorization boundary.
+- Owner can **revoke** all client sessions/invites or rotate an invitation immediately. A directory contact alone cannot sign in. Test revocation, attempted cross-project access and malicious Origin on the real Admin domain.
+
+## Full D1 + R2 bytes backup and isolated rehearsal — operator commands
+The private **Download Geo Recovery Manifest** now enumerates *all* project-owned R2 keys, including published model/media/poster bytes, not just studio asset references. This is still an index; no object bytes are included in the JSON.
+
+Run from a checked-out Engine repository with the installed Wrangler version and your explicitly authorized Cloudflare login/token. Stop demo data writes throughout the export to avoid a D1-vs-R2 race. Store exports on an encrypted, owner-controlled disk; the D1 SQL may include private client/payment records from other projects.
+
+```bash
+node scripts/geo-cloud-backup.mjs /secure/geo-manifest.json /secure/new-geo-backup
+node scripts/geo-cloud-restore-rehearsal.mjs /secure/new-geo-backup /secure/new-isolated-test.sqlite
+```
+
+- The first command uses `wrangler d1 export rekixo-3d-production --remote` and downloads every indexed object through `wrangler r2 object get rekixo-3d-assets/<key> --remote`. It writes a byte-count and SHA-256 verified backup index; no production writes.
+- The second command verifies the full SQL file and every archived R2 byte, restores D1 to a new local SQLite file and rechecks project IDs and sealed active mapping SHA. It **never** writes to production or another Cloudflare environment.
+- To rehearse restoration **inside a separate Cloudflare environment**, create a distinct D1 database and R2 bucket using separate credentials, import the SQL and upload the verified objects there, then independently check the live routes/auth/project ownership. This cannot be marked done until the authorized cloud restore is actually executed.
+- To test published share cards from an external network, run:
+  `node scripts/geo-social-preview-check.mjs 'https://ar3dstudio.in/3Dprojects/<project>/geo?share=<published-version>'`. It checks public Open Graph metadata, immutable poster URL, image MIME/magic and real crawler-readable bytes. WhatsApp client cache and image appearance still need actual device verification.
+
+## Demo-data policy
+Demo projects may be recreated, but this release never automatically deletes existing projects, signed releases, admin accounts or payment evidence. Owner-initiated explicit resets remain project-scoped and auditable.

@@ -71,8 +71,10 @@ test("Commercial owner routes require same-origin auth and published map source 
  assert.doesNotMatch(owner,/buyer_phone|buyer_name|receipt|payment_paise/);
  assert.match(publicMap,/publicGeoCommercialForRelease/);
  assert.match(publicUI,/not independently approved for this mapping release/);
- assert.match(management,/clientLoginEnabled:false/,
-   "A proposed directory contact is NOT silently granted a client session.");
+ assert.match(management,/clientLoginEnabled:true/,
+   "Client portal is enabled, but a directory contact still needs an explicit owner grant.");
+ assert.match(management,/project_client_grants_3d/,
+   "Directory records alone never create an authenticated client session.");
 });
 test("Existing versioned Geo poster social preview stays immutable and pinned to a real share-card version",()=>{
  const p=read("workers/project-branding.mjs");

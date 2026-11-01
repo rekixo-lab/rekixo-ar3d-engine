@@ -1,4 +1,5 @@
 // Engine-owned project profile and client directory. No Platform integration.
+import {provisionProjectClient,revokeProjectClient} from "./project-client-access.mjs";
 // Directory roles are proposals only: never permissions, sessions or credentials.
 const json = (payload, status = 200) => Response.json(payload,{
   status, headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"},
@@ -60,15 +61,21 @@ async function audit(env,actor,action,projectId,targetId,detail={}){
 async function getState(env,project){
   const [prof,clients] = await Promise.all([
     env.DB.prepare("SELECT * FROM project_profiles_3d WHERE project_id=?").bind(project.id).first(),
-    env.DB.prepare(`SELECT id,display_name AS displayName,email,phone,
-         proposed_role AS proposedRole,access_state AS accessState,notes,
-         created_at AS createdAt,updated_at AS updatedAt
-      FROM project_client_directory_3d WHERE project_id=? ORDER BY updated_at DESC,id ASC LIMIT 200`)
+    env.DB.prepare(`SELECT c.id,c.display_name AS displayName,c.email,c.phone,
+         c.proposed_role AS proposedRole,c.access_state AS accessState,c.notes,
+         c.created_at AS createdAt,c.updated_at AS updatedAt,
+         g.role AS grantedRole,g.active AS grantActive,
+         g.epoch AS grantEpoch
+      FROM project_client_directory_3d c
+      LEFT JOIN project_client_grants_3d g ON g.client_id=c.id AND g.project_id=c.project_id
+      WHERE c.project_id=? ORDER BY c.updated_at DESC,c.id ASC LIMIT 200`)
       .bind(project.id).all(),
   ]);
   return {project:{id:project.id,slug:project.slug,projectKind:project.project_kind||"legacy",
     name:project.name,location:project.location||"",status:project.status},
-    profile:profileView(prof),clients:clients.results||[],clientLoginEnabled:false};
+    profile:profileView(prof),clients:(clients.results||[]).map(c=>({
+      ...c,grantActive:c.accessState!=="disabled"&&c.grantActive===1
+    })),clientLoginEnabled:true};
 }
 function sameOrigin(req){
   try{return new URL(req.headers.get("origin")||"").origin===new URL(req.url).origin;}
@@ -126,15 +133,13 @@ export async function handleProjectManagementAdmin(request,env,actor,project,par
       await audit(env,actor,"project.client_record_added",project.id,id,{proposedRole:role});
       return json(await getState(env,project),201);
     }
-    if(request.method==="PATCH"&&body.action==="disable-client"){
-      const id=String(body.id||"");
-      if(!/^[0-9a-f-]{36}$/i.test(id))return fail("Invalid client record.");
-      const result=await env.DB.prepare(`UPDATE project_client_directory_3d
-        SET access_state='disabled',updated_by=?,updated_at=?
-        WHERE project_id=? AND id=? AND access_state='not_provisioned'`)
-        .bind(actor.email,new Date().toISOString(),project.id,id).run();
-      if(result.meta?.changes!==1)return fail("Client record already disabled or not found.",409);
-      await audit(env,actor,"project.client_record_disabled",project.id,id);
+    if(request.method==="POST"&&body.action==="grant-client-access"){
+      const invitation=await provisionProjectClient(env,actor,project,body,request);
+      return json({...(await getState(env,project)),invitation});
+    }
+    if(request.method==="PATCH"&&(body.action==="disable-client"||
+       body.action==="revoke-client-access")){
+      await revokeProjectClient(env,actor,project,body);
       return json(await getState(env,project));
     }
     return fail("Unknown management action.");

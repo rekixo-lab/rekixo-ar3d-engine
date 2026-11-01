@@ -5,6 +5,7 @@ import {
   handleReleaseReadRequest,
 } from "./release-runtime.mjs";
 import { engineAdminReadAccess, handleCloudAdminRequest } from "./admin-cloud.mjs";
+import {handleProjectClientPortal} from "./project-client-portal.mjs";
 import { assertProjectAssetKey } from "./storage-boundary.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
 const BASE_PATH = "/3Dprojects";
@@ -346,6 +347,9 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // Client authentication is isolated from Engine owner credentials.
+    const clientResponse = await handleProjectClientPortal(request,env,url);
+    if(clientResponse)return clientResponse;
     const cloudResponse = await handleCloudAdminRequest(request, env, url);
     if (cloudResponse) return cloudResponse;
 

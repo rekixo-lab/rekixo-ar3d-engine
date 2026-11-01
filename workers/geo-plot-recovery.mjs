@@ -31,10 +31,35 @@ export async function projectGeoRecoveryManifest(env,ctx){
     if(!/^[a-f0-9]{64}$/i.test(row.sha256)||!row.r2_key)
       throw Error("Project asset reference missing immutable SHA-256 or R2 key.");
   }
+  // Scan all project-owned R2 keys, not merely the studio_assets table:
+  // published GLBs, media derivatives and share-card versions must be recoverable.
+  // This remains a checksum/reference index; actual object bytes are exported by
+  // the authorized offline CLI and independently rechecked.
+  const prefix="projects/"+ctx.project.slug+"/";
+  const known=new Map(assets.map(a=>[a.r2_key,a.sha256?.toLowerCase()||null]));
+  const r2Objects=[];let cursor;
+  do{
+    const page=await env.MODEL_ASSETS.list({prefix,limit:1000,...(cursor?{cursor}:{})});
+    if(!page||!Array.isArray(page.objects))
+      throw Error("Full project R2 index is unavailable; recovery manifest refused.");
+    for(const item of page.objects){
+      if(!item.key.startsWith(prefix)||item.key.includes("..")||item.key.includes("\\"))
+        throw Error("R2 project prefix containment failed during recovery scan.");
+      r2Objects.push({key:item.key,size:item.size,
+        etag:item.etag||null,knownSha256:known.get(item.key)||null});
+      if(r2Objects.length>10000)
+        throw Error("R2 object scan exceeds 10,000 project assets; use paginated operator backup.");
+    }
+    if(page.truncated&&!page.cursor)throw Error("R2 pagination cursor missing.");
+    cursor=page.truncated?page.cursor:undefined;
+  }while(cursor);
+  for(const row of assets)if(!r2Objects.some(o=>o.key===row.r2_key))
+    throw Error("Referenced R2 object is missing from project archive: "+row.id);
   const payload={project:{id,slug:ctx.project.slug,projectKind:ctx.project.project_kind,
        status:ctx.project.status},activeGeo:{
        experienceId:ctx.active.experience_id,geoReleaseId:ctx.active.geo_release_id,
        buildingReleaseId:ctx.active.source_building_release_id},
+     r2Objects,
      draft:draft||null,inventory:inventory||null,alignment:alignment||null,
      activeMapping:active||null,mappingReleases:releases,geoReleases,assets};
   const body=JSON.stringify(payload);
@@ -46,7 +71,7 @@ export async function projectGeoRecoveryManifest(env,ctx){
     completeness:"METADATA_AND_R2_REFERENCES_ONLY",
     warnings:[
       "Restore is isolated-only; no production database or release activation is performed.",
-      "R2 object bytes are NOT included; independently export and checksum-verify referenced R2 keys.",
+      "R2 object bytes are NOT included in this manifest; use the offline cloud backup CLI to download and checksum every indexed key.",
       "Buyer/payment data, external services and Cloudflare configuration require separate protected backups."
     ],sha256:await sha256(body),payload};
 }

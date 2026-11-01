@@ -6,9 +6,11 @@ type Profile = {
   whatsapp:string;email:string;websiteUrl:string;mapsUrl:string;brochureUrl:string;
 };
 type ManagedClient = {id:string;displayName:string;email:string;phone:string;proposedRole:string;
-  accessState:"not_provisioned"|"disabled";notes:string;createdAt:string};
+  accessState:"not_provisioned"|"disabled";notes:string;createdAt:string;
+  grantActive?:boolean;grantedRole?:string;grantEpoch?:number};
 type ManagedState = {project:{id:string;name:string;slug:string;projectKind:string;status:string};
-  profile:{revision:number;values:Profile};clients:ManagedClient[];clientLoginEnabled:false};
+  profile:{revision:number;values:Profile};clients:ManagedClient[];clientLoginEnabled:boolean;
+  invitation?:{clientId:string;role:string;expiresAt:number;inviteUrl:string}};
 type Tab = "profile"|"clients";
 const fields:Array<{key:keyof Profile;name:string;hint?:string}>= [
   {key:"builderName",name:"Developer / Builder name"},
@@ -40,6 +42,7 @@ export default function ProjectManagement({section}:{section:Tab}){
   const [notes,setNotes]=useState("");
   const [error,setError]=useState("");const [message,setMessage]=useState("");
   const [busy,setBusy]=useState(false);
+  const [invitation,setInvitation]=useState<ManagedState["invitation"]|null>(null);
   const load=useCallback(async()=>{
     if(!slug){setState(null);setProfile(null);return;}
     const next=await request<ManagedState>(endpoint);
@@ -50,7 +53,9 @@ export default function ProjectManagement({section}:{section:Tab}){
   async function perform(method:string,body:object){
     setBusy(true);setError("");setMessage("");
     try{const next=await request<ManagedState>(endpoint,method,body);
-      setState(next);setProfile(next.profile.values);setMessage("Saved and verified from Engine database.");
+      setState(next);setProfile(next.profile.values);
+      if(next.invitation)setInvitation(next.invitation);
+      setMessage(next.invitation?"Client invitation created. Share this one-time secret privately with the intended person; it will not be shown again.":"Saved and verified from Engine database.");
       return true;
     }catch(e){setError(e instanceof Error?e.message:"Operation failed.");return false;}
     finally{setBusy(false);}
@@ -85,8 +90,23 @@ export default function ProjectManagement({section}:{section:Tab}){
     </>:<>
       <section className="engine-manage-card">
         <h2>Project Client Directory</h2>
-        <p>Names, contacts and intended roles are stored per project. <strong>Client logins are not yet provisioned.</strong>
-          Creating a record never grants access to customer data or financial records.</p>
+        <p>Directory contacts are NOT logins. A separate owner-issued, one-use invite is required
+          to activate a strictly project-scoped session. Viewer can read; Editor can prepare
+          private commercial facts; Approver / Client Admin can explicitly approve public listing
+          facts. No role receives Engine Owner access, buyer ledgers or cross-project access.</p>
+        {invitation&&<div className="engine-manage-card" role="status">
+          <strong>One-time private invitation — copy now</strong>
+          <p>Expires {new Date(invitation.expiresAt).toLocaleString()} · {invitation.role}.
+            This bearer link is delivered out of band after identity verification by the owner.
+            It is NOT sent by email automatically.</p>
+          <input readOnly value={invitation.inviteUrl} aria-label="One-time project client invitation link"
+            onFocus={e=>e.currentTarget.select()}/>
+          <div className="engine-manage-actions">
+            <button type="button" onClick={()=>void navigator.clipboard.writeText(invitation.inviteUrl)}>
+              Copy one-time invitation</button>
+            <button type="button" onClick={()=>setInvitation(null)}>Hide this secret</button>
+          </div>
+        </div>}
         <form onSubmit={e=>{e.preventDefault();void perform("POST",{
           action:"create-client",displayName:name,email,phone,proposedRole:role,notes
         }).then(saved=>{if(saved){setName("");setEmail("");setPhone("");setNotes("");}});}}>
@@ -99,7 +119,7 @@ export default function ProjectManagement({section}:{section:Tab}){
             </select></label>
             <label>Notes<input value={notes} maxLength={500} onChange={e=>setNotes(e.target.value)}/></label>
           </div>
-          <div className="engine-manage-actions"><span>No login or password is created</span>
+          <div className="engine-manage-actions"><span>No access until explicit one-time invitation</span>
             <button disabled={busy||!name.trim()||(!email&&!phone)||state?.project.status==="archived"}>Add Client Record</button></div>
         </form>
       </section>
@@ -107,11 +127,21 @@ export default function ProjectManagement({section}:{section:Tab}){
         <div className="engine-manage-client-list">
           {state?.clients.map(client=><div key={client.id}>
             <div><strong>{client.displayName}</strong><small>{client.email||client.phone} · proposed {client.proposedRole}</small>
-              <small>{client.accessState==="disabled"?"Disabled":"Not provisioned · No access"}</small></div>
-            {client.accessState==="not_provisioned"&&<button disabled={busy} onClick={()=>{
-              if(confirm("Disable directory record for "+client.displayName+"?"))
-                void perform("PATCH",{action:"disable-client",id:client.id});
-            }}>Disable</button>}
+              <small>{client.accessState==="disabled"?"Revoked / disabled":
+                client.grantActive?"Active grant · "+client.grantedRole+" · epoch "+client.grantEpoch:
+                "Not invited · no access"}</small></div>
+            {client.accessState==="not_provisioned"&&<div className="engine-manage-actions">
+              <button disabled={busy||!client.email} onClick={()=>{
+                if(confirm("Grant "+client.proposedRole+" access ONLY to this project for "+client.displayName+
+                  "? A 24h one-time invite will be generated. Confirm identity before sharing."))
+                  void perform("POST",{action:"grant-client-access",id:client.id,role:client.proposedRole});
+              }}>{client.grantActive?"Rotate invite / revoke previous sessions":"Issue scoped invitation"}</button>
+              <button disabled={busy} onClick={()=>{
+                if(confirm("Permanently revoke ALL sessions and invitations for "+client.displayName+
+                   " in this project?"))
+                  void perform("PATCH",{action:"revoke-client-access",id:client.id});
+              }}>Revoke access</button>
+            </div>}
           </div>)}
           {!state?.clients.length&&<p>No client records yet.</p>}
         </div>
