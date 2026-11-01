@@ -42,7 +42,16 @@ function modelPlotElevation(
   const center=averagePoint(plot);
   // For modest projects check center and several corners to reject a stray
   // high gate/road mesh. For very large sites use one bounded ray per plot.
-  const samples=sampleBudget>1?[center,...plot.corners.slice(0,sampleBudget-1)]:[center];
+  // Do not raycast at polygon corners: SATHARAI's corner points can lie
+  // exactly on a raised boundary wall. Four wall-top hits would otherwise
+  // dominate the median and float the *entire* plot above its actual lot.
+  // Sample comfortably INSIDE the footprint instead, along center-to-corner
+  // segments, so neighboring walls and roads cannot set the plot height.
+  const samples=sampleBudget>1?[center,...plot.corners.slice(0,sampleBudget-1)
+    .map(([x,z]):[number,number]=>[
+      center[0]+(x-center[0])*0.3,
+      center[1]+(z-center[1])*0.3
+    ])]:[center];
   const elevations:number[]=[];
   const inset=.0001;
   for(const [x,z] of samples){
@@ -100,10 +109,13 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
   ray.far=Math.max(10,bounds.getSize(new THREE.Vector3()).y+10);
   const fillMaterial=new THREE.MeshBasicMaterial({
     color:PLOT_COLOR,transparent:true,opacity:.12,side:THREE.DoubleSide,
-    depthTest:false,depthWrite:false
+    // Keep the model's real depth buffer: a plot behind a 3D wall MUST be
+    // occluded in Overview, Front and Corner. Disabling depthTest drew these
+    // lines through and beyond boundary walls at steep camera tilts.
+    depthTest:true,depthWrite:false
   });
   const strokeMaterial=new THREE.LineBasicMaterial({
-    color:PLOT_COLOR,transparent:true,opacity:.96,depthTest:false,depthWrite:false
+    color:PLOT_COLOR,transparent:true,opacity:.96,depthTest:true,depthWrite:false
   });
   for(const plot of plots){
     if(!Array.isArray(plot.corners)||plot.corners.length<3)continue;
