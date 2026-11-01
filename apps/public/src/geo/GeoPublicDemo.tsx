@@ -660,7 +660,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
               if (cancelled) return;
               const actual = map.getZoom?.();
               if (actual !== undefined && actual < requested - 0.1) {
-                setZoomNotice("Google Maps has reached its native satellite zoom limit at this location.");
+                setZoomNotice("Google Maps has reached its native zoom limit here. Satellite imagery cannot zoom closer at this location.");
               }
             }, 650);
           }
