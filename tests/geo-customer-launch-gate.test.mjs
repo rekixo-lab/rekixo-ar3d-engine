@@ -38,7 +38,7 @@ function fixture(){
   const socialReport={schema:"rekixo-social-crawler-probe-v1",ok:true,
     publicUrl:shareUrl,version:"3",imageBytes:123456};
   const restoreReport={schema:"rekixo-full-geo-isolated-restore-test-v1",
-    projectSlug:slug,d1Restored:true,r2BytesVerified:11,productionChanged:false};
+    projectSlug:slug,activeMappingReleaseId:release,d1Restored:true,r2BytesVerified:11,productionChanged:false};
   return {manifest,root,surveyReport,socialReport,restoreReport};
 }
 function evaluate(f){
@@ -100,6 +100,12 @@ test("tampered screenshots, fake cloud recovery or production target are refused
   withFixture(f=>{
     f.restoreReport.productionChanged=true;
     assert.throws(()=>evaluate(f),/offline D1\/R2/);
+  });
+});
+test("an old published mapping backup must not pass a new immutable release",()=>{
+  withFixture(f=>{
+    f.restoreReport.activeMappingReleaseId="previous-map-release";
+    assert.throws(()=>evaluate(f),/offline D1\\/R2/);
   });
 });
 test("social poster must bind the actual version and exact Geo public project",()=>{
