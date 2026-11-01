@@ -25,6 +25,9 @@ This runbook is for **Engine** `building_geo` projects, not AR3D Platform's 2D m
 - Client-editor authorization is limited by role and project. Plot geometry verification/publication and Owner-profile public-contact consent stay under Engine Owner control.
 
 ## Required real acceptance before a paying customer
+
+Use the separate [evidence-backed launch acceptance procedure](geo-customer-launch-acceptance.md) to combine numeric source survey, real device screenshots, public social crawler bytes, full offline D1/R2 rehearsal and authorized isolated cloud restore proof. It deliberately requires a final independent owner signoff; a passing automated CI run is not physical certification.
+
 - Survey at least ten independently measured control plots; compare every road-facing edge, model-local corner and Geo placement. Do not label a plan surveyed from synthetic or screenshot evidence.
 - Try a fresh `building_geo` project end-to-end: new record, profile, GLB, Geo, Platform CSV, complete mapping, pricing, real logo, public share image and customer plot click. Test disabled contact consent and explicit consent separately.
 - Run actual Android Chrome and iPhone Safari touch/performance tests plus in-app WhatsApp share preview (remote WhatsApp cache and crawler may vary). Test mobile and slow network behavior.
