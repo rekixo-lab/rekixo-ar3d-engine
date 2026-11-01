@@ -28,7 +28,8 @@ test("irregular outline can resume after 1, 3, 6 and 79 corners",()=>{
 });
 test("different shape and editing a saved mapping never silently resume stale new-plot state",()=>{
   assert.equal(geoPlotToolResumeAction(args(2,{requestedShape:"irregular"})),"start");
-  assert.equal(geoPlotToolResumeAction(args(2,{originalId:"1"})),"start");
+  assert.equal(geoPlotToolResumeAction(args(4,{originalId:"1"})),"edit");
+  assert.equal(geoPlotToolResumeAction(args(3,{originalId:"1",shape:"irregular",requestedShape:"irregular"})),"edit");
   assert.equal(geoPlotToolResumeAction(args(0)),"start");
   assert.equal(geoPlotToolResumeAction(args(2,{plot:null})),"start");
   assert.equal(geoPlotPausedDrawingLabel({...args(2),mode:"draw"}),null);
