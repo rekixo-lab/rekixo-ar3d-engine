@@ -108,7 +108,10 @@ export default function GeoPlotImageAlignmentPanel({
       exportReview(slug,snapshot,old);
     }
     if(!old||switched){
-      setActualImage(null);
+      // Keep already checksum-verified dimensions when rebinding the SAME image.
+      // Clearing them here would deadlock Save without a new image load event.
+      if(!old||old.imageAssetId!==asset.id||old.imageSha256!==asset.sha256.toLowerCase())
+        setActualImage(null);
       setDraft({imageAssetId:asset.id,imageSha256:asset.sha256.toLowerCase(),
         imageWidth:0,imageHeight:0,
         geoReleaseId,buildingReleaseId,modelSha256:snapshot.modelSha256,
