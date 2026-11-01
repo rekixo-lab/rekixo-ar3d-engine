@@ -91,13 +91,13 @@ type GeoPayload = {
     sha256?: string;
     sourceSha256?: string;
   };
-  plotMapping?: {version:number;geoReleaseId:string;plots:GeoMappedPlot[];
+  plotMapping?: {version:number;geoReleaseId:string;publicationMode?:"verified"|"preliminary";plots:GeoMappedPlot[];
     commercial?:Record<string,{status:"available"|"booked"|"sold";pricePaise:number|null;currency:"INR"}>};
   error?: string;
 };
 
-type GeoMappedPlot = { id:string; corners:Array<[number,number]>; planeY?:number; facing:string; road:string; notes:string;
-  area:{value:number;unit:string}; sides:Record<string,{length:number;unit:string;roadFacing:boolean}> };
+type GeoMappedPlot = { id:string; corners:Array<[number,number]>; planeY?:number; facing:string|null; road:string|null; notes:string;
+  area:{value:number;unit:string}|null; sides:Record<string,{length:number;unit:string;roadFacing:boolean}> };
 
 type GeoCameraView = "overview" | "front" | "corner" | "entry" | "aerial";
 type MapsListener = { remove(): void };
@@ -802,10 +802,16 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         <button type="button" onClick={() => setShowPlotBoundaries(v=>!v)}
           aria-pressed={showPlotBoundaries}>Plots {showPlotBoundaries?"ON":"OFF"}</button>
         <span>{data.plotMapping.plots.length} mapped</span>
+        {data.plotMapping.publicationMode==="preliminary"&&
+          <span className="geo-plot-preliminary-notice" role="status">
+            Preliminary plot mapping · Details pending source review
+          </span>}
       </div> : null}
-      {selectedPlot && <aside className="geo-plot-public-details" aria-label="Selected verified plot details">
+      {selectedPlot && <aside className="geo-plot-public-details" aria-label="Selected plot details">
         <button type="button" className="geo-plot-public-close" aria-label="Close plot details" onClick={()=>setSelectedPlot(null)}>×</button>
         <strong>Plot {selectedPlot.id}</strong>
+        {data.plotMapping?.publicationMode==="preliminary"&&
+          <small className="geo-plot-preliminary-detail">Preliminary mapped boundary; source measurements shown only when reviewed.</small>}
         {(()=>{
           const commercial=data.plotMapping?.commercial?.[selectedPlot.id];
           return commercial?<span>
@@ -815,9 +821,12 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
                 .format(commercial.pricePaise/100):""}
           </span>:<small>Commercial status/price not independently approved for this mapping release.</small>;
         })()}
-        <span>{selectedPlot.area.value} {selectedPlot.area.unit} · {selectedPlot.facing}</span>
-        {selectedPlot.road && <span>Road: {selectedPlot.road}</span>}
+        {selectedPlot.area&&<span>Area: {selectedPlot.area.value} {selectedPlot.area.unit}</span>}
+        {selectedPlot.facing&&<span>Facing: {selectedPlot.facing}</span>}
+        {selectedPlot.road&&<span>Road: {selectedPlot.road}</span>}
         {Object.entries(selectedPlot.sides).map(([role,side])=><span key={role}>{role}: {side.length} {side.unit}{side.roadFacing?" · Road":""}</span>)}
+        {data.plotMapping?.publicationMode==="preliminary"&&(!selectedPlot.area||!selectedPlot.facing)&&
+          <small>Unreviewed measurements and directions are not publicly asserted.</small>}
         {selectedPlot.notes&&<small>{selectedPlot.notes}</small>}
       </aside>}
       {zoomNotice && !inspectMode ? <div className="geo-zoom-notice" role="status">{zoomNotice}</div> : null}

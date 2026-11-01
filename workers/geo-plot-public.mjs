@@ -1,8 +1,9 @@
 import { validateGeoPlotCollection } from "./geo-plot-geometry.mjs";
 import { publicGeoCommercialForRelease } from "./geo-plot-commercial.mjs";
+import { normalizeGeoPlotPublicationMode,publicGeoPlotFacts } from "../shared/geo-plot-publication-mode.js";
 const digest = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))).map(n => n.toString(16).padStart(2,"0")).join("");
 export async function publicGeoPlotMapping(env,slug,expectedGeoReleaseId) {
-  const row=await env.DB.prepare(`SELECT r.project_id,r.id AS mapping_release_id,r.plots_json,r.sha256,r.version,r.geo_release_id,r.building_release_id,
+  const row=await env.DB.prepare(`SELECT r.project_id,r.id AS mapping_release_id,r.plots_json,r.sha256,r.version,r.publication_mode,r.geo_release_id,r.building_release_id,
       gr.source_building_release_id AS current_building_release_id
       FROM geo_plot_mapping_active_3d a JOIN geo_plot_mapping_releases_3d r
       ON r.id=a.mapping_release_id AND r.project_id=a.project_id AND r.experience_id=a.experience_id
@@ -14,7 +15,11 @@ export async function publicGeoPlotMapping(env,slug,expectedGeoReleaseId) {
   if (!row) return null;
   if (await digest(row.plots_json)!==row.sha256) throw Error("Published plot mapping checksum mismatch.");
   const plots=validateGeoPlotCollection(JSON.parse(row.plots_json));
-  const commercial=await publicGeoCommercialForRelease(env,row.project_id,row.mapping_release_id,
-    plots.map(p=>p.id));
-  return {version:row.version,geoReleaseId:row.geo_release_id,plots,commercial};
+  const publicationMode=normalizeGeoPlotPublicationMode(row.publication_mode);
+  // Private status and pricing belong to separately approved verified mappings.
+  const commercial=publicationMode==="verified"
+    ?await publicGeoCommercialForRelease(env,row.project_id,row.mapping_release_id,plots.map(p=>p.id))
+    :{};
+  return {version:row.version,geoReleaseId:row.geo_release_id,
+    publicationMode,plots:plots.map(plot=>publicGeoPlotFacts(plot,publicationMode)),commercial};
 }
