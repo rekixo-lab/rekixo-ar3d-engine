@@ -30,7 +30,7 @@ export function normalizeGeoCommercialChange(body){
     currency:"INR",evidenceRef,publicApproved:body.publicApproved,
     expectedRevision:body.expectedRevision};
 }
-async function activeMap(env,ctx){
+export async function activeMap(env,ctx){
   const row=await env.DB.prepare(`SELECT r.id,r.sha256,r.plots_json
     FROM geo_plot_mapping_active_3d a
     JOIN geo_plot_mapping_releases_3d r ON r.id=a.mapping_release_id
