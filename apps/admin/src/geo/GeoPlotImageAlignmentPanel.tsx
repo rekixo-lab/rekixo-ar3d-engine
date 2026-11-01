@@ -1,0 +1,261 @@
+import {useCallback,useEffect,useMemo,useState,type PointerEvent} from "react";
+import {downloadAsset,listAssets,type CloudAssetSummary} from "../studio/cloud";
+import {evaluateImageModelAlignment,modelPointToImage,
+  type ImageModelAlignmentDraft,type AlignmentPoint} from "../../../../shared/geo-plot-image-alignment.js";
+import "./geo-plot-image-alignment.css";
+
+type Point=[number,number];
+type Snapshot={revision:number;verifiedRevision:number|null;stale:boolean;
+  modelSha256:string;draft:ImageModelAlignmentDraft|null};
+type Props={slug:string;geoReleaseId:string|null;buildingReleaseId:string|null;
+  plots:Array<{id:string;corners:Point[]}>;onCapture:(done:(point:Point)=>void)=>void};
+const url=(slug:string)=>"/3Dprojects/api/cloud/projects/"+encodeURIComponent(slug)+"/geo-plots/alignment";
+async function api<T>(path:string,init?:RequestInit):Promise<T>{
+  const r=await fetch(path,{cache:"no-store",...init,headers:{
+    Accept:"application/json",...init?.headers
+  }});
+  if(!(r.headers.get("content-type")||"").includes("application/json"))
+    throw Error("Image alignment API returned a web page instead of JSON.");
+  const data=await r.json() as T&{error?:string};
+  if(!r.ok)throw Error(data.error||"Alignment request failed ("+r.status+").");
+  return data;
+}
+function exportReview(slug:string,snapshot:Snapshot,draft:ImageModelAlignmentDraft){
+  const content=JSON.stringify({format:"geo-image-alignment-review-v1",slug,
+    createdAt:new Date().toISOString(),savedRevision:snapshot.revision,
+    savedVerifiedRevision:snapshot.verifiedRevision,draft},null,2);
+  const address=URL.createObjectURL(new Blob([content],{type:"application/json;charset=utf-8"}));
+  const link=document.createElement("a");link.href=address;
+  link.download=slug+"-image-alignment-review.json";link.click();
+  window.setTimeout(()=>URL.revokeObjectURL(address),2000);
+}
+export default function GeoPlotImageAlignmentPanel({
+  slug,geoReleaseId,buildingReleaseId,plots,onCapture
+}:Props){
+  const [snapshot,setSnapshot]=useState<Snapshot|null>(null);
+  const [draft,setDraft]=useState<ImageModelAlignmentDraft|null>(null);
+  const [assets,setAssets]=useState<CloudAssetSummary[]>([]);
+  const [imageUrl,setImageUrl]=useState("");
+  const [pending,setPending]=useState<Point|null>(null);
+  const [evidence,setEvidence]=useState("");
+  const [dirty,setDirty]=useState(false);
+  const [busy,setBusy]=useState("");
+  const [message,setMessage]=useState("");
+  const [error,setError]=useState("");
+  const [showOverlay,setShowOverlay]=useState(true);
+  const [open,setOpen]=useState(false);
+  const sources=useMemo(()=>assets.filter(a=>a.kind==="reference"&&
+    ["image/jpeg","image/png","image/webp"].includes(a.mimeType)),[assets]);
+  const selected=useMemo(()=>sources.find(a=>a.id===draft?.imageAssetId),[sources,draft?.imageAssetId]);
+  const load=useCallback(async()=>{
+    const [state,assetList]=await Promise.all([
+      api<Snapshot>(url(slug)),listAssets(slug)
+    ]);
+    setSnapshot(state);setDraft(state.draft);setAssets(assetList.assets);
+    setDirty(false);setPending(null);setMessage("");setError("");
+  },[slug]);
+  useEffect(()=>{
+    let valid=true;
+    void load().catch(err=>{if(valid)setError(String(err));});
+    return()=>{valid=false;};
+  },[load]);
+  useEffect(()=>{
+    let valid=true;let currentUrl="";
+    setImageUrl("");
+    if(!selected)return;
+    void downloadAsset(selected).then(asset=>{
+      if(!valid)return;
+      currentUrl=URL.createObjectURL(asset.blob);
+      setImageUrl(currentUrl);
+    }).catch(err=>{if(valid)setError("Original image checksum verification failed: "+String(err));});
+    return()=>{valid=false;if(currentUrl)URL.revokeObjectURL(currentUrl);};
+  },[selected?.id,selected?.sha256]);
+  const assessed=useMemo(()=>{
+    if(!draft||draft.anchors.length<3)return {result:null,error:"Add three non-collinear fit anchors."};
+    try{return {result:evaluateImageModelAlignment(draft),error:""};}
+    catch(err){return {result:null,error:err instanceof Error?err.message:String(err)};}
+  },[draft]);
+  const isVerified=Boolean(snapshot&&snapshot.revision>0&&
+    snapshot.verifiedRevision===snapshot.revision&&!snapshot.stale&&!dirty&&
+    assessed.result?.verifiedReady);
+  const stale=Boolean(snapshot?.stale||draft&&(
+    draft.geoReleaseId!==geoReleaseId||draft.buildingReleaseId!==buildingReleaseId||
+    draft.modelSha256!==snapshot?.modelSha256));
+  const reload=async()=>{
+    if(dirty&&!window.confirm("Discard unapplied image alignment point edits and reload saved revision?"))return;
+    setBusy("reload");try{await load();}catch(err){setError(String(err));}
+    finally{setBusy("");}
+  };
+  const selectSource=(id:string)=>{
+    if(!snapshot||!geoReleaseId||!buildingReleaseId)return;
+    const asset=sources.find(a=>a.id===id);
+    if(!asset)return;
+    const old=draft;
+    const switched=old&&old.imageAssetId!==asset.id;
+    if(switched){
+      if(!window.confirm("Switch original image? The image alignment draft points will be cleared. "+
+        "The CURRENT review JSON will be downloaded first. Published plot data will remain unchanged."))return;
+      exportReview(slug,snapshot,old);
+    }
+    if(!old||switched){
+      setDraft({imageAssetId:asset.id,imageSha256:asset.sha256.toLowerCase(),
+        geoReleaseId,buildingReleaseId,modelSha256:snapshot.modelSha256,
+        anchors:[],checkpoints:[]});
+      setDirty(true);setPending(null);setMessage("New original image selected. Pair fresh points and Save before Verify.");
+    }
+  };
+  const markImage=(ev:PointerEvent<SVGSVGElement>)=>{
+    if(!draft||!imageUrl||busy)return;
+    const rect=ev.currentTarget.getBoundingClientRect();
+    if(!rect.width||!rect.height)return;
+    const u=(ev.clientX-rect.left)/rect.width,v=(ev.clientY-rect.top)/rect.height;
+    if(u<0||u>1||v<0||v>1)return;
+    setPending([Number(u.toFixed(7)),Number(v.toFixed(7))]);
+  };
+  const capture=(kind:"anchors"|"checkpoints")=>{
+    if(!draft||!pending||!evidence.trim())return;
+    const point=pending,evidenceText=evidence.trim(),type=kind;
+    onCapture(model=>{
+      setDraft(previous=>{
+        if(!previous)return previous;
+        const all=[...previous.anchors,...previous.checkpoints];
+        let count=1;while(all.some(p=>p.id===((type==="anchors"?"F":"C")+count)))count++;
+        const record:AlignmentPoint={id:(type==="anchors"?"F":"C")+count,
+          u:point[0],v:point[1],x:model[0],z:model[1],evidence:evidenceText};
+        return {...previous,[type]:[...previous[type],record]};
+      });
+      setPending(null);setDirty(true);
+      setMessage("3D model X/Z captured. Save and use independent withheld checkpoints before verification.");
+    });
+    setMessage("Click the corresponding site location on the 3D masterplan canvas to pair this image point.");
+  };
+  const drop=(kind:"anchors"|"checkpoints",id:string)=>{
+    setDraft(old=>old?{...old,[kind]:old[kind].filter(p=>p.id!==id)}:old);setDirty(true);
+  };
+  const save=async()=>{
+    if(!snapshot||!draft||!selected||busy)return;
+    setBusy("save");setError("");
+    try{
+      const switched=Boolean(snapshot.draft&&(
+        snapshot.draft.imageAssetId!==draft.imageAssetId||
+        snapshot.draft.imageSha256!==draft.imageSha256||
+        snapshot.draft.geoReleaseId!==draft.geoReleaseId||
+        snapshot.draft.buildingReleaseId!==draft.buildingReleaseId||
+        snapshot.draft.modelSha256!==draft.modelSha256));
+      const next=await api<Snapshot>(url(slug),{
+        method:"PUT",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({expectedRevision:snapshot.revision,draft,confirmSourceChange:switched})
+      });
+      setSnapshot(next);setDraft(next.draft);setDirty(false);
+      setMessage("Private image/model alignment draft saved. No published plot geometry changed.");
+    }catch(err){setError(err instanceof Error?err.message:String(err));}
+    finally{setBusy("");}
+  };
+  const verify=async()=>{
+    if(!snapshot||dirty||!draft||!assessed.result?.verifiedReady||stale||busy)return;
+    setBusy("verify");setError("");
+    try{
+      const next=await api<Snapshot>(url(slug),{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"verify",expectedRevision:snapshot.revision})
+      });
+      setSnapshot(next);setDraft(next.draft);
+      setMessage("Independent image↔model checkpoints verified server-side. Existing published mapping remains unchanged.");
+    }catch(err){setError(err instanceof Error?err.message:String(err));}
+    finally{setBusy("");}
+  };
+  const projected=useMemo(()=>{
+    if(!assessed.result||!showOverlay||!isVerified)return [];
+    return plots.map(plot=>({id:plot.id,uv:plot.corners.map(point=>
+      modelPointToImage(assessed.result!.transform,point))}));
+  },[plots,assessed.result,showOverlay,isVerified]);
+  const canEdit=Boolean(geoReleaseId&&buildingReleaseId&&snapshot&&!snapshot.stale);
+  return <details className="geo-align-panel" open={open} onToggle={event=>setOpen(event.currentTarget.open)}>
+    <summary>02 · Original image ↔ verified 3D alignment
+      <small> · {isVerified?"independent QA passed":snapshot?.draft?"needs review":"not set"}</small>
+    </summary>
+    <div className="geo-align-body">
+      <p className="geo-plot-hint">Private, project-scoped calibration. Image U/V is 0–1;
+        3D points remain immutable Building-local X/Z metres. No model, plot, sale or live release is changed.</p>
+      {error&&<p className="geo-plot-warning" role="alert">{error}</p>}
+      {message&&<p className="geo-plot-message" role="status">{message}</p>}
+      {stale&&<p className="geo-plot-warning">A source or Geo/Building release changed.
+        Do not reuse this alignment. Save a new source-controlled draft before any new verification.</p>}
+      <div className="geo-align-actions">
+        <button type="button" disabled={!!busy} onClick={()=>void reload()}>Reload Sources / Draft</button>
+        {snapshot&&draft&&<button type="button" onClick={()=>exportReview(slug,snapshot,draft)}>
+          Download Private Review JSON</button>}
+      </div>
+      <label>Approved original reference image
+        <select value={draft?.imageAssetId||""} disabled={!canEdit||!!busy}
+          onChange={e=>selectSource(e.target.value)}>
+          <option value="">Choose uploaded original image</option>
+          {sources.map(a=><option key={a.id} value={a.id}>{a.name} · {a.sha256.slice(0,10)}</option>)}
+        </select>
+      </label>
+      {!sources.length&&<p className="geo-plot-hint">First archive the original masterplan PNG/JPG/WebP in the Plot Inventory section, then Reload Sources.</p>}
+      {selected&&<p className="geo-align-checksum">Image SHA-256: {selected.sha256.slice(0,20)}…
+        Model SHA-256: {snapshot?.modelSha256.slice(0,20)}…</p>}
+      {draft&&<div className="geo-align-image">
+        {imageUrl?<div className="geo-align-image-stage">
+          <img src={imageUrl} alt="Checksum-verified original masterplan source used for image to model alignment"/>
+          <svg viewBox="0 0 1 1" preserveAspectRatio="none"
+            aria-label="Select a checkpoint on the original masterplan image"
+            onPointerDown={markImage}>
+            {projected.map(p=><polygon key={p.id}
+              points={p.uv.map(q=>q.join(",")).join(" ")}
+              stroke="#31e0ad" fill="rgba(49,224,173,.15)" strokeWidth=".002"
+              pointerEvents="none"/>)}
+            {draft.anchors.map(p=><circle key={p.id} cx={p.u} cy={p.v} r=".008"
+              fill="#ffce6d" stroke="#172638" strokeWidth=".002" pointerEvents="none"/>)}
+            {draft.checkpoints.map(p=><circle key={p.id} cx={p.u} cy={p.v} r=".008"
+              fill="#7ebcff" stroke="#172638" strokeWidth=".002" pointerEvents="none"/>)}
+            {pending&&<circle cx={pending[0]} cy={pending[1]} r=".012"
+              stroke="#ffffff" strokeWidth=".003" fill="none" pointerEvents="none"/>}
+          </svg>
+        </div>:<p className="geo-plot-hint">Loading and verifying original image bytes…</p>}
+        <p className="geo-plot-hint">Click a precise landmark on the image. Then capture its matching location on the 3D canvas.
+          Use at least 3 distributed fit anchors and 2 different withheld survey checkpoints.</p>
+        {pending&&<strong>Image point U {pending[0].toFixed(5)} · V {pending[1].toFixed(5)}</strong>}
+        <label>Signed drawing / survey evidence for new pair
+          <input value={evidence} maxLength={160} placeholder="Approved plan, page and surveyed landmark"
+            onChange={e=>setEvidence(e.target.value)}/></label>
+        <div className="geo-align-actions">
+          <button type="button" disabled={!canEdit||!!busy||!pending||!evidence.trim()||draft.anchors.length>=48}
+            onClick={()=>capture("anchors")}>Pair Fit Point on 3D Canvas</button>
+          <button type="button" disabled={!canEdit||!!busy||!pending||!evidence.trim()||draft.checkpoints.length>=48}
+            onClick={()=>capture("checkpoints")}>Pair Independent Checkpoint</button>
+        </div>
+      </div>}
+      {draft&&<div className="geo-align-points">
+        {(["anchors","checkpoints"] as const).map(kind=><div key={kind}>
+          <strong>{kind==="anchors"?"Fit anchors":"Withheld checkpoints"} · {draft[kind].length}</strong>
+          {draft[kind].map(p=><div className="geo-align-point" key={p.id}>
+            <span>{p.id}: ({p.u.toFixed(4)}, {p.v.toFixed(4)}) → X {p.x.toFixed(3)}, Z {p.z.toFixed(3)}
+              <small>{p.evidence}</small></span>
+            <button type="button" disabled={!canEdit||!!busy}
+              onClick={()=>drop(kind,p.id)} aria-label={"Remove "+p.id}>Remove</button>
+          </div>)}
+        </div>)}
+      </div>}
+      {draft&&<div className="geo-align-qa">
+        <strong>Independent QA · {assessed.result?.verifiedReady?"eligible":"review required"}</strong>
+        {assessed.result?<p>Fit max {assessed.result.maxFitMetres?.toFixed(3)} m ·
+          withheld max {assessed.result.maxCheckpointMetres?.toFixed(3)??"—"} m ·
+          review limit {assessed.result.limitMetres.toFixed(3)} m</p>:
+          <p>{assessed.error}</p>}
+        {assessed.result?.issues.map((issue,i)=><p key={i} className="geo-plot-warning">{issue}</p>)}
+        <p className="geo-plot-hint">Alignment is a read-only overlay preview after independent verification.
+          A passing check does not certify survey accuracy or automatically republish polygons.</p>
+        <label><input type="checkbox" checked={showOverlay}
+          onChange={e=>setShowOverlay(e.target.checked)}/> Show verified plot outline overlay</label>
+        <div className="geo-align-actions">
+          <button type="button" disabled={!canEdit||!dirty||!!busy||!selected}
+            onClick={()=>void save()}>{busy==="save"?"Saving…":"Save Alignment Draft"}</button>
+          <button type="button" disabled={!canEdit||dirty||!!busy||!assessed.result?.verifiedReady}
+            onClick={()=>void verify()}>{busy==="verify"?"Verifying…":"Verify Independent Checkpoints"}</button>
+        </div>
+      </div>}
+    </div>
+  </details>;
+}
