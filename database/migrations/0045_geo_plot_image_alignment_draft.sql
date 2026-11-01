@@ -17,3 +17,10 @@ CREATE TABLE IF NOT EXISTS geo_plot_image_alignment_drafts_3d (
   updated_by TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+-- Record which independent image calibration revision backed the latest legacy
+-- plot mapping verification. Null keeps pre-alignment drafts backward compatible
+-- only while no project alignment draft exists.
+ALTER TABLE geo_plot_mapping_drafts_3d
+  ADD COLUMN verified_alignment_revision INTEGER
+  CHECK(verified_alignment_revision IS NULL OR verified_alignment_revision >= 0);
