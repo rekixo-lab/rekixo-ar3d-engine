@@ -19,6 +19,7 @@ const ShareWorkspace = lazy(() => import("./branding/ShareWorkspace"));
 const EngineAdvanced = lazy(() => import("./advanced/EngineAdvanced"));
 const PublishedViewer = lazy(() => import("./studio/PublishedViewer"));
 const CloudLogin = lazy(() => import("./CloudLogin"));
+const ProjectClientPortal = lazy(() => import("./management/ProjectClientPortal"));
 
 function RouteLoading({ label }: { label: string }) {
   return (
@@ -57,6 +58,12 @@ function AdminRouter() {
         <PublishedViewer />
       </Suspense>
     );
+  }
+
+  if (path === "/3Dprojects/client-portal") {
+    return <Suspense fallback={<RouteLoading label="Opening secure client portal…" />}>
+      <ProjectClientPortal />
+    </Suspense>;
   }
 
   if (path === "/3Dprojects/login") {
