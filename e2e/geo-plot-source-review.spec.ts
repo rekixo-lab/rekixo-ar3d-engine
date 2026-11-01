@@ -48,6 +48,8 @@ test("legacy Geo editor reveals stale CSV evidence and offers safe road Front re
   })));
   await page.goto("/3Dprojects/geo-plots?project=e2e-geo");
   await expect(page.getByRole("heading",{name:"3D Geo Plot Mapper"}).last()).toBeVisible();
+  // New fullscreen tabs intentionally keep source reconciliation with the Plot editor.
+  await page.getByRole("button",{name:"2 · Plot Details"}).click();
   const review=page.locator(".geo-plot-source-review").first();
   await expect(review).toContainText("1 issue(s)");
   await expect(review).toContainText("front");
@@ -90,10 +92,13 @@ test("legacy Geo editor reveals stale CSV evidence and offers safe road Front re
   await page.getByRole("button",{name:/Exit full screen/}).last().click();
   await expect(page.locator(".geo-plot-editor-shell")).toHaveAttribute("data-fullscreen","false");
 
+  // The Quality tab isolates diagnostic evidence from the fast drawing controls.
+  await page.getByRole("button",{name:"3 · Quality"}).click();
   // Evidence dashboard is diagnostic-only, while Clone Previous produces a
   // new canonical ID with unverified source and NO silent polygon publication.
   await expect(page.getByText("Data quality ·")).toBeVisible();
   await expect(page.getByRole("button",{name:"Download Evidence & Quality Review JSON"})).toBeVisible();
+  await page.getByText("Clone Previous · unverified footprint template").click();
   await page.getByLabel("Previous mapped Plot ID").selectOption("1");
   await page.getByLabel("X offset (metres)").fill("10");
   await page.getByLabel("Z offset (metres)").fill("0");
