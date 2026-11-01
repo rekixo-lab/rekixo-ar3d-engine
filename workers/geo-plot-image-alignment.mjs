@@ -33,6 +33,7 @@ async function readRow(env,projectId){
 function asDraft(row){
   if(!row)return null;
   return {imageAssetId:row.image_asset_id,imageSha256:row.image_sha256,
+    imageWidth:row.image_width,imageHeight:row.image_height,
     geoReleaseId:row.geo_release_id,buildingReleaseId:row.building_release_id,
     modelSha256:row.model_sha256,anchors:JSON.parse(row.control_points_json),
     checkpoints:JSON.parse(row.checkpoints_json)};
@@ -79,14 +80,16 @@ async function save(env,ctx,actor,body,modelHash){
   let stmt;
   if(expected===0){
     stmt=env.DB.prepare(`INSERT INTO geo_plot_image_alignment_drafts_3d
-      (project_id,image_asset_id,image_sha256,geo_release_id,building_release_id,model_sha256,
-       revision,verified_revision,control_points_json,checkpoints_json,updated_by,updated_at)
-      VALUES(?,?,?,?,?,?,1,NULL,?,?,?,?) ON CONFLICT(project_id) DO NOTHING`)
-    .bind(ctx.project.id,draft.imageAssetId,draft.imageSha256,draft.geoReleaseId,
-      draft.buildingReleaseId,draft.modelSha256,controls,checks,actor.email,now);
+      (project_id,image_asset_id,image_sha256,image_width,image_height,
+       geo_release_id,building_release_id,model_sha256,revision,verified_revision,
+       control_points_json,checkpoints_json,updated_by,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,1,NULL,?,?,?,?) ON CONFLICT(project_id) DO NOTHING`)
+    .bind(ctx.project.id,draft.imageAssetId,draft.imageSha256,draft.imageWidth,draft.imageHeight,
+      draft.geoReleaseId,draft.buildingReleaseId,draft.modelSha256,controls,checks,actor.email,now);
   }else{
     stmt=env.DB.prepare(`UPDATE geo_plot_image_alignment_drafts_3d
-      SET image_asset_id=?,image_sha256=?,geo_release_id=?,building_release_id=?,model_sha256=?,
+      SET image_asset_id=?,image_sha256=?,image_width=?,image_height=?,
+      geo_release_id=?,building_release_id=?,model_sha256=?,
       revision=revision+1,verified_revision=NULL,control_points_json=?,checkpoints_json=?,
       updated_by=?,updated_at=?
       WHERE project_id=? AND revision=? AND EXISTS(
@@ -96,8 +99,9 @@ async function save(env,ctx,actor,body,modelHash){
           AND ar.experience_id=? AND ar.geo_release_id=? AND gr.source_building_release_id=?)
       AND EXISTS(SELECT 1 FROM studio_assets_3d a WHERE a.id=? AND a.project_id=?
         AND a.deleted_at IS NULL AND a.sha256=?)`)
-      .bind(draft.imageAssetId,draft.imageSha256,draft.geoReleaseId,draft.buildingReleaseId,
-        draft.modelSha256,controls,checks,actor.email,now,ctx.project.id,expected,
+      .bind(draft.imageAssetId,draft.imageSha256,draft.imageWidth,draft.imageHeight,
+        draft.geoReleaseId,draft.buildingReleaseId,draft.modelSha256,
+        controls,checks,actor.email,now,ctx.project.id,expected,
         ctx.active.experience_id,ctx.active.geo_release_id,ctx.active.source_building_release_id,
         draft.imageAssetId,ctx.project.id,draft.imageSha256);
   }
@@ -105,7 +109,8 @@ async function save(env,ctx,actor,body,modelHash){
   if(result.meta?.changes!==1)
     throw Error("Source or alignment revision changed during Save. Nothing was overwritten.");
   await audit(env,ctx,actor,"geo.image_alignment_saved",
-    {revision:expected+1,imageAssetId:draft.imageAssetId,sourceSwitched:switched,
+    {revision:expected+1,imageAssetId:draft.imageAssetId,
+     imageWidth:draft.imageWidth,imageHeight:draft.imageHeight,sourceSwitched:switched,
      anchorCount:draft.anchors.length,checkpointCount:draft.checkpoints.length});
   return snapshot(env,ctx,modelHash);
 }
