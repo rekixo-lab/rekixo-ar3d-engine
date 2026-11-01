@@ -26,7 +26,25 @@ export function assignVisiblePlotEdge(plot,role,edge,{extend=false}={}){
   if(plot.layout==="four"&&plot.corners.length===4&&role==="front"&&!extend)
     return assignFourCornerRoadFront(plot,edge);
   const count=plot.corners.length;
-  const before=plot.sides||{},sides={};
+  const before=plot.sides||{};
+  // In an ordinary quadrilateral, switching Back/Depth edges is a permutation,
+  // not a delete: every segment must keep exactly one role for draft validation.
+  if(count===4&&plot.layout==="four"&&!extend){
+    const targetEdge=before[role]?.edges?.[0];
+    const owner=ROLES.find(key=>before[key]?.edges?.includes(edge));
+    if(owner&&owner!==role&&Number.isInteger(targetEdge)){
+      const sides=Object.fromEntries(ROLES.map(key=>[key,{
+        ...before[key],edges:[...(before[key]?.edges||[])],
+        verified:false
+      }]));
+      sides[role]={...sides[role],edges:[edge],
+        roadFacing:role==="front",verified:false};
+      sides[owner]={...sides[owner],edges:[targetEdge],
+        roadFacing:owner==="front",verified:false};
+      return {...plot,sides,facingVerified:false};
+    }
+  }
+  const sides={};
   for(const key of ROLES){
     const side=before[key]||{length:0,unit:"ft",source:"",roadFacing:false,verified:false,edges:[]};
     const current=Array.isArray(side.edges)?side.edges.filter(x=>x!==edge):[];
