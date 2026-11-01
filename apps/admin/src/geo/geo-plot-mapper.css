@@ -253,3 +253,21 @@
 .geo-plot-nudge-buttons button{flex:1;min-width:54px}
 .geo-plot-corner-nudge small{color:#bdd8e0;line-height:1.4}
 @media (max-width:390px){.geo-plot-nudge-settings{grid-template-columns:1fr}}
+
+/* Stage 3: private, diagnostic-only evidence and unverified next-plot cloning. */
+.geo-plot-review-dashboard,.geo-plot-clone-panel{
+  margin:12px 0;padding:12px;border:1px solid #456979;border-radius:10px;
+  background:#102b39;color:#e7faff;font-size:12px;
+}
+.geo-plot-review-dashboard>summary{cursor:pointer;font-size:13px;font-weight:700}
+.geo-plot-review-dashboard>button{margin:8px 0;width:100%}
+.geo-plot-review-issues{max-height:240px;overflow:auto;display:grid;gap:6px}
+.geo-plot-review-issues p{margin:0;border-left:2px solid #547889;padding:6px;
+  border-radius:3px;overflow-wrap:anywhere}
+.geo-plot-review-issues p.geo-plot-warning{border-left-color:#f4b278}
+.geo-plot-clone-panel{display:grid;gap:8px}
+.geo-plot-clone-panel>strong{font-size:12px}
+.geo-plot-clone-panel>p{margin:2px 0}
+.geo-plot-clone-panel label{margin:0}
+.geo-plot-clone-offsets{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+@media (max-width:390px){.geo-plot-clone-offsets{grid-template-columns:1fr}}
