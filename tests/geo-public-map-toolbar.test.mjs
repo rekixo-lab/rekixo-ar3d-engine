@@ -19,13 +19,13 @@ test("Geo customer header keeps only the project logo, name, and subtitle", () =
   assert.doesNotMatch(geoApp, /const mapsUrl\s*=/);
 });
 
-test("Geo map toolbar keeps only five views and omits the Building link", () => {
+test("Geo map toolbar shows four views and omits Entry view and Building", () => {
   const toolbarStart = geoApp.indexOf('<nav className="geo-camera-toolbar geo-camera-toolbar--normal-row"');
   const toolbarEnd = geoApp.indexOf("</nav>", toolbarStart);
   assert.ok(toolbarStart >= 0 && toolbarEnd > toolbarStart, "Geo map toolbar must exist");
   const toolbar = geoApp.slice(toolbarStart, toolbarEnd);
   const declaredViews = geoApp.slice(geoApp.indexOf("const GEO_CAMERA_VIEWS"), geoApp.indexOf("let mapsPromise"));
-  const labels = ["Overview", "Front", "Corner", "Entry view", "Aerial"];
+  const labels = ["Overview", "Front", "Corner", "Aerial"];
   let previous = -1;
   for (const label of labels) {
     const position = declaredViews.indexOf(`label: "${label}"`);
@@ -34,6 +34,8 @@ test("Geo map toolbar keeps only five views and omits the Building link", () => 
   }
 
   assert.match(toolbar, /\{GEO_CAMERA_VIEWS\.map/);
+  assert.doesNotMatch(declaredViews, /label: "Entry view"/);
+  assert.doesNotMatch(toolbar, /Entry view/);
   assert.doesNotMatch(toolbar, /geo-building-link|Building <span|building website|<a[\s>]/);
   assert.doesNotMatch(geoApp.slice(geoApp.indexOf('{toolbarContainer ? createPortal(<nav className="geo-camera-toolbar') - 35, geoApp.indexOf('{toolbarContainer ? createPortal(<nav className="geo-camera-toolbar')), /!failure/);
   assert.doesNotMatch(toolbar, /Open location|Google Maps/);
@@ -47,12 +49,12 @@ test("Geo camera controls are fixed to the viewport bottom with mobile safe-area
   assert.ok(dock.includes("safe-area-inset-bottom"));
   assert.ok(dock.includes("touch-action: none;"));
   assert.ok(dock.includes(".geo-map-quick-actions"));
-  assert.ok(geoStyles.includes("grid-template-columns: repeat(5, minmax(0, 1fr))"));
+  assert.ok(geoStyles.includes("grid-template-columns: repeat(4, minmax(0, 1fr))"));
 });
 
 test("normal camera row spans available width without a panel or button pills", () => {
   const transparentRow = geoStyles.slice(geoStyles.indexOf("/* Transparent, full-width camera controls:"));
-  assert.match(transparentRow, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
+  assert.match(transparentRow, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(transparentRow, /width:\s*100% !important/);
   assert.match(transparentRow, /border:\s*0 !important/);
   assert.match(transparentRow, /border-radius:\s*0 !important/);
