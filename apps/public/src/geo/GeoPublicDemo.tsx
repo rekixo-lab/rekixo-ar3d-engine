@@ -165,7 +165,6 @@ const GEO_CAMERA_VIEWS: Array<{ id: GeoCameraView; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "front", label: "Front" },
   { id: "corner", label: "Corner" },
-  { id: "entry", label: "Entry view" },
   { id: "aerial", label: "Aerial" },
 ];
 let mapsPromise: Promise<GoogleRoot> | null = null;

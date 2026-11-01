@@ -375,7 +375,7 @@
 .geo-public-toolbar-slot > .geo-camera-toolbar--normal-row {
   position: static !important;
   display: grid !important;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: stretch; justify-content: stretch !important;
   gap: clamp(1px, .35vw, 6px);
   width: 100% !important; max-width: 100% !important; min-height: 0; margin: 0;
@@ -421,7 +421,7 @@
 @media (max-width: 640px) {
   .geo-public-toolbar-slot { margin-top: 6px; }
   .geo-public-toolbar-slot > .geo-camera-toolbar--normal-row {
-    grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0;
   }
   .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button,
   .geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link {
