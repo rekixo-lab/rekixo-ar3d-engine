@@ -93,5 +93,5 @@ test("Public GLB polygons preserve all small sites and cull large sites on map i
  assert.match(text,/plotLayer\?\.dispose\(\)/);
  assert.match(text,/preparedPaths.length<=160\?preparedPaths/);
  assert.doesNotMatch(text,/new google\.maps\.Polygon\(/);
- assert.match(text,/plotRefreshRef.current\?\.\(showPlotBoundaries\)/);
+ assert.match(text,/refreshPlotPolygons\?\.\(true\)/);
 });
