@@ -27,6 +27,10 @@ export function normalizeImageModelAlignment(value){
   if(!id(value.imageAssetId)||!id(value.geoReleaseId)||!id(value.buildingReleaseId)||
      !sha(value.imageSha256)||!sha(value.modelSha256))
     throw Error("Pin the owned original image SHA-256 and the current immutable 3D release.");
+  if(!Number.isInteger(value.imageWidth)||!Number.isInteger(value.imageHeight)||
+     value.imageWidth<1||value.imageHeight<1||value.imageWidth>40000||
+     value.imageHeight>40000||value.imageWidth*value.imageHeight>80_000_000)
+    throw Error("The checksum-verified original image width/height are required (max 80 megapixels).");
   const anchors=normalizePoints(value.anchors,"Fit anchors");
   const checkpoints=normalizePoints(value.checkpoints,"Independent checkpoints");
   const keys=new Set(anchors.map(p=>p.id.toLowerCase()));
@@ -40,6 +44,7 @@ export function normalizeImageModelAlignment(value){
       throw Error("Separate survey points must not reference the same image location.");
   }
   return {imageAssetId:value.imageAssetId,imageSha256:value.imageSha256.toLowerCase(),
+    imageWidth:value.imageWidth,imageHeight:value.imageHeight,
     geoReleaseId:value.geoReleaseId,buildingReleaseId:value.buildingReleaseId,
     modelSha256:value.modelSha256.toLowerCase(),anchors,checkpoints};
 }
@@ -51,32 +56,34 @@ function hasDistributedAnchors(points){
   return false;
 }
 export function imagePointToModel(t,p){
-  return [t.a*p[0]-t.b*p[1]+t.tx,t.b*p[0]+t.a*p[1]+t.tz];
+  const u=p[0]*t.imageAspect;
+  return [t.a*u-t.b*p[1]+t.tx,t.b*u+t.a*p[1]+t.tz];
 }
 export function modelPointToImage(t,p){
   const det=t.a*t.a+t.b*t.b;
   if(!Number.isFinite(det)||det<=1e-12)throw Error("Invalid image/model transform.");
   const x=p[0]-t.tx,z=p[1]-t.tz;
-  return [(t.a*x+t.b*z)/det,(-t.b*x+t.a*z)/det];
+  return [(t.a*x+t.b*z)/det/t.imageAspect,(-t.b*x+t.a*z)/det];
 }
 export function evaluateImageModelAlignment(value,{requireCheckpoints=false}={}){
   const draft=normalizeImageModelAlignment(value);
   const anchors=draft.anchors,checks=draft.checkpoints;
+  const imageAspect=draft.imageWidth/draft.imageHeight;
   if(anchors.length<3||!hasDistributedAnchors(anchors))
     throw Error("At least three non-collinear site-spanning image/model fit anchors are required.");
   const mean=items=>items.reduce((s,p)=>s+p,0)/items.length;
-  const u=mean(anchors.map(p=>p.u)),v=mean(anchors.map(p=>p.v));
+  const u=mean(anchors.map(p=>p.u*imageAspect)),v=mean(anchors.map(p=>p.v));
   const x=mean(anchors.map(p=>p.x)),z=mean(anchors.map(p=>p.z));
   let denom=0,dot=0,cross=0;
   for(const p of anchors){
-    const du=p.u-u,dv=p.v-v,dx=p.x-x,dz=p.z-z;
+    const du=p.u*imageAspect-u,dv=p.v-v,dx=p.x-x,dz=p.z-z;
     denom+=du*du+dv*dv;dot+=du*dx+dv*dz;cross+=du*dz-dv*dx;
   }
   if(denom<=1e-8)throw Error("Calibration points are too close together.");
   const a=dot/denom,b=cross/denom,scale=Math.hypot(a,b);
   if(!finite(scale)||scale<0.001||scale>1e7)
     throw Error("Alignment scale is degenerate.");
-  const transform={a,b,tx:x-a*u+b*v,tz:z-b*u-a*v};
+  const transform={a,b,tx:x-a*u+b*v,tz:z-b*u-a*v,imageAspect};
   const errors=items=>items.map(p=>{
     const [px,pz]=imagePointToModel(transform,[p.u,p.v]);
     return {id:p.id,errorMetres:Math.hypot(px-p.x,pz-p.z)};
