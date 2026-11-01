@@ -102,7 +102,7 @@ export function evaluateImageModelAlignment(value,{requireCheckpoints=false}={})
     Math.min(...checks.map(p=>p.u)) + Math.max(...checks.map(p=>p.v))-
     Math.min(...checks.map(p=>p.v))>=0.20;
   const issues=[];
-  if(maxFit!==null&&maxFit>limit)issues.push("Fit anchor residual exceeds the 1% / 0.25m review threshold.");
+  if(maxFit!==null&&maxFit>limit)issues.push("Fit anchor residual exceeds the conservative submeter review threshold.");
   if(checks.length<2)issues.push("At least two independent withheld checkpoints are required.");
   else if(!independentSpread)issues.push("Independent checkpoints must span different parts of the source image.");
   if(maxIndependent!==null&&maxIndependent>limit)
