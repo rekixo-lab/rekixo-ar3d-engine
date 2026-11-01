@@ -7,6 +7,7 @@ import { projects as listProjects, type CloudProjectSummary } from "../studio/cl
 import {adjacentPlot,boundedZoom,hasPendingPlotEdits,isTextEditingTarget,
   nextFreePlotId,sideLabelAnchor} from "../../../../shared/geo-plot-editor.js";
 import GeoPlotInventoryPanel from "./GeoPlotInventoryPanel";
+import GeoPlotImageAlignmentPanel from "./GeoPlotImageAlignmentPanel";
 import {nextUnmappedInventory,type GeoInventoryRow} from "../../../../shared/geo-plot-inventory.js";
 import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
 import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
@@ -27,7 +28,7 @@ type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | n
   releases:Array<{id:string;version:number;geoReleaseId:string}> };
 type GeoPublic = { geoRelease:{id:string}; buildingRelease:{id:string};
   model:{url:string;sha256?:string;byteSize?:number}; canonicalModel?:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number;scale:number} };
-type ToolMode = "pan" | "draw" | "edit";
+type ToolMode = "pan" | "draw" | "edit" | "align";
 type PointerPreview = {clientX:number;clientY:number;rawScreen:Point;screen:Point;
   point:Point;kind:"none"|"vertex"|"edge";pointerType:string};
 type PointerStart = {id:number;x:number;y:number;cancelled?:boolean};
@@ -174,6 +175,7 @@ export default function GeoPlotMapper(){
   const cameraRef=useRef<THREE.OrthographicCamera|null>(null);
   const controlsRef=useRef<OrbitControls|null>(null);
   const dragRef=useRef<number|null>(null);
+  const alignmentPickRef=useRef<((point:Point)=>void)|null>(null);
   const pointerStartRef=useRef<PointerStart|null>(null);
   const pointerPreviewRef=useRef<PointerPreview|null>(null);
   const pointerRafRef=useRef(0);
@@ -210,7 +212,7 @@ export default function GeoPlotMapper(){
   useEffect(()=>{
     let live=true;
     setState(null);setGeo(null);setPlots([]);setInventoryRows([]);setWorking(null);setDirty(false);
-    pointerPreviewRef.current=null;setPointerPreview(null);
+    pointerPreviewRef.current=null;setPointerPreview(null);alignmentPickRef.current=null;
     void refresh(()=>live).catch(e=>{if(live){setState(null);setGeo(null);
       setMessage("ERROR: "+(e instanceof Error?e.message:"Unable to load published Geo source."));}});
     return()=>{live=false;};
@@ -321,6 +323,12 @@ export default function GeoPlotMapper(){
       rawScreen:screen,kind:target.kind};
   };
   const clearPointer=()=>{pointerPendingRef.current=null;pointerPreviewRef.current=null;setPointerPreview(null);};
+  const captureImageAlignmentPoint=(done:(point:Point)=>void)=>{
+    if(!geo||!state||state.draft.stale)return;
+    alignmentPickRef.current=done;
+    setMode("align");
+    setMessage("Select the same approved landmark on the 3D canvas. This records a draft control only.");
+  };
   const updatePointer=(clientX:number,clientY:number,pointerType:string,skipIndex=-1)=>{
     const host=hostRef.current;if(!host||mode==="pan"||!geo)return;
     const rect=host.getBoundingClientRect();
@@ -439,7 +447,7 @@ export default function GeoPlotMapper(){
     });
   };
   const onOverlayPointerDown=(e:React.PointerEvent<SVGSVGElement>)=>{
-    if(mode!=="draw"||dragRef.current!==null||(e.pointerType==="mouse"&&e.button!==0))return;
+    if((mode!=="draw"&&mode!=="align")||dragRef.current!==null||(e.pointerType==="mouse"&&e.button!==0))return;
     pointerStartRef.current={id:e.pointerId,x:e.clientX,y:e.clientY};
     e.currentTarget.setPointerCapture(e.pointerId);
     queuePointer(e.clientX,e.clientY,e.pointerType);
@@ -454,9 +462,14 @@ export default function GeoPlotMapper(){
   };
   const onOverlayPointerUp=(e:React.PointerEvent<SVGSVGElement>)=>{
     const start=pointerStartRef.current;
-    if(mode==="draw"&&start&&!start.cancelled&&
-      isMappingTap(start,{id:e.pointerId,x:e.clientX,y:e.clientY}))
-      commitCorner(e.clientX,e.clientY);
+    if(start&&!start.cancelled&&
+      isMappingTap(start,{id:e.pointerId,x:e.clientX,y:e.clientY})){
+      if(mode==="draw")commitCorner(e.clientX,e.clientY);
+      else if(mode==="align"&&alignmentPickRef.current){
+        const point=unproject(e.clientX,e.clientY),done=alignmentPickRef.current;
+        if(point){alignmentPickRef.current=null;setMode("pan");done(point);}
+      }
+    }
     if(start?.id===e.pointerId)pointerStartRef.current=null;
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
     dragRef.current=null;
@@ -681,6 +694,8 @@ export default function GeoPlotMapper(){
       </div>
       <section className="geo-plot-tools" aria-label="Plot mapper controls">
         <div className="geo-plot-tool-group" aria-label="Boundary drawing tools">
+          {mode==="align"&&<button type="button" className="active"
+            onClick={()=>{alignmentPickRef.current=null;setMode("pan");}}>Cancel alignment capture</button>}
           <button type="button" disabled={!editable||busy} className={mode==="pan"?"active":""}
             title="Pan and pinch zoom (P)" aria-pressed={mode==="pan"}
             onClick={()=>setMode("pan")}>✋ Pan</button>
@@ -750,7 +765,7 @@ export default function GeoPlotMapper(){
              return <g key={p.id} className="geo-plot-mapped-outline">
                <polygon points={path(p.corners)} fill="rgba(16,185,129,.16)"
                  stroke={working?.id===p.id?"#f5dd6d":"#3fe3b1"} strokeWidth="2"
-                 onPointerDown={e=>{if(mode==="draw")return;e.stopPropagation();choose(p);}}/>
+                 onPointerDown={e=>{if(mode==="draw"||mode==="align")return;e.stopPropagation();choose(p);}}/>
                {showGuides&&<text className="geo-plot-map-number" x={cx} y={cy}
                  textAnchor="middle" dominantBaseline="middle">{p.id}</text>}
              </g>;
@@ -781,8 +796,8 @@ export default function GeoPlotMapper(){
               return <g key={i} className="geo-plot-precision-handle">
                 <circle className="geo-plot-handle-hit" cx={x} cy={y} r="17" fill="transparent"
                   onPointerDown={e=>{
-                    e.stopPropagation();
                     if(mode!=="edit")return;
+                    e.stopPropagation();
                     dragRef.current=i;pointerStartRef.current=null;
                     e.currentTarget.setPointerCapture(e.pointerId);
                     updatePointer(e.clientX,e.clientY,e.pointerType,i);
@@ -838,6 +853,9 @@ export default function GeoPlotMapper(){
             setWorking(fromInventory(row,groundY));setOriginalId(null);setShape("four");setMode("draw");
             setMessage("Plot "+row.id+" loaded from CSV. Start at the road-facing Front edge, then mark corners.");
           }}/>
+        {slug&&geo&&state&&<GeoPlotImageAlignmentPanel key={slug+"-alignment"}
+          slug={slug} geoReleaseId={state.geoReleaseId} buildingReleaseId={state.buildingReleaseId}
+          plots={plots} onCapture={captureImageAlignmentPoint}/>}
         <div className="geo-plot-inspector-head">
            <div><small>PROJECT PLOT INVENTORY</small><h3>Plot Editor</h3></div>
            <span>{displayedPlots.length}/{plots.length}</span>
