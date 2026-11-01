@@ -225,11 +225,11 @@ export default function GeoPlotMapper(){
   const rendererRef=useRef<THREE.WebGLRenderer|null>(null);
   const cameraRef=useRef<THREE.OrthographicCamera|null>(null);
   const controlsRef=useRef<OrbitControls|null>(null);
-  const pointerGeometryRef=useRef({
+  const pointerGeometry=useMemo(()=>({
     raycaster:new THREE.Raycaster(),
     plane:new THREE.Plane(new THREE.Vector3(0,1,0),0),
     uv:new THREE.Vector2(),hit:new THREE.Vector3(),projected:new THREE.Vector3()
-  });
+  }),[]);
   const dragRef=useRef<number|null>(null);
   const alignmentPickRef=useRef<((point:Point)=>void)|null>(null);
   const pointerStartRef=useRef<PointerStart|null>(null);
@@ -445,14 +445,14 @@ export default function GeoPlotMapper(){
   },[geo?.canonicalModel?.url,geo?.canonicalModel?.sha256,geo?.model.url,geo?.model.sha256]);
   const project=(p:readonly [number,number]):Point=>{
     const camera=cameraRef.current;if(!camera)return [0,0];
-    const vec=pointerGeometryRef.current.projected.set(p[0],groundY+0.02,p[1]).project(camera);
+    const vec=pointerGeometry.projected.set(p[0],groundY+0.02,p[1]).project(camera);
     return [(vec.x+1)*viewport.w/2,(1-vec.y)*viewport.h/2];
   };
   const unproject=(clientX:number,clientY:number):Point|null=>{
     const host=hostRef.current,camera=cameraRef.current;if(!host||!camera)return null;
     const rect=host.getBoundingClientRect();if(!rect.width||!rect.height)return null;
     const x=(clientX-rect.left)/rect.width*2-1,y=1-(clientY-rect.top)/rect.height*2;
-    const pointer=pointerGeometryRef.current;
+    const pointer=pointerGeometry;
     pointer.uv.set(x,y);pointer.plane.constant=-groundY;
     pointer.raycaster.setFromCamera(pointer.uv,camera);
     const hit=pointer.raycaster.ray.intersectPlane(pointer.plane,pointer.hit);
