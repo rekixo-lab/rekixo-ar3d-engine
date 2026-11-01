@@ -8,11 +8,14 @@ import {adjacentPlot,boundedZoom,hasPendingPlotEdits,isTextEditingTarget,
   nextFreePlotId,sideLabelAnchor} from "../../../../shared/geo-plot-editor.js";
 import GeoPlotInventoryPanel from "./GeoPlotInventoryPanel";
 import GeoPlotImageAlignmentPanel from "./GeoPlotImageAlignmentPanel";
+import GeoPlotCommercialPanel from "./GeoPlotCommercialPanel";
 import {nextUnmappedInventory,type GeoInventoryRow} from "../../../../shared/geo-plot-inventory.js";
 import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
 import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import {cloneUnverifiedGeoPlot,geoPlotEvidenceManifest,geoPlotQualityReport} from "../../../../shared/geo-plot-stage3-review.js";
+import {stageVerifiedImageCorner} from "../../../../shared/geo-plot-image-corner.js";
+import type {SimilarityTransform} from "../../../../shared/geo-plot-image-alignment.js";
 import {newPlotEditHistory,replacePlotEditHistory,updatePlotEditHistory,
   closeGroupedPlotEdit,undoPlotEdit,redoPlotEdit,geometryWithRevokedApprovals,nudgePlotCorner
 } from "../../../../shared/geo-plot-precision-history.js";
@@ -189,6 +192,11 @@ export default function GeoPlotMapper(){
   const [snap,setSnap]=useState(false);
   const [selectedRole,setSelectedRole]=useState<Role>("front");
   const [inventoryQuery,setInventoryQuery]=useState("");
+  const [publishedPreview,setPublishedPreview]=useState<{
+    draftRevision:number;activeReleaseId:string|null;token:string;
+    diff:{liveCount:number;draftCount:number;added:number;removed:number;changed:number;
+      changes:Array<{plotId:string;kind:string;fields:string[]}>}
+  }|null>(null);
   const [cloneFrom,setCloneFrom]=useState("");
   const [cloneX,setCloneX]=useState("");
   const [cloneZ,setCloneZ]=useState("");
@@ -404,6 +412,73 @@ export default function GeoPlotMapper(){
     const neighbor=adjacentPlot(plots,working?.id||"",direction);
     if(neighbor)choose(neighbor);
   };
+  const rebindWithReviewedSource=async(
+    oldAlignment:import("../../../../shared/geo-plot-image-alignment.js").ImageModelAlignmentDraft,
+    selectedIds:string[]):Promise<{ok:boolean;reason?:string}>=>{
+    if(!state||!geo||!state.draft.stale||busy||dirty||working)
+      return {ok:false,reason:"Only a clean, source-stale mapping may be selectively remapped. Save/discard local edits first."};
+    if(selectedIds.length<1)return {ok:false,reason:"Select at least one Plot ID for reviewed remapping."};
+    setBusy(true);
+    try{
+      const body={expectedRevision:state.draft.revision,previousAlignment:oldAlignment,selectedIds};
+      const reviewed=await callApi<{
+        plan:{rows:Array<{plotId:string;selected:boolean;maxModelCoordinateMovementM:number}>;
+          unreviewedIds:string[]};
+        token:string;expectedRevision:number;verifiedAlignmentRevision:number
+      }>(api,{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...body,action:"remap-preflight"})
+      });
+      if(activeProjectRef.current!==slug)throw Error("Project switched while reviewing source remap.");
+      const selected=reviewed.plan.rows.filter(p=>p.selected);
+      const maximum=Math.max(...selected.map(p=>p.maxModelCoordinateMovementM));
+      const prompt="SELECTIVE SOURCE REMAP\n"+
+        selected.length+" selected polygons; "+reviewed.plan.unreviewedIds.length+
+        " others keep old coordinates but ALL approvals and model plane approvals reset.\n"+
+        "Largest selected model X/Z move: "+maximum.toFixed(3)+" m.\n"+
+        "NO published map/sales will change. Continue, then recheck EVERY plot against new signed survey?";
+      if(!window.confirm(prompt))
+        return {ok:false,reason:"Selective remap cancelled; no source draft was changed."};
+      const next=await callApi<MappingState>(api,{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...body,action:"rebind-remap",
+          expectedPreflightToken:reviewed.token,confirmation:"REMAP SOURCE "+slug})
+      });
+      if(activeProjectRef.current!==slug)throw Error("Project changed; reload mapping before editing.");
+      setState(next);setPlots(next.draft.plots);setDirty(false);resetWorking(null);
+      setOriginalId(null);setMode("pan");setPublishedPreview(null);
+      setMessage("Reviewed selective remap saved as UNVERIFIED mapping draft. "+
+        reviewed.plan.unreviewedIds.length+" plots still need manual source coordinate review. "+
+        "Nothing published. Review every plot and re-verify before Publish.");
+      return {ok:true};
+    }catch(error){
+      const message=error instanceof Error?error.message:String(error);
+      setMessage("ERROR: "+message);
+      return {ok:false,reason:message};
+    }finally{setBusy(false);}
+  };
+  const stageCornerFromVerifiedImage=(plotId:string,index:number,uv:Point,
+    transform:SimilarityTransform,alignmentRevision:number):{ok:boolean;reason?:string}=>{
+    if(!state||!geo||state.draft.stale||busy||state.alignmentRevision!==alignmentRevision)
+      return {ok:false,reason:"Mapping or alignment source is stale. Reload before editing image corners."};
+    if(!confirmUnapplied())return {ok:false,reason:"Unapplied working-plot edits were preserved; image edit cancelled."};
+    try{
+      const staged=stageVerifiedImageCorner(plots,plotId,index,uv,transform);
+      if(!window.confirm("Stage Plot "+staged.plotId+" corner "+(index+1)+
+        " from independently verified original image at model X "+
+        staged.modelPoint[0].toFixed(4)+", Z "+staged.modelPoint[1].toFixed(4)+
+        "? This changes the LOCAL DRAFT only. All spatial, road, area, facing and plane approvals reset.")){
+        return {ok:false,reason:"Image corner correction cancelled. No draft changed."};
+      }
+      setPlots(staged.plots);setDirty(true);
+      resetWorking(null);setOriginalId(null);setMode("pan");
+      setMessage("Image-mapped correction staged for Plot "+staged.plotId+
+        ". Cross-check new geometry in 3D, Apply/Save/Verify, then explicitly Publish.");
+      return {ok:true};
+    }catch(error){
+      return {ok:false,reason:error instanceof Error?error.message:String(error)};
+    }
+  };
   const clonePreviousDraft=()=>{
     if(!editable||busy||!cloneFrom)return;
     if(!cloneX.trim()||!cloneZ.trim()){
@@ -584,7 +659,7 @@ export default function GeoPlotMapper(){
     if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId))throw Error("Duplicate plot ID.");
     const updated=[...plots.filter(p=>p.id!==(originalId||id)),{...working,id}]
       .sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
-    setPlots(updated);setDirty(true);
+    setPlots(updated);setDirty(true);setPublishedPreview(null);
     if(openNext){
       const next=nextUnmappedInventory(inventoryRows,updated.map(p=>p.id),id);
       resetWorking(next?fromInventory(next,groundY):
@@ -596,15 +671,67 @@ export default function GeoPlotMapper(){
       setMessage("Plot "+id+" staged. Save Mapping Draft before verification.");
     }
   };
+  const downloadGeoRecovery=async()=>{
+    if(!state||busy||!slug)return;
+    setBusy(true);
+    try{
+      const document=await callApi<{schema:string;sha256:string;warnings:string[];
+        completeness:string;payload:unknown}>(api+"?recovery=1");
+      if(activeProjectRef.current!==slug)return;
+      if(document.completeness!=="METADATA_AND_R2_REFERENCES_ONLY")
+        throw Error("Unexpected recovery export scope.");
+      const url=URL.createObjectURL(new Blob([JSON.stringify(document,null,2)],
+        {type:"application/json;charset=utf-8"}));
+      const a=window.document.createElement("a");a.href=url;
+      a.download=slug+"-geo-recovery-manifest.json";a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),2000);
+      setMessage("Owner-private recovery manifest downloaded. Verify sealed SHAs and independently export R2 object bytes. This is NOT a complete D1/R2 backup.");
+    }catch(error){setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));}
+    finally{setBusy(false);}
+  };
+  const inspectPublish=async()=>{
+    if(!state||!geo||dirty||working||busy)return;
+    setBusy(true);
+    try{
+      const info=await callApi<NonNullable<typeof publishedPreview>>(api+"?preview=1");
+      if(activeProjectRef.current!==slug)return;
+      if(info.draftRevision!==state.draft.revision)
+        throw Error("Draft revision changed while comparing live publication. Reload.");
+      setPublishedPreview(info);
+      setMessage("Live/draft preflight ready. "+info.diff.added+" added, "+
+        info.diff.changed+" changed, "+info.diff.removed+" removed plots. Review before publish.");
+    }catch(error){setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));}
+    finally{setBusy(false);}
+  };
   const execute=async(action:"save"|"verify"|"publish"|"activate"|"rebind-reset",id?:string)=>{
     if(!state||!geo) return;setBusy(true);setMessage("");
     try{
+      let approvedPreflight:NonNullable<typeof publishedPreview>|null=null;
+      if(action==="publish"){
+        // Fresh server-side sealed release read: a cached diff can never approve
+        // a concurrent active-version switch or an updated draft.
+        approvedPreflight=await callApi<NonNullable<typeof publishedPreview>>(api+"?preview=1");
+        if(approvedPreflight.draftRevision!==state.draft.revision)
+          throw Error("Draft changed since the last review. Reload before publish.");
+        setPublishedPreview(approvedPreflight);
+        const d=approvedPreflight.diff;
+        const summary="PUBLISH CURRENT DRAFT?\n"+
+          "Live "+d.liveCount+" → Draft "+d.draftCount+" plots.\n"+
+          d.added+" ADDED, "+d.changed+" CHANGED, "+d.removed+" REMOVED.\n"+
+          d.changes.slice(0,12).map(p=>p.kind.toUpperCase()+" Plot "+p.plotId+
+            " ("+p.fields.join(", ")+")").join("\n")+
+          (d.changes.length>12?"\n...plus "+(d.changes.length-12)+" more changes.":"")+
+          "\nPublished releases are immutable; changed facts need independent source reapproval. Continue?";
+        if(!window.confirm(summary))return;
+      }
       const body=action==="save"?{expectedRevision:state.draft.revision,geoReleaseId:state.geoReleaseId,plots}
         :{action,expectedRevision:state.draft.revision,...(id?{releaseId:id}:{}),
+          ...(action==="publish"?{expectedPreflightToken:approvedPreflight!.token,
+            expectedActiveReleaseId:approvedPreflight!.activeReleaseId}:{}),
           ...(action==="rebind-reset"?{confirmation:"RESET MAPPING "+slug}:{})};
       const result=await callApi<MappingState>(api,{method:action==="save"?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       if(activeProjectRef.current!==slug)return; // Never display another project’s save response.
-      setState(result);setPlots(result.draft.plots);setDirty(false);setWorking(null);
+      setState(result);setPlots(result.draft.plots);setDirty(false);setWorking(null);setPublishedPreview(null);
       setMessage(action==="save"?"Mapping draft saved and server read-back confirmed.":action==="verify"?"All plot sources and geometry verified.":action==="publish"?"Immutable plot mapping published for this Geo release.":action==="rebind-reset"?"New empty draft created for active Geo. Historical published mapping releases remain preserved.":"Published mapping version activated.");
     }catch(e){setMessage("ERROR: "+(e instanceof Error?e.message:"Mapping operation failed."));}
     finally{setBusy(false);}
@@ -976,7 +1103,10 @@ export default function GeoPlotMapper(){
         {slug&&geo&&state&&<GeoPlotImageAlignmentPanel key={slug+"-alignment"}
           slug={slug} geoReleaseId={state.geoReleaseId} buildingReleaseId={state.buildingReleaseId}
           plots={plots} onCapture={captureImageAlignmentPoint}
-          onRevisionChange={onAlignmentRevisionChange}/>}
+          onRevisionChange={onAlignmentRevisionChange}
+          onStageImageCorner={stageCornerFromVerifiedImage} editable={editable&&!busy}
+          mappingStale={Boolean(state.draft.stale)}
+          onRebindSource={rebindWithReviewedSource}/>}
         <details className="geo-plot-review-dashboard" open>
           <summary>03 · Data quality · {quality.summary.blockers} blockers / {quality.summary.reviews} reviews</summary>
           <p className="geo-plot-hint">Private draft diagnostics · {quality.summary.mapped} mapped /
@@ -1019,6 +1149,10 @@ export default function GeoPlotMapper(){
             Clone to Unverified Draft
           </button>
         </div>
+        {state?.activeMapping?.current&&slug&&<GeoPlotCommercialPanel
+          key={slug+"-commercial-"+state.activeMapping.id}
+          slug={slug} mappingReleaseId={state.activeMapping.id}
+          plotIds={plots.map(p=>p.id)}/>}
         <div className="geo-plot-inspector-head">
            <div><small>PROJECT PLOT INVENTORY</small><h3>Plot Editor</h3></div>
            <span>{displayedPlots.length}/{plots.length}</span>
@@ -1199,6 +1333,24 @@ export default function GeoPlotMapper(){
         </>}
         <div className="geo-plot-draft-actions">
           <h3>Save, review & publish</h3>
+          <button type="button" disabled={!state||busy||!slug} onClick={()=>void downloadGeoRecovery()}>
+            Download Geo Recovery Manifest (private)
+          </button>
+          <p className="geo-plot-hint">Sealed D1 mapping history + SHA-pinned R2 references.
+            Rehearse restore offline; independently export R2 bytes and payment-ledger backup
+            before calling any project fully recoverable.</p>
+          <button type="button" disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision}
+            onClick={()=>void inspectPublish()}>Preview Live vs Draft Plot Changes</button>
+          {publishedPreview&&<div className="geo-plot-review-dashboard" role="status">
+            <strong>Live {publishedPreview.diff.liveCount} → Draft {publishedPreview.diff.draftCount}</strong>
+            <p>{publishedPreview.diff.added} added · {publishedPreview.diff.changed} changed ·
+              {publishedPreview.diff.removed} removed. A fresh preflight and confirmation is required to publish.</p>
+            {publishedPreview.diff.changes.slice(0,12).map((x,i)=><p key={i}>
+              {x.kind}: Plot {x.plotId} ({x.fields.join(", ")})</p>)}
+            {publishedPreview.diff.changes.length>12&&<p>
+              +{publishedPreview.diff.changes.length-12} additional differences.
+              Download private evidence/quality review before publishing.</p>}
+          </div>}
           <p className="geo-plot-hint">Apply each plot, save the draft, reconcile the approved CSV, then verify. A new inventory revision blocks Publish until re-reviewed.</p>
         <button disabled={!editable||busy||!dirty} onClick={()=>void execute("save")}>{busy?"Saving…":"Save Mapping Draft"}</button>
         <button disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision||inventoryIssues.length>0} onClick={()=>void execute("verify")}>Verify All Plots</button>

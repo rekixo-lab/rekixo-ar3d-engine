@@ -7,6 +7,7 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import { Viewer3D } from "../viewer/Viewer3D";
 import { applyRigidBuildingPlacement } from "./geoRigidTransform";
 import { loadPublicBranding, type PublicProjectBranding } from "../branding";
+import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shared/geo-plot-viewport.js";
 import "./geo-public-demo.css";
 
 type GeoCoordinate = {
@@ -72,7 +73,8 @@ type GeoPayload = {
     sha256?: string;
     sourceSha256?: string;
   };
-  plotMapping?: {version:number;geoReleaseId:string;plots:GeoMappedPlot[]};
+  plotMapping?: {version:number;geoReleaseId:string;plots:GeoMappedPlot[];
+    commercial?:Record<string,{status:"available"|"booked"|"sold";pricePaise:number|null;currency:"INR"}>};
   error?: string;
 };
 
@@ -91,6 +93,8 @@ type GoogleMap = {
   getMapCapabilities?(): MapCapabilities;
   getMapTypeId?(): string;
   getZoom?(): number | undefined;
+  getBounds?(): {getNorthEast():{lat():number;lng():number};
+    getSouthWest():{lat():number;lng():number}}|undefined;
 };
 
 type MaxZoomResult = { zoom?: number };
@@ -421,8 +425,12 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
   const [inspectMode, setInspectMode] = useState(false);
   const [selectedPlot, setSelectedPlot] = useState<GeoMappedPlot|null>(null);
   const [showPlotBoundaries, setShowPlotBoundaries] = useState(true);
+  const showPlotsRef=useRef(showPlotBoundaries);
+  showPlotsRef.current=showPlotBoundaries;
   const plotPolygonsRef = useRef<GooglePlotPolygon[]>([]);
+  const plotRefreshRef=useRef<((visible:boolean)=>void)|null>(null);
   useEffect(() => {
+    plotRefreshRef.current?.(showPlotBoundaries);
     for(const polygon of plotPolygonsRef.current)polygon.setVisible(showPlotBoundaries);
     if(!showPlotBoundaries)setSelectedPlot(null);
   },[showPlotBoundaries]);
@@ -438,7 +446,9 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
     let mapIdle: MapsListener | undefined;
     let mapTypeChanged: MapsListener | undefined;
     let mapZoomChanged: MapsListener | undefined;
-    const polygons: GooglePlotPolygon[] = [];
+    const handles=new Map<string,{polygon:GooglePlotPolygon;listener:MapsListener}>();
+    let preparedPaths:Array<{plot:GeoMappedPlot;path:Array<{lat:number;lng:number}>;bounds:GeoBounds}>=[];
+    let refreshPlotPolygons:((visible:boolean)=>void)|null=null;
     let renderer: THREE.WebGLRenderer | undefined;
     let loadedModel: THREE.Object3D | undefined;
     let root: THREE.Group | undefined;
@@ -490,6 +500,36 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           gestureHandling: "greedy",
           clickableIcons: false,
         });
+
+        // Plot overlays are lazy: do not create thousands of Google Polygon
+        // objects for plots outside the current viewport on large sites.
+        const currentViewport=():GeoBounds|null=>{
+          const bounds=map.getBounds?.();
+          if(!bounds)return null; // map API not yet ready / older runtime
+          const ne=bounds.getNorthEast(),sw=bounds.getSouthWest();
+          return {north:ne.lat(),east:ne.lng(),south:sw.lat(),west:sw.lng()};
+        };
+        refreshPlotPolygons=(enabled)=>{
+          if(cancelled||!google.maps.Polygon)return;
+          const desired=enabled?visibleGeoPlotPaths(preparedPaths,currentViewport()):[];
+          const visible=new Set(desired.map(p=>p.plot.id));
+          for(const [id,handle] of handles){
+            if(!visible.has(id)){
+              handle.listener.remove();handle.polygon.setMap(null);handles.delete(id);
+            }
+          }
+          for(const item of desired){
+            if(handles.has(item.plot.id))continue;
+            const polygon=new google.maps.Polygon({map,paths:item.path,
+              strokeColor:"#20d8a5",strokeWeight:2,strokeOpacity:.96,
+              fillColor:"#1dd5a2",fillOpacity:.13,clickable:true,zIndex:70});
+            const plot=item.plot;
+            const listener=polygon.addListener("click",()=>setSelectedPlot(plot));
+            handles.set(item.plot.id,{polygon,listener});
+          }
+          plotPolygonsRef.current=[...handles.values()].map(x=>x.polygon);
+        };
+        plotRefreshRef.current=visible=>refreshPlotPolygons?.(visible);
 
         const scene = new THREE.Scene();
         const camera = new THREE.Camera();
@@ -599,15 +639,12 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
               },
             );
             if (data.plotMapping?.geoReleaseId===data.geoRelease.id && google.maps.Polygon) {
-              for(const plot of data.plotMapping.plots){
-                const poly=new google.maps.Polygon({map,paths:geoPlotWorldPath(plot,data,Number.isFinite(plot.planeY)?plot.planeY!:modelGroundY),
-                  strokeColor:"#20d8a5",strokeWeight:2,strokeOpacity:.96,
-                  fillColor:"#1dd5a2",fillOpacity:.13,clickable:true,zIndex:70});
-                poly.addListener("click",()=>setSelectedPlot(plot));
-                poly.setVisible(showPlotBoundaries);
-                polygons.push(poly);
-                plotPolygonsRef.current=polygons;
-              }
+              preparedPaths=data.plotMapping.plots.map(plot=>{
+                const path=geoPlotWorldPath(plot,data,
+                  Number.isFinite(plot.planeY)?plot.planeY!:modelGroundY);
+                return {plot,path,bounds:geoPathBounds(path)};
+              });
+              refreshPlotPolygons?.(showPlotsRef.current);
             }
             model.traverse((node) => {
               if (!(node instanceof THREE.Mesh)) return;
@@ -680,6 +717,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         });
         mapIdle = map.addListener("idle", () => {
           overlay?.requestRedraw();
+          refreshPlotPolygons?.(showPlotsRef.current);
         });
         mapTypeChanged = map.addListener("maptypeid_changed", () => {
           if (isSatelliteMapType(map.getMapTypeId?.())) void refreshSatelliteLimit();
@@ -709,8 +747,12 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
       cameraActionRef.current = null;
       zoomActionRef.current = null;
       mapZoomChanged?.remove();
-      for(const polygon of polygons)polygon.setMap(null);
-      if(plotPolygonsRef.current===polygons)plotPolygonsRef.current=[];
+      for(const entry of handles.values()){
+        entry.listener.remove();entry.polygon.setMap(null);
+      }
+      handles.clear();preparedPaths=[];
+      plotRefreshRef.current=null;
+      plotPolygonsRef.current=[];
       mapIdle?.remove();
       mapTypeChanged?.remove();
       overlay?.setMap(null);
@@ -746,6 +788,15 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
       {selectedPlot && <aside className="geo-plot-public-details" aria-label="Selected verified plot details">
         <button type="button" className="geo-plot-public-close" aria-label="Close plot details" onClick={()=>setSelectedPlot(null)}>×</button>
         <strong>Plot {selectedPlot.id}</strong>
+        {(()=>{
+          const commercial=data.plotMapping?.commercial?.[selectedPlot.id];
+          return commercial?<span>
+            {commercial.status==="available"?"Available":commercial.status==="booked"?"Booked":"Sold"}
+            {Number.isSafeInteger(commercial.pricePaise)&&commercial.pricePaise!==null
+              ?" · "+new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR"})
+                .format(commercial.pricePaise/100):""}
+          </span>:<small>Commercial status/price not independently approved for this mapping release.</small>;
+        })()}
         <span>{selectedPlot.area.value} {selectedPlot.area.unit} · {selectedPlot.facing}</span>
         {selectedPlot.road && <span>Road: {selectedPlot.road}</span>}
         {Object.entries(selectedPlot.sides).map(([role,side])=><span key={role}>{role}: {side.length} {side.unit}{side.roadFacing?" · Road":""}</span>)}
