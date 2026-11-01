@@ -11,6 +11,7 @@ import { stageSelectedGeoSourceRemap } from "../shared/geo-plot-source-remap.js"
 import { geometryWithRevokedApprovals } from "../shared/geo-plot-precision-history.js";
 import { projectGeoRecoveryManifest } from "./geo-plot-recovery.mjs";
 import { handleGeoPlotCommercial } from "./geo-plot-commercial.mjs";
+import { handleGeoPlotPricingSheet } from "./geo-plot-pricing.mjs";
 import { geoPlotMappingProjectKind } from "../shared/geo-plot-project-policy.js";
 
 const json = (value, init = {}) => Response.json(value, {headers: {"Cache-Control":"no-store"}, ...init});
@@ -380,7 +381,7 @@ export function verifiedGeoPlotSourceResponse(ctx,experience) {
   });
 }
 export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.url)) {
-  const match=url.pathname.match(/^\/3Dprojects\/api\/cloud\/projects\/([^/]+)\/geo-plots(?:\/(source|inventory|alignment|commercial))?$/);
+  const match=url.pathname.match(/^\/3Dprojects\/api\/cloud\/projects\/([^/]+)\/geo-plots(?:\/(source|inventory|alignment|commercial|pricing))?$/);
   if (!match) return null;
   const slug=decodeURIComponent(match[1]).toLowerCase();
   if (!validProjectSlug(slug)) return fail("Invalid project slug.");
@@ -407,6 +408,10 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
     if(match[2]==="commercial"){
       if(request.method!=="GET"&&!sameOrigin(request))return fail("Same-origin request required.",403);
       return handleGeoPlotCommercial(request,env,ctx,access.actor);
+    }
+    if(match[2]==="pricing"){
+      if(request.method!=="GET"&&!sameOrigin(request))return fail("Same-origin request required.",403);
+      return handleGeoPlotPricingSheet(request,env,ctx,access.actor);
     }
     if (request.method==="GET"){
       if(url.searchParams.get("preview")==="1")
