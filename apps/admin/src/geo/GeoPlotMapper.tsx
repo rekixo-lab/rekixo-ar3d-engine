@@ -360,7 +360,11 @@ export default function GeoPlotMapper(){
       // The loupe samples this exact frame of the canonical model, not a guessed image.
       // WebGL capture must happen immediately after render (drawing buffer may be transient).
       const pointer=pointerPreviewRef.current,loupe=loupeCanvasRef.current;
-      if(pointer&&loupe&&++renderFramesRef.current%3===0){
+      if(pointer&&loupe&&++renderFramesRef.current%4===0){
+        const sampleKey=pointer.screen[0].toFixed(1)+":"+pointer.screen[1].toFixed(1)+":"+
+          camera.zoom.toFixed(3)+":"+camera.position.x.toFixed(3)+":"+camera.position.z.toFixed(3);
+        if(loupeLastSampleRef.current===sampleKey)return;
+        loupeLastSampleRef.current=sampleKey;
         const source=renderer.domElement,ctx=loupe.getContext("2d");
         if(ctx&&host.clientWidth&&host.clientHeight){
           const scaleX=source.width/host.clientWidth,scaleY=source.height/host.clientHeight;
@@ -440,7 +444,10 @@ export default function GeoPlotMapper(){
     return {point:target.point as Point,screen:target.screen as Point,
       rawScreen:screen,kind:target.kind};
   };
-  const clearPointer=()=>{pointerPendingRef.current=null;pointerPreviewRef.current=null;setPointerPreview(null);};
+  const clearPointer=()=>{
+    pointerPendingRef.current=null;pointerPreviewRef.current=null;
+    loupeLastSampleRef.current="";setPointerPreview(null);
+  };
   const captureImageAlignmentPoint=(done:(point:Point)=>void)=>{
     if(!geo||!state||state.draft.stale)return;
     alignmentPickRef.current=done;
@@ -454,7 +461,27 @@ export default function GeoPlotMapper(){
     const location=precisionPointer(clientX,clientY,skipIndex);
     if(!location)return;
     const next:PointerPreview={clientX,clientY,pointerType,...location};
-    pointerPreviewRef.current=next;setPointerPreview(next);
+    pointerPreviewRef.current=next;
+    const loupe=positionCursorLoupe(next.screen,[host.clientWidth,host.clientHeight]);
+    if(loupeRef.current){
+      loupeRef.current.style.left=loupe.left+"px";
+      loupeRef.current.style.top=loupe.top+"px";
+    }
+    if(crosshairRef.current){
+      crosshairRef.current.style.left=next.screen[0]+"px";
+      crosshairRef.current.style.top=next.screen[1]+"px";
+      crosshairRef.current.dataset.snapKind=next.kind;
+    }
+    if(pointerOriginRef.current){
+      pointerOriginRef.current.style.left=next.rawScreen[0]+"px";
+      pointerOriginRef.current.style.top=next.rawScreen[1]+"px";
+      pointerOriginRef.current.style.display=next.kind==="none"?"none":"";
+    }
+    const now=performance.now();
+    if(now-pointerStatePaintRef.current>=33||!loupeRef.current){
+      pointerStatePaintRef.current=now;
+      setPointerPreview(next);
+    }
   };
   const queuePointer=(clientX:number,clientY:number,pointerType:string,skipIndex=-1)=>{
     pointerPendingRef.current={x:clientX,y:clientY,kind:pointerType,skip:skipIndex};
@@ -473,7 +500,8 @@ export default function GeoPlotMapper(){
     if(!confirmUnapplied())return;
     resetWorking(structuredClone(plot));
     if(Number.isFinite(plot.planeY))setGroundY(plot.planeY!);
-    setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");setMode("edit");
+    setOriginalId(plot.id);setShape(plot.corners.length===4?"four":"irregular");
+    setMode("edit");setInspectorTab("plot");
   };
   const chooseSibling=(direction:1|-1)=>{
     const neighbor=adjacentPlot(plots,working?.id||"",direction);
@@ -562,7 +590,7 @@ export default function GeoPlotMapper(){
         " using X "+cloneX+" m and Z "+cloneZ+" m translation from Plot "+previous.id+
         "? All measurement, road, facing and plane approvals will be reset. Nothing is published."))return;
       resetWorking(next);setOriginalId(null);
-      setShape(next.corners.length===4?"four":"irregular");setMode("edit");
+      setShape(next.corners.length===4?"four":"irregular");setMode("edit");setInspectorTab("plot");
       setMessage("Unverified template ready for Plot "+next.id+
         ". Check each corner, approved CSV/source and road; apply only after inspecting the new footprint.");
     }catch(error){
@@ -1137,7 +1165,8 @@ export default function GeoPlotMapper(){
         <div><strong>PRECISION PLOT STUDIO</strong>
           <span>Front-first boundaries · editable corners · source-backed measurements</span></div>
         <div className="geo-plot-editor-head-stats">
-          <span><b>{plots.length}</b> mapped</span>
+          <span><b>{progress.confirmed}</b> / {progress.inventory} confirmed</span>
+          <span><b>{progress.pending}</b> pending</span>
           <span><b>{working?.id||"—"}</b> current plot</span>
           {dirty&&<span className="geo-plot-unsaved">Unsaved mapping draft</span>}
         </div>
