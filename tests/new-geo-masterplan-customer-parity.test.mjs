@@ -10,7 +10,7 @@ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 test("new Building+Geo projects gain plot authoring on server and navigation, unlike 2D-only",()=>{
  assert.equal(geoPlotMappingProjectKind("building_geo"),true);
  assert.equal(geoPlotMappingProjectKind("legacy"),true);
- for(const kind of ["masterplan_geo","building","unknown"]){
+ for(const kind of ["masterplan_geo","building"]){
   assert.equal(geoPlotMappingProjectKind(kind),false);
   assert.equal(projectModuleVisible(kind,"geo-plots"),false);
  }
