@@ -17,7 +17,7 @@ export function customerGeoContactsFromProfile(row){
       if(url.protocol!=="https:"||url.username||url.password)fields[key]="";
       if(key==="mapsUrl"&&!(url.hostname==="goo.gl"||
         url.hostname.endsWith(".goo.gl")||
-        /(^|\\.)google\\.(?:com|[a-z]{2}|co\\.[a-z]{2}|com\\.[a-z]{2})$/.test(url.hostname)))fields[key]="";
+        /(^|\.)google\.(?:com|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2})$/.test(url.hostname)))fields[key]="";
     }catch{fields[key]="";}
   }
   return fields;
