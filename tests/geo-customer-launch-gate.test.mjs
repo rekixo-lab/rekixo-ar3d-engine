@@ -105,7 +105,7 @@ test("tampered screenshots, fake cloud recovery or production target are refused
 test("an old published mapping backup must not pass a new immutable release",()=>{
   withFixture(f=>{
     f.restoreReport.activeMappingReleaseId="previous-map-release";
-    assert.throws(()=>evaluate(f),/offline D1\\/R2/);
+    assert.throws(()=>evaluate(f),/offline D1\/R2/);
   });
 });
 test("social poster must bind the actual version and exact Geo public project",()=>{
