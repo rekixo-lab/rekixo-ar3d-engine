@@ -49,7 +49,7 @@ async function state(env, ctx) {
   const alignment=await env.DB.prepare("SELECT revision FROM geo_plot_image_alignment_drafts_3d WHERE project_id=?")
     .bind(ctx.project.id).first();
   const active = await env.DB.prepare(
-    `SELECT r.id,r.version,r.geo_release_id,r.building_release_id,r.sha256,r.publication_mode
+    `SELECT r.id,r.version,r.draft_revision,r.geo_release_id,r.building_release_id,r.sha256,r.publication_mode
        FROM geo_plot_mapping_active_3d a JOIN geo_plot_mapping_releases_3d r
        ON r.id=a.mapping_release_id AND r.project_id=a.project_id AND r.experience_id=a.experience_id
        WHERE a.project_id=?`
@@ -68,8 +68,8 @@ async function state(env, ctx) {
       draft.building_release_id!==ctx.active?.source_building_release_id,
       plots:JSON.parse(draft.plots_json)} : {revision:0,verifiedRevision:null,
       verifiedInventoryRevision:null,verifiedAlignmentRevision:null,stale:false,plots:[]},
-    activeMapping:active ? {id:active.id,version:active.version,geoReleaseId:active.geo_release_id,
-      publicationMode:active.publication_mode,
+    activeMapping:active ? {id:active.id,version:active.version,draftRevision:active.draft_revision,
+      geoReleaseId:active.geo_release_id,publicationMode:active.publication_mode,
       current:active.geo_release_id===ctx.active?.geo_release_id && active.building_release_id===ctx.active?.source_building_release_id} : null,
     releases:versions.results || []};
 }
@@ -302,7 +302,33 @@ async function publish(env,ctx,actor,body) {
      body.expectedActiveReleaseId!==preflight.activeReleaseId)
     throw Error("Live mapping or draft changed since publication preview. Review the diff again.");
   const publicationMode=preliminary?"preliminary":"verified";
-  const text=JSON.stringify(plots),sha=await digest(text),id="geo_plot_"+crypto.randomUUID(),now=currentIso();
+  const text=JSON.stringify(plots),sha=await digest(text);
+  // The table intentionally forbids publishing a second immutable release
+  // from the *same* (experience, Geo, draft revision). Publishing r37 again
+  // when v1 is already live is a no-op, not a SQLITE_CONSTRAINT_UNIQUE error.
+  // Changing ANY mapped plot must first save the private draft as r38, then
+  // publish v2. Never mutate an existing sealed release or double-write audit.
+  const previousRelease=()=>env.DB.prepare(
+    `SELECT id,version,sha256,publication_mode,building_release_id
+       FROM geo_plot_mapping_releases_3d
+       WHERE experience_id=? AND geo_release_id=? AND draft_revision=?`
+  ).bind(ctx.active.experience_id,ctx.active.geo_release_id,draft.revision).first();
+  const existingIsCurrent=async row=>{
+    if(!row||row.sha256!==sha||row.publication_mode!==publicationMode||
+       row.building_release_id!==ctx.active.source_building_release_id)return false;
+    const activeNow=await env.DB.prepare(
+      "SELECT mapping_release_id FROM geo_plot_mapping_active_3d WHERE project_id=? AND experience_id=?"
+    ).bind(ctx.project.id,ctx.active.experience_id).first();
+    return activeNow?.mapping_release_id===row.id;
+  };
+  const prior=await previousRelease();
+  if(prior){
+    if(await existingIsCurrent(prior))return state(env,ctx);
+    throw Error("Draft r"+draft.revision+" already has immutable Mapping v"+prior.version+
+      ". To publish another version, edit a Plot and Confirm/Save to create a new draft revision. "+
+      "To restore an older version, use Activate Mapping in Releases.");
+  }
+  const id="geo_plot_"+crypto.randomUUID(),now=currentIso();
   const versionRow=await env.DB.prepare("SELECT COALESCE(MAX(version),0)+1 AS version FROM geo_plot_mapping_releases_3d WHERE experience_id=?")
     .bind(ctx.active.experience_id).first();
   // Guard the source again; publishing an old Geo alignment must not activate mapping.
@@ -310,6 +336,7 @@ async function publish(env,ctx,actor,body) {
   if (activeCheck?.active?.geo_release_id!==ctx.active.geo_release_id ||
       activeCheck?.active?.source_building_release_id!==ctx.active.source_building_release_id)
     throw Error("Geo or Building release changed during publish.");
+  try{
   await env.DB.batch([
     // Source and draft revision are rechecked *inside* the atomic D1 batch.
     // A concurrent Geo activation cannot activate old mapped coordinates.
@@ -352,6 +379,17 @@ async function publish(env,ctx,actor,body) {
         publicationMode,inventoryRevision:inventory.revision,alignmentRevision:alignment.revision,
         plotCount:plots.length,sha}),now)
   ]);
+  }catch(error){
+    const details=error instanceof Error?error.message:String(error);
+    if(!/SQLITE_CONSTRAINT_UNIQUE|UNIQUE constraint failed/i.test(details))throw error;
+    // A second tab may have won the unique index race between the initial
+    // revision check and this atomic D1 batch. Only treat a byte-for-byte
+    // identical, CURRENT published release as an idempotent success.
+    const winner=await previousRelease();
+    if(await existingIsCurrent(winner))return state(env,ctx);
+    throw Error("The mapping was published or changed in another tab. Reload Geo "+
+      "Plot Mapper, review Live vs Draft, and save a new revision before republishing.");
+  }
   return state(env,ctx);
 }
 async function activate(env,ctx,actor,id) {

@@ -12,6 +12,21 @@ model.add(site);
 const gate=new THREE.Mesh(new THREE.BoxGeometry(2,2,2),new THREE.MeshBasicMaterial({color:0x777777}));
 gate.position.set(8,3,0);
 model.add(gate);
+// A raised boundary wall touches all four corners. An edge-sampled median
+// incorrectly lifts the entire plot onto these walls; interior sampling must
+// keep the mapped footprint on the actual GLB lot surface at Y=2.
+for(const x of [-6,6]){
+  const wall=new THREE.Mesh(new THREE.BoxGeometry(.35,2.0,12.5),
+    new THREE.MeshBasicMaterial({color:0x777777}));
+  wall.position.set(x,3,0);
+  model.add(wall);
+}
+for(const z of [-6,6]){
+  const wall=new THREE.Mesh(new THREE.BoxGeometry(12.5,2.0,.35),
+    new THREE.MeshBasicMaterial({color:0x777777}));
+  wall.position.set(0,3,z);
+  model.add(wall);
+}
 const plots=[{id:"1",corners:[[-6,-6],[6,-6],[6,6],[-6,6]]}];
 const layer=buildModelGeoPlotLayer(model,plots);
 const anchor=new THREE.Group();
@@ -38,7 +53,14 @@ function exercise(position){
 window.__geoPlotTest={
   aerial:exercise([13,70,-7]),overview:exercise([39,27,22]),front:exercise([13,15,55]),
   groupSameParent:layer.group.parent===anchor,
-  outlineMesh:layer.hitMeshes.length===1
+  outlineMesh:layer.hitMeshes.length===1,
+  topOfPlotSurface:(()=>{
+    layer.hitMeshes[0].geometry.computeBoundingBox();
+    return layer.hitMeshes[0].geometry.boundingBox.max.y;
+  })(),
+  plotDepthTest:layer.hitMeshes[0].material.depthTest===true,
+  wallOcclusion:layer.groupsById.get("1").children.some(child=>
+    child.isLineLoop&&child.material.depthTest===true)
 };
 layer.dispose();
 `;
@@ -53,11 +75,15 @@ layer.dispose();
       aerial:{picked:string|null;offset:number;x:number;y:number};
       overview:{picked:string|null;offset:number;x:number;y:number};
       front:{picked:string|null;offset:number;x:number;y:number};
-      groupSameParent:boolean;outlineMesh:boolean
+      groupSameParent:boolean;outlineMesh:boolean;
+      topOfPlotSurface:number;plotDepthTest:boolean;wallOcclusion:boolean
     }}
   ).__geoPlotTest);
   expect(result?.groupSameParent).toBe(true);
   expect(result?.outlineMesh).toBe(true);
+  expect(result?.topOfPlotSurface).toBeCloseTo(2.015,3);
+  expect(result?.plotDepthTest).toBe(true);
+  expect(result?.wallOcclusion).toBe(true);
   for(const view of ["aerial","overview","front"] as const){
     expect(result?.[view].picked,view+" should select same 3D plot").toBe("1");
     expect(result?.[view].x,view+" visible in viewport").toBeGreaterThan(0);
