@@ -286,7 +286,7 @@ async function publish(env,ctx,actor,body) {
     preliminaryPublishPlotGuard(plots,inventory.rows);
   }else{
     if(draft.verified_inventory_revision!==inventory.revision)
-      throw Error("Plot inventory changed after Verify. Reconcile and Verify this revision again.");
+      throw Error("Plot inventory was imported or changed after Verify. Reconcile the CSV and Verify this revision again.");
     requireGeoInventoryReview(plots,inventory.rows);
   }
   const alignment=preliminary
@@ -328,6 +328,8 @@ async function publish(env,ctx,actor,body) {
           AND (?=1 OR (
             d.verified_revision=d.revision
             AND d.verified_inventory_revision=?
+            AND d.verified_inventory_revision=COALESCE(
+              (SELECT i.revision FROM geo_plot_inventory_3d i WHERE i.project_id=d.project_id),0)
             AND COALESCE(d.verified_alignment_revision,0)=?
             AND NOT EXISTS(SELECT 1 FROM geo_plot_image_alignment_drafts_3d a
               WHERE a.project_id=d.project_id
