@@ -6,6 +6,9 @@ import { handleGeoPlotInventory } from "./geo-plot-inventory.mjs";
 import { handleGeoPlotAlignment,requireCurrentImageAlignmentReview } from "./geo-plot-image-alignment.mjs";
 import { requireGeoInventoryReview } from "../shared/geo-plot-source-review.js";
 import { compareGeoPlotPublication } from "../shared/geo-plot-publication-diff.js";
+import { normalizeImageModelAlignment } from "../shared/geo-plot-image-alignment.js";
+import { stageSelectedGeoSourceRemap } from "../shared/geo-plot-source-remap.js";
+import { geometryWithRevokedApprovals } from "../shared/geo-plot-precision-history.js";
 
 const json = (value, init = {}) => Response.json(value, {headers: {"Cache-Control":"no-store"}, ...init});
 const fail = (message, status = 400) => json({error:message}, {status});
@@ -84,6 +87,91 @@ async function writeDraft(env, ctx, actor, body) {
       WHERE project_id=? AND experience_id=? AND geo_release_id=? AND building_release_id=? AND revision=?`
   ).bind(text,actor.email,now,ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,ctx.active.source_building_release_id,expected).run();
   if (result.meta?.changes!==1) throw Error("Concurrent change or Geo release switch. Reload mapping; no data overwritten.");
+  return state(env,ctx);
+}
+async function approvedSourceRemapPlan(env,ctx,body){
+  const draft=await env.DB.prepare("SELECT * FROM geo_plot_mapping_drafts_3d WHERE project_id=?")
+    .bind(ctx.project.id).first();
+  if(!draft||draft.revision!==body.expectedRevision)
+    throw Error("Old mapping draft revision changed. Reload and review source change.");
+  if(draft.geo_release_id===ctx.active.geo_release_id&&
+     draft.building_release_id===ctx.active.source_building_release_id)
+    throw Error("Source remap is only allowed after a Geo/Building release switch.");
+  const old=normalizeImageModelAlignment(body.previousAlignment);
+  if(old.geoReleaseId!==draft.geo_release_id||old.buildingReleaseId!==draft.building_release_id)
+    throw Error("Archived previous source review does not match the stale mapping release.");
+  const review=await requireCurrentImageAlignmentReview(env,ctx);
+  if(review.revision===0)throw Error("New model requires checksum-pinned independent image calibration.");
+  const row=await env.DB.prepare("SELECT * FROM geo_plot_image_alignment_drafts_3d WHERE project_id=?")
+    .bind(ctx.project.id).first();
+  if(!row||row.revision!==review.revision||row.verified_revision!==row.revision)
+    throw Error("Current original image/model calibration is not verified.");
+  const current=normalizeImageModelAlignment({
+    imageAssetId:row.image_asset_id,imageSha256:row.image_sha256,
+    imageWidth:row.image_width,imageHeight:row.image_height,
+    geoReleaseId:row.geo_release_id,buildingReleaseId:row.building_release_id,
+    modelSha256:row.model_sha256,
+    anchors:JSON.parse(row.control_points_json),checkpoints:JSON.parse(row.checkpoints_json)
+  });
+  const plots=validateGeoPlotCollection(JSON.parse(draft.plots_json));
+  const candidate=stageSelectedGeoSourceRemap(plots,old,current,body.selectedIds);
+  // Every old footprint, INCLUDING unselected plots, loses its former
+  // model-local plane and source approvals. No silent migration is publishable.
+  const staged=candidate.plots.map(p=>{
+    const clean=geometryWithRevokedApprovals(p,p.corners);
+    const {planeY,...noOldElevation}=clean;
+    return {...noOldElevation,planeSource:"",planeVerified:false};
+  });
+  const normalized=validateGeoPlotCollection(staged),text=JSON.stringify(normalized);
+  if(new TextEncoder().encode(text).byteLength>4_000_000)
+    throw Error("Reviewed remap exceeds D1 safe mapping size.");
+  const chosen=body.selectedIds.map(String).sort((a,b)=>a.localeCompare(b));
+  const token=await digest(JSON.stringify({
+    project:ctx.project.id,oldGeo:draft.geo_release_id,newGeo:ctx.active.geo_release_id,
+    oldBuilding:draft.building_release_id,newBuilding:ctx.active.source_building_release_id,
+    revision:draft.revision,oldDraftSha:await digest(draft.plots_json),
+    currentAlignmentRevision:review.revision,selectedIds:chosen,
+    oldSourceHash:old.imageSha256,oldModelHash:old.modelSha256,
+    stagedSha256:await digest(text)
+  }));
+  return {plan:candidate.plan,selectedPlotIds:chosen,verifiedAlignmentRevision:review.revision,
+    currentGeoReleaseId:ctx.active.geo_release_id,oldGeoReleaseId:draft.geo_release_id,
+    expectedRevision:draft.revision,token,stagedText:text,
+    oldBuildingReleaseId:draft.building_release_id};
+}
+async function rebindReviewedSource(env,ctx,actor,body){
+  if(body.confirmation!=="REMAP SOURCE "+ctx.project.slug)
+    throw Error("Explicit REMAP SOURCE project confirmation required.");
+  const preflight=await approvedSourceRemapPlan(env,ctx,body);
+  if(body.expectedPreflightToken!==preflight.token)
+    throw Error("Remap preflight/source revision changed. Review the plotted impact again.");
+  const now=currentIso();
+  const result=await env.DB.prepare(`UPDATE geo_plot_mapping_drafts_3d
+    SET geo_release_id=?,building_release_id=?,revision=revision+1,
+      verified_revision=NULL,verified_inventory_revision=NULL,verified_alignment_revision=NULL,
+      plots_json=?,updated_by=?,updated_at=?
+    WHERE project_id=? AND revision=? AND geo_release_id=? AND building_release_id=?
+      AND EXISTS(SELECT 1 FROM geo_experience_active_releases_3d ar
+        JOIN geo_releases_3d gr ON gr.id=ar.geo_release_id
+        WHERE ar.project_id=? AND ar.experience_id=? AND ar.geo_release_id=?
+          AND gr.source_building_release_id=?)
+      AND EXISTS(SELECT 1 FROM geo_plot_image_alignment_drafts_3d a
+        WHERE a.project_id=? AND a.revision=? AND a.verified_revision=a.revision)`)
+    .bind(preflight.currentGeoReleaseId,ctx.active.source_building_release_id,
+      preflight.stagedText,actor.email,now,ctx.project.id,preflight.expectedRevision,
+      preflight.oldGeoReleaseId,preflight.oldBuildingReleaseId,
+      ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
+      ctx.active.source_building_release_id,ctx.project.id,preflight.verifiedAlignmentRevision).run();
+  if(result.meta?.changes!==1)
+    throw Error("Source release, independent image calibration, or old mapping changed during remap.");
+  await env.DB.prepare(`INSERT INTO engine_admin_audit
+    (id,actor_email,action,project_id,target_id,details_json,created_at)
+    VALUES(?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),actor.email,
+      "geo.plot_source_selective_remap",ctx.project.id,preflight.currentGeoReleaseId,
+      JSON.stringify({previousGeo:preflight.oldGeoReleaseId,
+        selectedPlotIds:preflight.selectedPlotIds,
+        pendingManualReview:preflight.plan.unreviewedIds,
+        independentAlignmentRevision:preflight.verifiedAlignmentRevision}),now).run();
   return state(env,ctx);
 }
 async function resetForNewGeo(env,ctx,actor,body) {
@@ -323,6 +411,12 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
     if (ctx.project.status==="archived") return fail("Archived project is read-only.",409);
     const body=await request.json();
     if (request.method==="PUT") return json(await writeDraft(env,ctx,access.actor,body));
+    if (body.action==="remap-preflight"){
+      const report=await approvedSourceRemapPlan(env,ctx,body);
+      const {stagedText,...safe}=report;
+      return json(safe);
+    }
+    if (body.action==="rebind-remap") return json(await rebindReviewedSource(env,ctx,access.actor,body));
     if (body.action==="rebind-reset") return json(await resetForNewGeo(env,ctx,access.actor,body));
     if (body.action==="verify") return json(await verify(env,ctx,access.actor,body));
     if (body.action==="publish") return json(await publish(env,ctx,access.actor,body));
