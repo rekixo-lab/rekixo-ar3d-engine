@@ -70,6 +70,12 @@ test("Evidence manifest explicitly separates approved source, mapped text, model
     "do not invent OCR/survey confidence");
   assert.equal(evidence.plots[0].plane.reference,"Sealed model datum");
   assert.equal(evidence.inventoryRevision,3);
+  const withPage=geoPlotEvidenceManifest([original],[row("1",{
+    measurementSource:"Signed site register page 17",
+    areaSource:"Approved file p. 5"
+  })],1);
+  assert.equal(withPage.plots[0].area.approvedSource.page,"5");
+  assert.equal(withPage.plots[0].sides.front.approvedSource.page,"17");
 });
 test("Quality flags missing source, area/side variances, road side and stale review without overwriting plots",()=>{
   const original=previous(), p2=cloneUnverifiedGeoPlot(original,"2",10,0,[row("2")],[original]);
@@ -95,6 +101,14 @@ test("Overlapping plots are surfaced as blockers; shared boundary is valid",()=>
     .filter(i=>i.field==="overlap").length,1);
   assert.equal(geoPlotQualityReport([one,touch],[]).issues
     .filter(i=>i.field==="overlap").length,0);
+});
+test("Quality report prioritizes blocking errors and spots crossing geometries",()=>{
+  const bad={...previous(),id:"4",corners:[[0,0],[10,10],[0,10],[10,0]]};
+  const result=geoPlotQualityReport([bad],[row("4")]);
+  assert.ok(result.issues.some(issue=>issue.field==="geometry"&&issue.severity==="blocker"));
+  const firstReview=result.issues.findIndex(issue=>issue.severity==="review");
+  const lastBlock=result.issues.map(issue=>issue.severity).lastIndexOf("blocker");
+  assert.ok(firstReview===-1||lastBlock<firstReview);
 });
 test("Review and clone are UI-only; publish and business state remain server-authoritative",()=>{
   const source=readFileSync(new URL("../apps/admin/src/geo/GeoPlotMapper.tsx",import.meta.url),"utf8");
