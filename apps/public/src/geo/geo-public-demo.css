@@ -564,12 +564,11 @@
   .geo-zoom-notice { right: 8px; bottom: 70px; font-size: 11px; }
 }
 /* Independent read-only plot mapping presentation; legacy Geo sites remain unchanged. */
-@media(max-width:640px){.geo-plot-public-controls{right:8px;max-width:calc(100% - 16px);flex-wrap:wrap}.geo-plot-preliminary-notice{flex-basis:100%}}
 
 .geo-plot-public-details{position:absolute;z-index:12;bottom:64px;left:12px;display:grid;gap:5px;min-width:215px;max-width:min(340px,calc(100% - 24px));max-height:50%;overflow:auto;padding:15px 18px;border:1px solid #5ad3ad;border-radius:12px;background:rgba(5,23,32,.97);color:#e5f7ff;box-shadow:0 12px 35px #0007;font-size:12px}
 .geo-plot-public-details strong{font-size:17px;color:#85f8d1}.geo-plot-public-details small{line-height:1.4;color:#adccd5}
 .geo-plot-public-close{position:absolute;top:5px;right:6px;font-size:19px;border:0;background:transparent;color:#f7ffff;cursor:pointer}
-@media(max-width:640px){.geo-plot-public-details{bottom:62px;left:8px;padding:11px 15px}.geo-plot-public-controls{top:52px}}
+@media(max-width:640px){.geo-plot-public-details{bottom:62px;left:8px;padding:11px 15px}}
 
 
 /* Owner-approved contact strip; no blank card or private details without opt-in. */
