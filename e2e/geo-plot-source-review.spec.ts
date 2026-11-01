@@ -89,4 +89,21 @@ test("legacy Geo editor reveals stale CSV evidence and offers safe road Front re
   await expect(page.locator(".geo-plot-editor-shell")).toHaveAttribute("data-fullscreen","true");
   await page.getByRole("button",{name:/Exit full screen/}).last().click();
   await expect(page.locator(".geo-plot-editor-shell")).toHaveAttribute("data-fullscreen","false");
+
+  // Evidence dashboard is diagnostic-only, while Clone Previous produces a
+  // new canonical ID with unverified source and NO silent polygon publication.
+  await expect(page.getByText("Data quality ·")).toBeVisible();
+  await expect(page.getByRole("button",{name:"Download Evidence & Quality Review JSON"})).toBeVisible();
+  await page.getByLabel("Previous mapped Plot ID").selectOption("1");
+  await page.getByLabel("X offset (metres)").fill("10");
+  await page.getByLabel("Z offset (metres)").fill("0");
+  page.on("dialog",dialog=>dialog.accept());
+  await page.getByRole("button",{name:"Clone to Unverified Draft"}).click();
+  await expect(page.getByRole("heading",{name:"New Plot 2"})).toBeVisible();
+  await expect(page.getByLabel("Area verified against source")).not.toBeChecked();
+  await expect(page.getByLabel("Facing verified against reference")).not.toBeChecked();
+  const clonedFront=page.locator("fieldset").filter({has:page.locator("legend:text-is('front')")});
+  await expect(clonedFront.getByLabel("Road side")).not.toBeChecked();
+  await expect(clonedFront.getByLabel("Source verified")).not.toBeChecked();
+  await expect(page.getByRole("button",{name:"Publish Mapping"})).toBeDisabled();
 });
