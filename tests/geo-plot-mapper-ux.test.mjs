@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {validateGeoPlotCollection} from "../workers/geo-plot-geometry.mjs";
 import {nextCsvPlotForDrawing,positionCursorLoupe,assignVisiblePlotEdge,
   draftStorageKey,packLocalPlotDraft,unpackLocalPlotDraft,visibleMappingProgress
 } from "../shared/geo-plot-mapper-ux.js";
@@ -63,4 +65,40 @@ test("local draft recovery is source/revision bound, expires and cannot cross pr
   assert.equal(unpackLocalPlotDraft("{invalid",entry),null);
   assert.ok(draftStorageKey(entry.projectSlug)?.includes("satharai"));
   assert.equal(draftStorageKey("../other"),null);
+});
+
+test("visual Back/Depth swap retains all four edges and passes server draft geometry validation",()=>{
+  const before=plot();
+  const after=assignVisiblePlotEdge(before,"back",1);
+  assert.deepEqual(after.sides.back.edges,[1]);
+  assert.deepEqual(after.sides.depthA.edges,[2]);
+  const covered=Object.values(after.sides).flatMap(side=>side.edges);
+  assert.deepEqual(covered.slice().sort(),[0,1,2,3]);
+  assert.equal(validateGeoPlotCollection([after]).length,1);
+});
+test("irregular chains allow wraparound clockwise but never disconnected or mid-chain removal",()=>{
+  const p=plot(6);
+  p.sides.front.edges=[5];
+  const wrap=assignVisiblePlotEdge(p,"front",0,{extend:true});
+  assert.deepEqual(wrap.sides.front.edges,[5,0]);
+  const continued=assignVisiblePlotEdge(wrap,"front",1,{extend:true});
+  assert.deepEqual(continued.sides.front.edges,[5,0,1]);
+  assert.throws(()=>assignVisiblePlotEdge(continued,"front",0,{extend:true}),/chain end/);
+  assert.deepEqual(assignVisiblePlotEdge(continued,"front",5,{extend:true}).sides.front.edges,[0,1]);
+});
+test("actual UI contract keeps Confirm & Next, source/revision-safe local recovery and visible publish",()=>{
+  const editor=readFileSync(new URL("../apps/admin/src/geo/GeoPlotMapper.tsx",import.meta.url),"utf8");
+  const css=readFileSync(new URL("../apps/admin/src/geo/geo-plot-mapper.css",import.meta.url),"utf8");
+  assert.match(editor,/nextCsvPlotForDrawing\(inventoryRows,plots\)/);
+  assert.match(editor,/Confirm Plot/);
+  assert.match(editor,/confirmPlotAndNext/);
+  assert.match(editor,/readBack=await callApi<MappingState>\(api\)/);
+  assert.match(editor,/Publish Verified Mapping to Customer Site/);
+  assert.match(editor,/mode==="side"/);
+  assert.match(editor,/assignVisiblePlotEdge\(/);
+  assert.match(editor,/unpackLocalPlotDraft/);
+  assert.match(editor,/getCoalescedEvents/);
+  assert.match(editor,/positionCursorLoupe/);
+  assert.match(css,/\.geo-plot-dock-tabs/);
+  assert.match(css,/\.geo-plot-confirm-primary/);
 });
