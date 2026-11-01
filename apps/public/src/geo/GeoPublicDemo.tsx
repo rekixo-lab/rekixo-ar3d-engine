@@ -966,7 +966,7 @@ export default function GeoPublicDemo() {
             href={geoPublicMapHref(data.publicContacts)} aria-label="Open project in Google Maps">
             {data.publicContacts.mapsUrl?"Directions":"Find on Maps"}</a>}
           {data.publicContacts.phoneSecondary&&<a href={"tel:"+data.publicContacts.phoneSecondary.replace(/[^+0-9]/g,"")}
-            aria-label="Call secondary project contact">Call 2</a>
+            aria-label="Call secondary project contact">Call 2</a>}
           {data.publicContacts.websiteUrl&&<a target="_blank" rel="noopener noreferrer"
             href={data.publicContacts.websiteUrl}>Website</a>}
           {data.publicContacts.email&&<a href={"mailto:"+data.publicContacts.email}>Email</a>}
