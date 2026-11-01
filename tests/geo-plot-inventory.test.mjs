@@ -181,7 +181,7 @@ test("Platform feet-inch parser rejects missing source, impossible inches and co
     /inches must be less than 12/);
   assert.throws(()=>normalizeGeoInventoryRows([{...row,lengthUnit:"m"}]),/requires ft unit/);
   assert.throws(()=>normalizeGeoInventoryRows([{...row,notes:"No signed source"}]),
-    /source\\/reference required|source required/);
+    /source.reference required|source required/);
   assert.throws(()=>normalizeGeoInventoryRows([{...row,sqm:"50"}]),/contradictory/);
 });
 test("Mapper routes Platform CSV to source inventory preflight before attempting polygon-only measurement import",()=>{
