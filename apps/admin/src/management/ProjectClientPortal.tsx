@@ -1,13 +1,16 @@
 import {useEffect,useState} from "react";
 import GeoBulkPricingPanel,{type GeoPriceQuote} from "../geo/GeoBulkPricingPanel";
+import GeoDealRecordsPanel from "../geo/GeoDealRecordsPanel";
 import "./project-management.css";
 type Identity={displayName:string;email:string;role:string;projectSlug:string;projectName:string};
 type Session={authenticated:boolean;user:Identity|null};
 type Commercial={plotId:string;status:"available"|"booked"|"sold";
   pricePaise:number|null;revision:number;publicApproved:boolean;evidenceRef:string};
-type CommercialState={mappingReleaseId:string|null;rows:Commercial[];plotCount?:number;notice?:string};
+type CommercialState={mappingReleaseId:string|null;rows:Commercial[];
+  plotCount?:number;plotIds?:string[];notice?:string};
 type Overview={project:{slug:string;name:string;status:string};role:string;
-  permissions:{commercialRead:boolean;commercialPrepare:boolean;commercialApprove:boolean}};
+  permissions:{commercialRead:boolean;commercialPrepare:boolean;commercialApprove:boolean;
+    dealsRead?:boolean;dealsWrite?:boolean}};
 const ROOT="/3Dprojects/api/client-portal";
 async function api<T>(path:string,method="GET",data?:unknown):Promise<T>{
   const response=await fetch(ROOT+path,{method,credentials:"same-origin",cache:"no-store",
@@ -187,6 +190,11 @@ export default function ProjectClientPortal(){
           mappingReleaseId={commercial?.mappingReleaseId||null}
           canEdit={Boolean(overview?.permissions.commercialPrepare)}
           onQuotes={setPriceQuotes}/>}
+        {overview?.permissions.dealsRead&&identity&&<GeoDealRecordsPanel
+          endpoint={ROOT+"/projects/"+encodeURIComponent(identity.projectSlug)+"/deals"}
+          mappingReleaseId={commercial?.mappingReleaseId||null}
+          plotIds={commercial?.plotIds||[]}
+          canEdit={Boolean(overview.permissions.dealsWrite)}/>}
       </section>
     </>}
   </main>;
