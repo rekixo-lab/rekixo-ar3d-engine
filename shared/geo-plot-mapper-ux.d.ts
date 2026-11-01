@@ -2,7 +2,7 @@ import type {GeoInventoryRow} from "./geo-plot-inventory.js";
 import type {ReviewedPlot} from "./geo-plot-source-operations.js";
 export type GeoPlotSideRole="front"|"back"|"depthA"|"depthB";
 export function nextCsvPlotForDrawing<T extends {id:string}>(
-  rows:readonly T[],mapped:readonly (string|{id:string})[]):T|null;
+  rows:readonly T[],mapped:readonly (string|{id:string})[],afterId?:string|null):T|null;
 export function positionCursorLoupe(
   screen:readonly [number,number],viewport:readonly [number,number],
   size?:number,gap?:number):{left:number;top:number};
