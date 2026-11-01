@@ -74,7 +74,7 @@ test("public 3D Geo Experience is fail-closed on active immutable Geo release id
 
   assert.doesNotMatch(page, /INTEGRATED 3D GEO EXPERIENCE|Enter building|Open location/);
   assert.match(page, /geo-camera-toolbar--normal-row/);
-  assert.match(page, /className="geo-building-link"/);
+  assert.doesNotMatch(page, /className="geo-building-link"/);
   assert.match(page, /GEO RELEASE/);
   assert.match(page, /BUILDING SOURCE/);
   assert.match(page, /api\/projects\/\$\{encodeURIComponent\(slug\)\}\/geo-placement/);
