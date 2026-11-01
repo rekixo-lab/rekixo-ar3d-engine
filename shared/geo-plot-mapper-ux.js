@@ -53,13 +53,19 @@ export function assignVisiblePlotEdge(plot,role,edge,{extend=false}={}){
   }
   const target=sides[role];
   const old=Array.isArray(before[role]?.edges)?before[role].edges:[];
-  let edges=extend?[...new Set([...target.edges,edge])]:[edge];
-  if(extend&&old.length&&!old.includes(edge)){
-    const adjacent=old.some(i=>(i+1)%count===edge||(edge+1)%count===i);
-    if(!adjacent)throw Error("Add connected side edges in sequence; avoid disconnected chains.");
+  let edges=[edge];
+  if(extend&&old.length){
+    if(old.includes(edge)){
+      if(old.length===1)throw Error("A side must retain at least one boundary edge.");
+      if(edge!==old[0]&&edge!==old[old.length-1])
+        throw Error("Remove grouped side edges only from a chain end.");
+      edges=target.edges;
+    }else if((old[old.length-1]+1)%count===edge){
+      edges=[...target.edges,edge];
+    }else if((edge+1)%count===old[0]){
+      edges=[edge,...target.edges];
+    }else throw Error("Add connected side edges in sequence; avoid disconnected chains.");
   }
-  if(extend&&old.includes(edge)&&old.length>1)
-    edges=target.edges; // A second click can remove a grouped edge.
   sides[role]={...target,edges,roadFacing:role==="front",verified:false};
   return {...plot,sides,facingVerified:false};
 }
