@@ -678,7 +678,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
               // Same original X/Z frame as the model; placement is shared.
               plotLayer=candidateLayer;
               placement.anchorOffset.add(plotLayer.group);
-              preparedPaths=data.plotMapping.plots.map(plot=>{
+              preparedPaths=(data.plotMapping?.plots||[]).map(plot=>{
                 const path=geoPlotWorldPath(plot,data,
                   Number.isFinite(plot.planeY)?plot.planeY!:modelGroundY);
                 return {plot,path,bounds:geoPathBounds(path)};
