@@ -2,6 +2,33 @@ import {expect,test} from "@playwright/test";
 const slug="e2e-geo";
 const sha="00cbf4aed459027a84b7bdc22a1d15cc25fba49dc4119ffa594379718cde863f";
 const img=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAZAAAADICAIAAABJdyC1AAACUElEQVR42u3XwY3EQAwDQc1h8haV+YZw/hkyqkLgowGeJAWwwa2q7jbEEzNjK1vZ6sWh/qwAbCFYgGABCBYgWACCBSBYgGABCBaAYAGCBSBYAIIFCBaAYAEIFiBYAIIFIFiAYAEIFoBgAYIFIFgAggUIFoBgAQgWIFgAggUIlgkAwQIQLECwAAQLQLAAwQIQLADBAgQLQLAABAsQLADBAhAsQLAABAtAsIAPOUmsAKxwq6q7DfHEzNjKVrZ6cSiXEFhDsADBAhAsQLAABAtAsADBAhAsAMECBAtAsAAECxAsAMECECxAsAAEC0CwAMECECwAwQIEC0CwAAQLECwAwQIQLECwAAQLECwTAIIFIFiAYAEIFoBgAYIFIFgAggUIFoBgAQgWIFgAggUgWIBgAQgWgGABH3KSWAFY4VZVdxviiZmxla1s9eJQLiGwhmABggUgWIBgAQgWgGABggUgWACCBQgWgGABCBaAYAEIFiBYAIIFIFiAYAEIFiBYJgAEC0CwAMECECwAwQIEC0CwAAQLECwAwQIQLECwAAQLQLAAwQIQLADBAj7kJLECsMKtqu42xBMzYytb2erFoVxCYA3BAgQLQLAAwQIQLADBAgQLQLAABAsQLADBAhAsQLAABAtAsADBAhAsAMECBAtAsAAECxAsAMECECxAsAAEC0CwAMECECxAsEwACBaAYAGCBSBYAIIFCBaAYAEIFiBYAIIFIFiAYAEIFoBgAYIFIFgA/ztJrACs8AMvozkUOdN+cwAAAABJRU5ErkJggg==","base64");
+// A real, self-contained GLB ground mesh; browser tests capture model-local X/Z
+// rather than just switching a mocked toolbar state.
+function makeGlb(){
+  const bin=Buffer.alloc(60);
+  const positions=[-10,0,-10,10,0,-10,10,0,10,-10,0,10];
+  positions.forEach((v,i)=>bin.writeFloatLE(v,i*4));
+  [0,1,2,0,2,3].forEach((v,i)=>bin.writeUInt16LE(v,48+i*2));
+  const manifest={asset:{version:"2.0"},buffers:[{byteLength:bin.length}],
+    bufferViews:[{buffer:0,byteOffset:0,byteLength:48,target:34962},
+      {buffer:0,byteOffset:48,byteLength:12,target:34963}],
+    accessors:[{bufferView:0,componentType:5126,count:4,type:"VEC3",
+      min:[-10,0,-10],max:[10,0,10]},
+      {bufferView:1,componentType:5123,count:6,type:"SCALAR"}],
+    meshes:[{primitives:[{attributes:{POSITION:0},indices:1}]}],
+    nodes:[{mesh:0}],scenes:[{nodes:[0]}],scene:0};
+  const source=Buffer.from(JSON.stringify(manifest));
+  const jsonBytes=Buffer.alloc(Math.ceil(source.length/4)*4,0x20);source.copy(jsonBytes);
+  const result=Buffer.alloc(12+8+jsonBytes.length+8+bin.length);
+  result.write("glTF",0);result.writeUInt32LE(2,4);
+  result.writeUInt32LE(result.length,8);result.writeUInt32LE(jsonBytes.length,12);
+  result.writeUInt32LE(0x4e4f534a,16);jsonBytes.copy(result,20);
+  const offset=20+jsonBytes.length;
+  result.writeUInt32LE(bin.length,offset);result.writeUInt32LE(0x004e4942,offset+4);
+  bin.copy(result,offset+8);
+  return result;
+}
+const glb=makeGlb();
 const json=(value:unknown)=>({status:200,contentType:"application/json",body:JSON.stringify(value)});
 test("private original image captures real pixels and source-pinned alignment draft without touching published maps",async({page})=>{
   await page.route("**/3Dprojects/api/cloud/session",r=>r.fulfill(json({
@@ -28,7 +55,8 @@ test("private original image captures real pixels and source-pinned alignment dr
     model:{url:"/3Dprojects/no-glb-in-fixture.glb"},canonicalModel:{url:"/3Dprojects/no-glb-in-fixture.glb"},
     placement:{headingDeg:0,scale:1}
   })));
-  await page.route("**/3Dprojects/no-glb-in-fixture.glb",r=>r.fulfill({status:404,body:"mock GLB unavailable"}));
+  await page.route("**/3Dprojects/no-glb-in-fixture.glb",r=>r.fulfill({status:200,
+    contentType:"model/gltf-binary",body:glb}));
   await page.route("**/3Dprojects/api/cloud/projects/e2e-geo/geo-plots/inventory",r=>r.fulfill(json({
     revision:0,rows:[],updatedBy:null,updatedAt:null
   })));
@@ -65,5 +93,9 @@ test("private original image captures real pixels and source-pinned alignment dr
   await expect(panel.getByRole("button",{name:"Pair Fit Point on 3D Canvas"})).toBeEnabled();
   await panel.getByRole("button",{name:"Pair Fit Point on 3D Canvas"}).click();
   await expect(page.getByRole("button",{name:"Cancel alignment capture"})).toBeVisible();
+  await expect(page.getByText(/Top view · model coordinates in metres/)).toBeVisible();
+  await page.locator(".geo-plot-overlay").click({position:{x:160,y:135}});
+  await expect(panel.getByText("Fit anchors · 1")).toBeVisible();
+  await expect(page.getByRole("button",{name:"Cancel alignment capture"})).toHaveCount(0);
   await expect(page.getByRole("button",{name:"Publish Mapping"})).toBeDisabled();
 });
