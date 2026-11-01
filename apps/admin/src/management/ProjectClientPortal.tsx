@@ -1,4 +1,5 @@
 import {useEffect,useState} from "react";
+import GeoBulkPricingPanel,{type GeoPriceQuote} from "../geo/GeoBulkPricingPanel";
 import "./project-management.css";
 type Identity={displayName:string;email:string;role:string;projectSlug:string;projectName:string};
 type Session={authenticated:boolean;user:Identity|null};
@@ -40,6 +41,7 @@ export default function ProjectClientPortal(){
   const [rupees,setRupees]=useState("");
   const [evidence,setEvidence]=useState("");
   const [publicApproved,setPublicApproved]=useState(false);
+  const [priceQuotes,setPriceQuotes]=useState<GeoPriceQuote[]>([]);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
@@ -71,6 +73,7 @@ export default function ProjectClientPortal(){
     return()=>{live=false;};
   },[]);
   const selected=commercial?.rows.find(r=>r.plotId.toLowerCase()===plotId.toLowerCase());
+  const currentQuote=priceQuotes.find(r=>r.plotId.toLowerCase()===plotId.toLowerCase());
   const choose=(id:string)=>{
     setPlotId(id);
     const row=commercial?.rows.find(r=>r.plotId.toLowerCase()===id.toLowerCase());
@@ -162,6 +165,13 @@ export default function ProjectClientPortal(){
             <option value="sold">Sold</option></select></label>
           <label>INR listing price (optional)<input value={rupees}
             inputMode="decimal" onChange={e=>setRupees(e.target.value)}/></label>
+          {currentQuote&&<p>Private CSV price suggestion:
+            {" "}₹{(currentQuote.pricePaise/100).toLocaleString("en-IN")}
+            <button type="button" onClick={()=>{
+              if(!window.confirm("Use reviewed CSV quote? It does not change status or public approval."))return;
+              setRupees(String(currentQuote.pricePaise/100));setEvidence(currentQuote.evidenceRef);
+            }}>Use reviewed CSV price</button>
+          </p>}
           <label>Source / signed agreement reference<input value={evidence}
             maxLength={250} onChange={e=>setEvidence(e.target.value)}/></label>
           {overview.permissions.commercialApprove&&<label>
@@ -172,6 +182,11 @@ export default function ProjectClientPortal(){
             <button type="button" disabled={busy||!plotId||!status||evidence.trim().length<3}
               onClick={()=>void save()}>Save scoped commercial record</button></div>
         </>}
+        {identity&&<GeoBulkPricingPanel
+          endpoint={ROOT+"/projects/"+encodeURIComponent(identity.projectSlug)+"/pricing"}
+          mappingReleaseId={commercial?.mappingReleaseId||null}
+          canEdit={Boolean(overview?.permissions.commercialPrepare)}
+          onQuotes={setPriceQuotes}/>}
       </section>
     </>}
   </main>;
