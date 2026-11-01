@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {mkdtempSync,writeFileSync,rmSync} from "node:fs";
+import {mkdtempSync,writeFileSync,rmSync,readFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {createHash} from "node:crypto";
@@ -123,4 +123,11 @@ test("evidence files cannot traverse or symlink outside the evidence directory",
     f.manifest.devices[0].siteScreenshot.path="../stolen-data.txt";
     assert.throws(()=>evaluate(f),/inside the provided evidence folder/);
   });
+});
+
+test("new 3D Geo dashboard distinguishes publication from physical signoff",()=>{
+  const dashboard=readFileSync(new URL("../apps/admin/src/dashboard/EngineDashboard.tsx",import.meta.url),"utf8");
+  assert.match(dashboard,/selectedProject\\.projectKind === "building_geo"\\) return \\{/);
+  assert.match(dashboard,/Geo published · field acceptance required/);
+  assert.match(dashboard,/Source-backed mapping is published, not field-certified/);
 });
