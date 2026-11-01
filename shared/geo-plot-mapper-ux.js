@@ -76,7 +76,8 @@ export function unpackLocalPlotDraft(raw,expected,now=Date.now()){
       now-d.checkedAt>7*24*60*60*1000)return null;
     if(!packLocalPlotDraft(d))return null;
     if(!d.plot.corners.length)return null;
-    if(!Array.isArray(d.plot.sides)||false)return null; // plot.sides is a record, not a list.
+    if(!d.plot.sides||typeof d.plot.sides!=="object"||Array.isArray(d.plot.sides)||
+      !d.plot.area||typeof d.plot.area!=="object")return null;
     return {plot:d.plot,originalId:d.originalId,shape:d.shape,checkedAt:d.checkedAt};
   }catch{return null;}
 }
