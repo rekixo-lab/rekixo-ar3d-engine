@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS geo_plot_image_alignment_drafts_3d (
   image_sha256 TEXT NOT NULL CHECK(length(image_sha256)=64),
   image_width INTEGER NOT NULL CHECK(image_width>0 AND image_width<=40000),
   image_height INTEGER NOT NULL CHECK(image_height>0 AND image_height<=40000),
-  CHECK(image_width*image_height<=80000000),
   geo_release_id TEXT NOT NULL REFERENCES geo_releases_3d(id) ON DELETE RESTRICT,
   building_release_id TEXT NOT NULL REFERENCES releases_3d(id) ON DELETE RESTRICT,
   model_sha256 TEXT NOT NULL CHECK(length(model_sha256)=64),
@@ -15,7 +14,8 @@ CREATE TABLE IF NOT EXISTS geo_plot_image_alignment_drafts_3d (
   control_points_json TEXT NOT NULL CHECK(json_valid(control_points_json) AND json_type(control_points_json)='array'),
   checkpoints_json TEXT NOT NULL CHECK(json_valid(checkpoints_json) AND json_type(checkpoints_json)='array'),
   updated_by TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  CHECK(image_width*image_height<=80000000)
 );
 
 -- Record which independent image calibration revision backed the latest legacy
