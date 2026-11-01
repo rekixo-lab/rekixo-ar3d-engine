@@ -72,7 +72,8 @@ test("Stage 2 alignment does not alter existing releases or commercial plot data
   const route=root("workers/geo-plot-mapping.mjs");
   const deletion=root("workers/project-deletion.mjs");
   assert.match(migration,/CREATE TABLE IF NOT EXISTS geo_plot_image_alignment_drafts_3d/);
-  assert.doesNotMatch(migration,/ALTER TABLE/);
+  assert.match(migration,/ADD COLUMN verified_alignment_revision/);
+  assert.doesNotMatch(migration,/ALTER TABLE geo_plot_mapping_releases_3d|ALTER TABLE geo_plot_mapping_active_3d/);
   assert.match(worker,/WHERE project_id=\? AND revision=\?/);
   assert.match(worker,/verified_revision=revision/);
   assert.match(worker,/requireCheckpoints:true/);
@@ -80,6 +81,8 @@ test("Stage 2 alignment does not alter existing releases or commercial plot data
   assert.match(worker,/image_sha256=geo_plot_image_alignment_drafts_3d.image_sha256/);
   assert.doesNotMatch(worker,/UPDATE geo_plot_mapping_active_3d|INSERT INTO geo_plot_mapping_releases_3d|UPDATE masterplan_sales_3d/);
   assert.match(route,/source\|inventory\|alignment/);
+  assert.match(route,/requireCurrentImageAlignmentReview\(env,ctx\)/);
+  assert.match(route,/verified_alignment_revision/);
   assert.match(deletion,/DELETE FROM geo_plot_image_alignment_drafts_3d/);
 });
 test("Image pairing lives inside the existing Geo studio and is read-only until independently verified",()=>{
