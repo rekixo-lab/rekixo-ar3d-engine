@@ -168,9 +168,12 @@ export default function GeoPlotMapper(){
   const [selectedCorner,setSelectedCorner]=useState<number|null>(null);
   const [nudgeStep,setNudgeStep]=useState(0.01);
   const setWorking=useCallback((update:SetStateAction<Plot|null>)=>{
+    // Capture grouping before React batches a pointer release; a closed drag must
+    // not accidentally create one undo entry per intermediate frame.
+    const grouped=dragStartRef.current!==null;
     setWorkingHistory(history=>{
       const next=typeof update==="function"?update(history.present):update;
-      return updatePlotEditHistory(history,next,{grouped:dragStartRef.current!==null});
+      return updatePlotEditHistory(history,next,{grouped});
     });
   },[]);
   const resetWorking=useCallback((plot:Plot|null)=>{
@@ -671,13 +674,38 @@ export default function GeoPlotMapper(){
     e.currentTarget.setPointerCapture(e.pointerId);
     queuePointer(e.clientX,e.clientY,e.pointerType);
   };
+  const queueDrag=(index:number,x:number,y:number)=>{
+    pendingDragRef.current={index,x,y};
+    if(dragFrameRef.current)return;
+    dragFrameRef.current=requestAnimationFrame(()=>{
+      dragFrameRef.current=0;
+      const latest=pendingDragRef.current;pendingDragRef.current=null;
+      if(latest&&dragRef.current===latest.index)
+        editPoint(latest.index,latest.x,latest.y);
+    });
+  };
+  const flushDrag=(index:number,x:number,y:number)=>{
+    if(dragFrameRef.current){cancelAnimationFrame(dragFrameRef.current);dragFrameRef.current=0;}
+    pendingDragRef.current=null;
+    if(dragRef.current===index)editPoint(index,x,y);
+  };
+  useEffect(()=>()=>{if(dragFrameRef.current)cancelAnimationFrame(dragFrameRef.current);},[]);
+  const latestPointer=(e:React.PointerEvent<Element>)=>{
+    const native=e.nativeEvent;
+    try{
+      const samples=typeof native.getCoalescedEvents==="function"?native.getCoalescedEvents():[];
+      const last=samples.length?samples[samples.length-1]:native;
+      return {x:last.clientX,y:last.clientY};
+    }catch{return {x:e.clientX,y:e.clientY};}
+  };
   const onOverlayPointerMove=(e:React.PointerEvent<SVGSVGElement>)=>{
+    const pointer=latestPointer(e);
     const dragging=dragRef.current;
-    if(dragging!==null)editPoint(dragging,e.clientX,e.clientY);
-    queuePointer(e.clientX,e.clientY,e.pointerType,dragging??-1);
+    if(dragging!==null)queueDrag(dragging,pointer.x,pointer.y);
+    queuePointer(pointer.x,pointer.y,e.pointerType,dragging??-1);
     const start=pointerStartRef.current;
     if(start&&start.id===e.pointerId&&
-      Math.hypot(e.clientX-start.x,e.clientY-start.y)>9)start.cancelled=true;
+      Math.hypot(pointer.x-start.x,pointer.y-start.y)>9)start.cancelled=true;
   };
   const onOverlayPointerUp=(e:React.PointerEvent<SVGSVGElement>)=>{
     const start=pointerStartRef.current;
@@ -691,11 +719,14 @@ export default function GeoPlotMapper(){
     }
     if(start?.id===e.pointerId)pointerStartRef.current=null;
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+    if(dragRef.current!==null)flushDrag(dragRef.current,e.clientX,e.clientY);
     dragRef.current=null;closeCornerDrag();
     queuePointer(e.clientX,e.clientY,e.pointerType);
   };
   const onOverlayPointerCancel=(e:React.PointerEvent<SVGSVGElement>)=>{
     if(pointerStartRef.current?.id===e.pointerId)pointerStartRef.current=null;
+    if(dragFrameRef.current){cancelAnimationFrame(dragFrameRef.current);dragFrameRef.current=0;}
+    pendingDragRef.current=null;
     dragRef.current=null;closeCornerDrag();clearPointer();
   };
   const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>{
@@ -718,6 +749,15 @@ export default function GeoPlotMapper(){
     setWorking(p=>p?applyApprovedInventoryRow(p,selectedInventory):p);
     setMessage("Plot "+working.id+": approved CSV values staged. Recheck road-facing edge, measurements and sources before applying.");
   };
+  const assignSideOnCanvas=(edge:number)=>{
+    if(!working||busy||mode!=="side"||working.corners.length<3)return;
+    try{
+      const changed=assignVisiblePlotEdge(working,selectedRole,edge,{extend:extendSide});
+      setWorking(changed);
+      setMessage("Plot "+working.id+": "+selectedRole+" edge "+(edge+1)+
+        " staged. Road, source lengths and facing need review before Verify.");
+    }catch(error){setMessage("ERROR: "+String(error));}
+  };
   const applyPlot=(openNext=false)=>{
     if(!working)return;const id=working.id.trim();if(!id||working.corners.length<3)throw Error("Plot number and at least 3 mapped corners required.");
     if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId))throw Error("Duplicate plot ID.");
@@ -734,6 +774,53 @@ export default function GeoPlotMapper(){
       setWorking(null);setOriginalId(null);setMode("pan");
       setMessage("Plot "+id+" staged. Save Mapping Draft before verification.");
     }
+  };
+  const confirmPlotAndNext=async()=>{
+    if(!state||!geo||!working||busy||!editable)return;
+    const id=working.id.trim();
+    if(!id||working.corners.length<3||
+      (shape==="four"&&working.corners.length!==4)){
+      setMessage("ERROR: Finish the plot boundary before confirming.");return;
+    }
+    if(inventoryRows.length&&!inventoryRows.some(row=>row.id.toLowerCase()===id.toLowerCase())){
+      setMessage("ERROR: Plot "+id+" is not in the approved CSV. Cancel this unconfirmed Plot 37 and select Plot 1 from Inventory.");return;
+    }
+    if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId)){
+      setMessage("ERROR: Duplicate Plot ID "+id+". Open the already mapped plot to edit.");return;
+    }
+    if(dirty&&!window.confirm("Other staged draft changes will be saved together with Plot "+
+      id+". Continue with an UNPUBLISHED draft save?"))return;
+    const proposed=[...plots.filter(p=>p.id!==(originalId||id)),{...working,id}]
+      .sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
+    setBusy(true);
+    try{
+      const saved=await callApi<MappingState>(api,{method:"PUT",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({expectedRevision:state.draft.revision,
+          geoReleaseId:state.geoReleaseId,plots:proposed})});
+      // The public release is NOT changed. Verify a second uncached D1 read
+      // before clearing the operator's in-progress corner geometry.
+      const readBack=await callApi<MappingState>(api);
+      if(activeProjectRef.current!==slug)return;
+      const recorded=readBack.draft.plots.find(p=>p.id===id);
+      if(!recorded||readBack.draft.revision!==saved.draft.revision||
+        JSON.stringify(recorded.corners)!==JSON.stringify(working.corners))
+        throw Error("Server read-back did not confirm Plot "+id+". Keep this local draft and reload before editing other plots.");
+      setState(readBack);setPlots(readBack.draft.plots);setDirty(false);setPublishedPreview(null);
+      clearLocalPlotDraft();
+      const next=nextCsvPlotForDrawing(inventoryRows,readBack.draft.plots);
+      if(next){
+        resetWorking(fromInventory(next,groundY));setOriginalId(null);
+        setShape("four");setMode("draw");setInspectorTab("plot");
+      }else{
+        resetWorking(null);setOriginalId(null);setMode("pan");setInspectorTab("quality");
+      }
+      setMessage("✓ Plot "+id+" SERVER SAVED in private mapping draft r"+
+        readBack.draft.revision+". "+(next?"Next CSV Plot "+next.id+" is ready.":
+        "All approved CSV IDs mapped. Review original-image alignment, data quality, then Verify and Publish."));
+    }catch(error){
+      setMessage("ERROR: "+(error instanceof Error?error.message:String(error))+
+        " The unsaved plot is still in this editor.");
+    }finally{setBusy(false);}
   };
   const downloadGeoRecovery=async()=>{
     if(!state||busy||!slug)return;
@@ -1172,6 +1259,7 @@ export default function GeoPlotMapper(){
                     updatePointer(e.clientX,e.clientY,e.pointerType,i);
                   }}
                   onPointerUp={e=>{
+                    if(dragRef.current!==null)flushDrag(dragRef.current,e.clientX,e.clientY);
                     dragRef.current=null;closeCornerDrag();
                     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
                     queuePointer(e.clientX,e.clientY,e.pointerType);
