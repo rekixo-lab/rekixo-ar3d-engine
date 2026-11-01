@@ -1157,13 +1157,18 @@ export default function GeoPlotMapper(){
           {working.road&&working.sides.front?.roadFacing!==true&&
             <p className="geo-plot-warning">Road/access is entered but Front has not been marked Road side. Publishing requires explicit road-front confirmation.</p>}
           {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{const side=working.sides[role]||emptySide();
-            const referenceM=geometrySideLengthMetres(working.corners,side.edges,geo?.placement.scale||1);
-            const reference=side.unit==="ft"?referenceM*3.280839895:referenceM;
+            const localM=geometrySideLengthMetres(working.corners,side.edges,1);
+            const scaledM=geometrySideLengthMetres(working.corners,side.edges,geo?.placement.scale||1);
+            const reference=side.unit==="ft"?scaledM*3.280839895:scaledM;
+            const csvLength=selectedInventory?.[role]||0;
             const mismatch=side.length>0 && reference>0 && Math.abs(reference-side.length)/side.length>0.1;
             return <fieldset key={role}><legend>{role}</legend>
               <p className={mismatch?"geo-plot-warning":"geo-plot-hint"}>
-                Model geometry estimate: {reference.toFixed(2)} {side.unit}
-                {mismatch?" — differs by more than 10% from the approved side length; verify scale and source.":" (not authoritative)"}
+                Approved CSV: {csvLength>0?csvLength+" "+selectedInventory?.lengthUnit:"not supplied"}
+                {" · "}Mapped source: {side.length||"not supplied"} {side.unit}
+                {" · "}Model-local estimate: {localM.toFixed(2)} m
+                {" · "}Geo-scaled estimate: {scaledM.toFixed(2)} m
+                {mismatch?" — geo-scaled estimate differs more than 10% from the mapped side length; recheck source and scale.":" (estimates are not authoritative)"}
               </p>
               <label>Edges (0…{Math.max(working.corners.length-1,0)})<input value={side.edges.join(",")} placeholder="0,1"
                 onChange={e=>changeSide(role,{edges:e.target.value.split(",").map(x=>Number(x.trim())).filter(Number.isInteger),verified:false})}/></label>
