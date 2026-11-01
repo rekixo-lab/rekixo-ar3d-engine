@@ -13,15 +13,6 @@ export function nextCsvPlotForDrawing(rows,mapped,afterId=null){
   }
   return null;
 }
-export function positionCursorLoupe(screen,viewport,size=170,gap=18){
-  if(!Array.isArray(screen)||!Array.isArray(viewport)||![...screen,...viewport,size,gap].every(finite))
-    return {left:12,top:12};
-  const [x,y]=screen,[w,h]=viewport,margin=8;
-  const left=x+gap+size>w-margin?x-gap-size:x+gap;
-  const top=y+gap+size>h-margin?y-gap-size:y+gap;
-  return {left:Math.round(Math.max(margin,Math.min(Math.max(margin,w-size-margin),left))),
-    top:Math.round(Math.max(margin,Math.min(Math.max(margin,h-size-margin),top)))};
-}
 export function assignVisiblePlotEdge(plot,role,edge,{extend=false}={}){
   if(!plot||!Array.isArray(plot.corners)||plot.corners.length<3||
     !ROLES.includes(role)||!Number.isInteger(edge)||edge<0||edge>=plot.corners.length)
