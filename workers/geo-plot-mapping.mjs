@@ -14,6 +14,7 @@ import { handleGeoPlotCommercial } from "./geo-plot-commercial.mjs";
 import { handleGeoPlotPricingSheet } from "./geo-plot-pricing.mjs";
 import { handleGeoPlotDeals } from "./geo-plot-deals.mjs";
 import { geoPlotMappingProjectKind } from "../shared/geo-plot-project-policy.js";
+import { preliminaryPublishPlotGuard } from "../shared/geo-plot-publication-mode.js";
 
 const json = (value, init = {}) => Response.json(value, {headers: {"Cache-Control":"no-store"}, ...init});
 const fail = (message, status = 400) => json({error:message}, {status});
@@ -48,13 +49,13 @@ async function state(env, ctx) {
   const alignment=await env.DB.prepare("SELECT revision FROM geo_plot_image_alignment_drafts_3d WHERE project_id=?")
     .bind(ctx.project.id).first();
   const active = await env.DB.prepare(
-    `SELECT r.id,r.version,r.geo_release_id,r.building_release_id,r.sha256
+    `SELECT r.id,r.version,r.geo_release_id,r.building_release_id,r.sha256,r.publication_mode
        FROM geo_plot_mapping_active_3d a JOIN geo_plot_mapping_releases_3d r
        ON r.id=a.mapping_release_id AND r.project_id=a.project_id AND r.experience_id=a.experience_id
        WHERE a.project_id=?`
   ).bind(ctx.project.id).first();
   const versions = await env.DB.prepare(
-    "SELECT id,version,geo_release_id AS geoReleaseId,created_at AS createdAt FROM geo_plot_mapping_releases_3d WHERE project_id=? ORDER BY version DESC LIMIT 20"
+    "SELECT id,version,geo_release_id AS geoReleaseId,publication_mode AS publicationMode,created_at AS createdAt FROM geo_plot_mapping_releases_3d WHERE project_id=? ORDER BY version DESC LIMIT 20"
   ).bind(ctx.project.id).all();
   return {project:ctx.project,inventoryRevision:inventory.revision,
     alignmentRevision:Number(alignment?.revision||0),
@@ -68,6 +69,7 @@ async function state(env, ctx) {
       plots:JSON.parse(draft.plots_json)} : {revision:0,verifiedRevision:null,
       verifiedInventoryRevision:null,verifiedAlignmentRevision:null,stale:false,plots:[]},
     activeMapping:active ? {id:active.id,version:active.version,geoReleaseId:active.geo_release_id,
+      publicationMode:active.publication_mode,
       current:active.geo_release_id===ctx.active?.geo_release_id && active.building_release_id===ctx.active?.source_building_release_id} : null,
     releases:versions.results || []};
 }
@@ -269,24 +271,37 @@ async function publicationPreflight(env,ctx){
     token};
 }
 async function publish(env,ctx,actor,body) {
+  const preliminary=body.action==="publish-preliminary";
   const draft=await env.DB.prepare("SELECT * FROM geo_plot_mapping_drafts_3d WHERE project_id=?").bind(ctx.project.id).first();
-  if (!draft || draft.revision!==body.expectedRevision || draft.verified_revision!==draft.revision ||
+  if (!draft || draft.revision!==body.expectedRevision ||
       draft.geo_release_id!==ctx.active.geo_release_id || draft.building_release_id!==ctx.active.source_building_release_id)
-    throw Error("Current mapping must be saved and verified for the active Geo/Building release.");
-  const plots=validateGeoPlotCollection(JSON.parse(draft.plots_json),{forPublish:true});
+    throw Error("Save the current mapping for the active Geo/Building release before publishing.");
+  if(!preliminary&&draft.verified_revision!==draft.revision)
+    throw Error("Verify all source facts first, or choose Publish Preliminary Mapping.");
+  // Always validate polygon structure, unique IDs and no overlapping interiors.
+  // Preliminary only waives *source approval*, never the real model/Geo source.
+  const plots=validateGeoPlotCollection(JSON.parse(draft.plots_json),{forPublish:!preliminary});
   const inventory=await inventoryState(env,ctx.project.id);
-  if(draft.verified_inventory_revision!==inventory.revision)
-    throw Error("Plot inventory was imported or changed after the last Verify. Reconcile the CSV and verify this revision again.");
-  requireGeoInventoryReview(plots,inventory.rows);
-  const alignment=await requireCurrentImageAlignmentReview(env,ctx);
-  if(Number(draft.verified_alignment_revision||0)!==alignment.revision)
-    throw Error("Image alignment revision changed after plot verification. Verify the current mapping again.");
+  if(preliminary){
+    preliminaryPublishPlotGuard(plots,inventory.rows);
+  }else{
+    if(draft.verified_inventory_revision!==inventory.revision)
+      throw Error("Plot inventory changed after Verify. Reconcile and Verify this revision again.");
+    requireGeoInventoryReview(plots,inventory.rows);
+  }
+  const alignment=preliminary
+    ?{revision:(await env.DB.prepare("SELECT revision FROM geo_plot_image_alignment_drafts_3d WHERE project_id=?")
+      .bind(ctx.project.id).first())?.revision||0}
+    :await requireCurrentImageAlignmentReview(env,ctx);
+  if(!preliminary&&Number(draft.verified_alignment_revision||0)!==alignment.revision)
+    throw Error("Image alignment revision changed after verification. Verify the current mapping again.");
   // The operator must review the exact current live-vs-draft delta.
   // An old preview or parallel release activation is never silently accepted.
   const preflight=await publicationPreflight(env,ctx);
   if(typeof body.expectedPreflightToken!=="string"||body.expectedPreflightToken!==preflight.token||
      body.expectedActiveReleaseId!==preflight.activeReleaseId)
     throw Error("Live mapping or draft changed since publication preview. Review the diff again.");
+  const publicationMode=preliminary?"preliminary":"verified";
   const text=JSON.stringify(plots),sha=await digest(text),id="geo_plot_"+crypto.randomUUID(),now=currentIso();
   const versionRow=await env.DB.prepare("SELECT COALESCE(MAX(version),0)+1 AS version FROM geo_plot_mapping_releases_3d WHERE experience_id=?")
     .bind(ctx.active.experience_id).first();
@@ -299,29 +314,32 @@ async function publish(env,ctx,actor,body) {
     // Source and draft revision are rechecked *inside* the atomic D1 batch.
     // A concurrent Geo activation cannot activate old mapped coordinates.
     env.DB.prepare(`INSERT INTO geo_plot_mapping_releases_3d
-      (id,project_id,experience_id,geo_release_id,building_release_id,version,draft_revision,plots_json,sha256,created_by,created_at)
-      SELECT ?,?,?,?,?,?,?,?,?,?,?
+      (id,project_id,experience_id,geo_release_id,building_release_id,version,draft_revision,plots_json,sha256,publication_mode,created_by,created_at)
+      SELECT ?,?,?,?,?,?,?,?,?,?,?,?
       WHERE EXISTS(SELECT 1 FROM geo_experience_active_releases_3d ar
         JOIN geo_releases_3d gr ON gr.id=ar.geo_release_id AND gr.project_id=ar.project_id
         WHERE ar.project_id=? AND ar.experience_id=? AND ar.geo_release_id=?
           AND gr.source_building_release_id=?)
         AND EXISTS(SELECT 1 FROM geo_plot_mapping_drafts_3d d WHERE d.project_id=?
           AND d.experience_id=? AND d.geo_release_id=? AND d.building_release_id=?
-          AND d.revision=? AND d.verified_revision=d.revision
-          AND d.verified_inventory_revision=?
-          AND d.verified_inventory_revision=COALESCE(
-            (SELECT i.revision FROM geo_plot_inventory_3d i WHERE i.project_id=d.project_id),0)
-          AND COALESCE(d.verified_alignment_revision,0)=COALESCE(
-            (SELECT a.revision FROM geo_plot_image_alignment_drafts_3d a WHERE a.project_id=d.project_id),0)
-          AND NOT EXISTS(SELECT 1 FROM geo_plot_image_alignment_drafts_3d a
-            WHERE a.project_id=d.project_id
-            AND (a.verified_revision IS NULL OR a.verified_revision<>a.revision))
+          AND d.revision=?
+          AND COALESCE((SELECT i.revision FROM geo_plot_inventory_3d i WHERE i.project_id=d.project_id),0)=?
+          AND COALESCE((SELECT a.revision FROM geo_plot_image_alignment_drafts_3d a WHERE a.project_id=d.project_id),0)=?
+          AND (?=1 OR (
+            d.verified_revision=d.revision
+            AND d.verified_inventory_revision=?
+            AND COALESCE(d.verified_alignment_revision,0)=?
+            AND NOT EXISTS(SELECT 1 FROM geo_plot_image_alignment_drafts_3d a
+              WHERE a.project_id=d.project_id
+              AND (a.verified_revision IS NULL OR a.verified_revision<>a.revision))
+          ))
           AND COALESCE((SELECT a.mapping_release_id FROM geo_plot_mapping_active_3d a
             WHERE a.project_id=d.project_id AND a.experience_id=d.experience_id),'')=?)`).bind(id,ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
-      ctx.active.source_building_release_id,versionRow.version,draft.revision,text,sha,actor.email,now,
+      ctx.active.source_building_release_id,versionRow.version,draft.revision,text,sha,publicationMode,actor.email,now,
       ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,ctx.active.source_building_release_id,
       ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
-      ctx.active.source_building_release_id,draft.revision,inventory.revision,preflight.activeReleaseId||""),
+      ctx.active.source_building_release_id,draft.revision,inventory.revision,Number(alignment.revision||0),
+      preliminary?1:0,inventory.revision,Number(alignment.revision||0),preflight.activeReleaseId||""),
     env.DB.prepare(`INSERT INTO geo_plot_mapping_active_3d(experience_id,project_id,mapping_release_id,updated_by,updated_at)
       VALUES (?,?,?,?,?) ON CONFLICT(experience_id) DO UPDATE SET
       mapping_release_id=excluded.mapping_release_id,updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
@@ -329,7 +347,7 @@ async function publish(env,ctx,actor,body) {
     env.DB.prepare(`INSERT INTO engine_admin_audit(id,actor_email,action,project_id,target_id,details_json,created_at)
       VALUES (?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),actor.email,"geo.plots_published",ctx.project.id,id,
       JSON.stringify({geoReleaseId:ctx.active.geo_release_id,version:versionRow.version,
-        inventoryRevision:inventory.revision,alignmentRevision:alignment.revision,
+        publicationMode,inventoryRevision:inventory.revision,alignmentRevision:alignment.revision,
         plotCount:plots.length,sha}),now)
   ]);
   return state(env,ctx);
@@ -438,7 +456,8 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
     if (body.action==="rebind-remap") return json(await rebindReviewedSource(env,ctx,access.actor,body));
     if (body.action==="rebind-reset") return json(await resetForNewGeo(env,ctx,access.actor,body));
     if (body.action==="verify") return json(await verify(env,ctx,access.actor,body));
-    if (body.action==="publish") return json(await publish(env,ctx,access.actor,body));
+    if (body.action==="publish"||body.action==="publish-preliminary")
+    return json(await publish(env,ctx,access.actor,body));
     if (body.action==="activate") return json(await activate(env,ctx,access.actor,String(body.releaseId||"")));
     return fail("Unknown mapping action.");
   } catch(error) {
