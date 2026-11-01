@@ -60,6 +60,12 @@ test("legacy Geo editor reveals stale CSV evidence and offers safe road Front re
   // magnifier or a second synthetic cursor that can drift from the hit point.
   const overlay=page.locator(".geo-plot-overlay");
   await expect(overlay).toHaveAttribute("data-tool-mode","edit");
+  // A previously mapped plot must not jump to Plot 2 when returning from Pan.
+  await page.getByRole("button",{name:"✋ Pan"}).click();
+  await expect(overlay).toHaveAttribute("data-tool-mode","pan");
+  await page.getByRole("button",{name:"▱ 4 corners"}).click();
+  await expect(overlay).toHaveAttribute("data-tool-mode","edit");
+  await expect(page.getByLabel("Current approved CSV plot")).toHaveValue("1");
   await expect.poll(()=>overlay.evaluate(el=>getComputedStyle(el).cursor)).toBe("crosshair");
   await expect(page.locator(".geo-plot-precision-loupe, .geo-plot-precision-crosshair, .geo-plot-precision-pointer-origin")).toHaveCount(0);
   await expect(page.getByRole("button",{name:/Apply Latest Approved CSV/})).toBeVisible();
