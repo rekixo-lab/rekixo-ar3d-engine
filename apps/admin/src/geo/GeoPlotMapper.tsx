@@ -257,6 +257,7 @@ export default function GeoPlotMapper(){
     inventoryRevision:state?.inventoryRevision,
     verifiedInventoryRevision:state?.draft.verifiedInventoryRevision
   }),[plots,inventoryRows,geo?.placement.scale,state]);
+  const actionableQualityIssues=useMemo(()=>quality.issues.filter(issue=>issue.field!=="unmapped"),[quality]);
   const nextTemplateId=useMemo(()=>nextUnmappedInventory(inventoryRows,plots.map(p=>p.id))?.id||
     nextFreePlotId([...plots,...inventoryRows]),[plots,inventoryRows]);
   const onInventoryRowsChange=useCallback((rows:GeoInventoryRow[],revision:number)=>{
@@ -1447,7 +1448,8 @@ export default function GeoPlotMapper(){
         </>}
         {inspectorTab==="quality"&&<>
         <details className="geo-plot-review-dashboard" open>
-          <summary>03 · Data quality · {quality.summary.blockers} blockers / {quality.summary.reviews} reviews</summary>
+          <summary>03 · Data quality · {progress.pending} pending / {quality.summary.blockers} blockers /
+            {actionableQualityIssues.filter(issue=>issue.severity==="review").length} mapped reviews</summary>
           <p className="geo-plot-hint">Private draft diagnostics · {quality.summary.mapped} mapped /
             {quality.summary.inventory} approved inventory IDs. Source evidence and model estimates are separate;
             review findings are not a survey certificate or a publish approval.</p>
@@ -1455,15 +1457,16 @@ export default function GeoPlotMapper(){
             Download Evidence & Quality Review JSON
           </button>
           <div className="geo-plot-review-issues" aria-live="polite">
-            {quality.issues.slice(0,24).map((issue,i)=><p key={issue.plotId+issue.field+i}
+            {actionableQualityIssues.slice(0,24).map((issue,i)=><p key={issue.plotId+issue.field+i}
               className={issue.severity==="blocker"?"geo-plot-warning":"geo-plot-hint"}>
               <strong>{issue.severity==="blocker"?"Blocker":"Review"}</strong> ·
               Plot {issue.plotId} · {issue.field}: {issue.reason}
             </p>)}
-            {!quality.issues.length&&<p className="geo-plot-hint">No diagnostic issues in the current working draft.
+            {!actionableQualityIssues.length&&<p className="geo-plot-hint">No blocker/review issues in mapped plots.
+              {progress.pending>0?" "+progress.pending+" CSV plots are pending mapping.":""}
               Source and model quality checks do not themselves certify real-world field measurements.</p>}
-            {quality.issues.length>24&&<p className="geo-plot-hint">
-              +{quality.issues.length-24} more. Download the complete evidence report to inspect all plots.</p>}
+            {actionableQualityIssues.length>24&&<p className="geo-plot-hint">
+              +{actionableQualityIssues.length-24} more. Download the complete evidence report to inspect all plots.</p>}
           </div>
         </details>
         <details className="geo-plot-clone-panel">
