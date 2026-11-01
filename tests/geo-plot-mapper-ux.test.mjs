@@ -18,6 +18,8 @@ test("CSV-first drawing uses pending approved Plot 1, never invents Plot 37",()=
   const inventory=Array.from({length:36},(_,i)=>row(i+1));
   assert.equal(nextCsvPlotForDrawing(inventory,[]).id,"1");
   assert.equal(nextCsvPlotForDrawing(inventory,[plot()]).id,"2");
+  assert.equal(nextCsvPlotForDrawing(inventory,[row("20")],"20").id,"21");
+  assert.equal(nextCsvPlotForDrawing(inventory,[row("36")],"36").id,"1");
   assert.equal(nextCsvPlotForDrawing(inventory,inventory.map(x=>x.id)),null);
   assert.equal(nextCsvPlotForDrawing([],[]),null);
   assert.deepEqual(visibleMappingProgress(inventory,[plot()]),
