@@ -1,0 +1,15 @@
+export type AlignmentPoint={id:string;u:number;v:number;x:number;z:number;evidence:string};
+export type ImageModelAlignmentDraft={imageAssetId:string;imageSha256:string;
+  imageWidth:number;imageHeight:number;
+  geoReleaseId:string;buildingReleaseId:string;modelSha256:string;
+  anchors:AlignmentPoint[];checkpoints:AlignmentPoint[]};
+export type SimilarityTransform={a:number;b:number;tx:number;tz:number;imageAspect:number};
+export type AlignmentError={id:string;errorMetres:number};
+export type AlignmentAssessment={transform:SimilarityTransform;fit:AlignmentError[];
+  independent:AlignmentError[];fitRmsMetres:number|null;checkpointRmsMetres:number|null;
+  maxFitMetres:number|null;maxCheckpointMetres:number|null;limitMetres:number;
+  modelSpanMetres:number;verifiedReady:boolean;issues:string[]};
+export function normalizeImageModelAlignment(value:ImageModelAlignmentDraft):ImageModelAlignmentDraft;
+export function imagePointToModel(t:SimilarityTransform,p:[number,number]):[number,number];
+export function modelPointToImage(t:SimilarityTransform,p:[number,number]):[number,number];
+export function evaluateImageModelAlignment(value:ImageModelAlignmentDraft,options?:{requireCheckpoints?:boolean}):AlignmentAssessment;
