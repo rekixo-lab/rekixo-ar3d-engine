@@ -523,7 +523,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
             const polygon=new google.maps.Polygon({map,paths:item.path,
               strokeColor:"#20d8a5",strokeWeight:2,strokeOpacity:.96,
               fillColor:"#1dd5a2",fillOpacity:.13,clickable:true,zIndex:70});
-            const listener=polygon.addListener("click",()=>setSelectedPlot(item.plot));
+            const plot=item.plot;
+            const listener=polygon.addListener("click",()=>setSelectedPlot(plot));
             handles.set(item.plot.id,{polygon,listener});
           }
           plotPolygonsRef.current=[...handles.values()].map(x=>x.polygon);
@@ -715,8 +716,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           overlay?.requestRedraw();
         });
         mapIdle = map.addListener("idle", () => {
-          refreshPlotPolygons?.(showPlotsRef.current);
           overlay?.requestRedraw();
+          refreshPlotPolygons?.(showPlotsRef.current);
         });
         mapTypeChanged = map.addListener("maptypeid_changed", () => {
           if (isSatelliteMapType(map.getMapTypeId?.())) void refreshSatelliteLimit();
