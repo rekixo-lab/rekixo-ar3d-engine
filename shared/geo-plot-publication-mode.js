@@ -26,7 +26,8 @@ export function publicGeoPlotFacts(plot,mode){
     plot.sides.front.roadFacing===true&&Boolean(plot.sides.front.source)
     ?plot.road:null;
   return {id:plot.id,corners:plot.corners,layout:plot.layout,
-    ...(Number.isFinite(plot.planeY)?{planeY:plot.planeY}:{}),
+    ...(plot.planeVerified===true&&Boolean(plot.planeSource)&&Number.isFinite(plot.planeY)
+      ?{planeY:plot.planeY}:{}),
     area,facing,sides,road,notes:""};
 }
 export function preliminaryPublishPlotGuard(plots,approvedInventory){
