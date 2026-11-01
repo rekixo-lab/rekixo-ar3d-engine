@@ -21,8 +21,9 @@ type Plot = { id: string; corners: Point[]; layout: "three" | "four";
   sides: Partial<Record<Role, Side>>; area: { value: number; unit: "sqft" | "sqm" | "sqyd"; source: string; verified: boolean };
   facing: string; facingSource:string; facingVerified:boolean; planeY?:number;planeSource?:string;planeVerified?:boolean;road: string; notes: string };
 type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | null;
-  inventoryRevision:number;
+  inventoryRevision:number;alignmentRevision:number;
   draft: {revision:number;verifiedRevision:number|null;verifiedInventoryRevision:number|null;
+    verifiedAlignmentRevision:number|null;
     stale:boolean;plots:Plot[]};
   activeMapping:{id:string;version:number;current:boolean}|null;
   releases:Array<{id:string;version:number;geoReleaseId:string}> };
@@ -193,6 +194,9 @@ export default function GeoPlotMapper(){
     p.id.toLowerCase()===working?.id.toLowerCase()),[inventoryRows,working?.id]);
   const onInventoryRowsChange=useCallback((rows:GeoInventoryRow[],revision:number)=>{
     setInventoryRows(rows);setState(prev=>prev?{...prev,inventoryRevision:revision}:prev);
+  },[]);
+  const onAlignmentRevisionChange=useCallback((revision:number)=>{
+    setState(prev=>prev?{...prev,alignmentRevision:revision}:prev);
   },[]);
   const hasUnapplied=hasPendingPlotEdits(working,originalId?plots.find(p=>p.id===originalId):null);
   const api=slug?`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/geo-plots`:"";
@@ -666,7 +670,9 @@ export default function GeoPlotMapper(){
       <span>Draft <b>r{state?.draft.revision||0}</b></span>
       <span>Mapped <b>{plots.length}</b></span>
       <span>Verified <b>{state?.draft.revision&&state.draft.verifiedRevision===state.draft.revision&&
-          state.draft.verifiedInventoryRevision===state.inventoryRevision?"Yes":"Needs review"}</b></span>
+          state.draft.verifiedInventoryRevision===state.inventoryRevision&&
+          (state.alignmentRevision===0||state.draft.verifiedAlignmentRevision===state.alignmentRevision)
+            ?"Yes":"Needs review"}</b></span>
       <span>Live mapping <b>{state?.activeMapping?.current?"v"+state.activeMapping.version:"None / stale"}</b></span>
     </section>
     {state?.draft.stale&&<div className="geo-plot-warning">
@@ -741,6 +747,7 @@ export default function GeoPlotMapper(){
             disabled={!editable||busy||dirty||Boolean(working)||!state||
               state.draft.verifiedRevision!==state.draft.revision||
               state.draft.verifiedInventoryRevision!==state.inventoryRevision||
+              (state.alignmentRevision>0&&state.draft.verifiedAlignmentRevision!==state.alignmentRevision)||
               inventoryIssues.length>0}
             onClick={()=>void execute("publish")}>Publish Mapping</button>
         </div>
@@ -855,7 +862,8 @@ export default function GeoPlotMapper(){
           }}/>
         {slug&&geo&&state&&<GeoPlotImageAlignmentPanel key={slug+"-alignment"}
           slug={slug} geoReleaseId={state.geoReleaseId} buildingReleaseId={state.buildingReleaseId}
-          plots={plots} onCapture={captureImageAlignmentPoint}/>}
+          plots={plots} onCapture={captureImageAlignmentPoint}
+          onRevisionChange={onAlignmentRevisionChange}/>}
         <div className="geo-plot-inspector-head">
            <div><small>PROJECT PLOT INVENTORY</small><h3>Plot Editor</h3></div>
            <span>{displayedPlots.length}/{plots.length}</span>
