@@ -5,9 +5,9 @@ import {normalizeImageModelAlignment,evaluateImageModelAlignment,
  imagePointToModel,modelPointToImage} from "../shared/geo-plot-image-alignment.js";
 
 const sha="c".repeat(64);
-const sample=(u,v,key)=>({id:key,u,v,x:120+80*u-20*v,z:-40+20*u+80*v,
+const sample=(u,v,key)=>({id:key,u,v,x:120+80*(2*u)-20*v,z:-40+20*(2*u)+80*v,
   evidence:"Signed 2026 survey, site landmark "+key});
-const fresh=()=>({imageAssetId:"source-uuid-1",imageSha256:sha,
+const fresh=()=>({imageAssetId:"source-uuid-1",imageSha256:sha,imageWidth:2000,imageHeight:1000,
   geoReleaseId:"geo-release-1",buildingReleaseId:"building-release-1",modelSha256:sha,
   anchors:[sample(.1,.1,"F1"),sample(.85,.15,"F2"),sample(.15,.8,"F3"),sample(.8,.7,"F4")],
   checkpoints:[sample(.65,.85,"C1"),sample(.4,.35,"C2")]});
@@ -30,6 +30,13 @@ test("held-out checkpoint is never fitted into transform; wrong landmark fails c
   assert.ok(qa.maxCheckpointMetres>qa.limitMetres);
   assert.deepEqual(qa.transform,original.transform);
   assert.throws(()=>evaluateImageModelAlignment(d,{requireCheckpoints:true}),/independently verified/);
+});
+test("rectangular source image requires actual pixel aspect for correct transform",()=>{
+  const draft=fresh();
+  assert.equal(evaluateImageModelAlignment(draft,{requireCheckpoints:true}).verifiedReady,true);
+  const distorted={...draft,imageWidth:1000,imageHeight:1000};
+  const qa=evaluateImageModelAlignment(distorted);
+  assert.equal(qa.verifiedReady,false,"A normalized-square distortion must never silently pass.");
 });
 test("three nearly collinear anchors never pass geometry review",()=>{
   const d=fresh();d.anchors=[
@@ -55,6 +62,8 @@ test("rejects cross-source assumptions, nonfinite model positions and duplicate 
   assert.throws(()=>normalizeImageModelAlignment(c),/same image location/);
   const d=fresh();d.anchors[1].id="F1";
   assert.throws(()=>normalizeImageModelAlignment(d),/unique/);
+  const e=fresh();e.imageHeight=0;
+  assert.throws(()=>normalizeImageModelAlignment(e),/width\/height/);
 });
 test("Stage 2 alignment does not alter existing releases or commercial plot data",()=>{
   const root=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
