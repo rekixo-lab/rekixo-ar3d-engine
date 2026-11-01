@@ -142,17 +142,6 @@ export async function handleProjectManagementAdmin(request,env,actor,project,par
       await revokeProjectClient(env,actor,project,body);
       return json(await getState(env,project));
     }
-    if(false&&request.method==="PATCH"&&body.action==="disable-client"){
-      const id=String(body.id||"");
-      if(!/^[0-9a-f-]{36}$/i.test(id))return fail("Invalid client record.");
-      const result=await env.DB.prepare(`UPDATE project_client_directory_3d
-        SET access_state='disabled',updated_by=?,updated_at=?
-        WHERE project_id=? AND id=? AND access_state='not_provisioned'`)
-        .bind(actor.email,new Date().toISOString(),project.id,id).run();
-      if(result.meta?.changes!==1)return fail("Client record already disabled or not found.",409);
-      await audit(env,actor,"project.client_record_disabled",project.id,id);
-      return json(await getState(env,project));
-    }
     return fail("Unknown management action.");
   }catch(err){
     if(/UNIQUE constraint failed/i.test(String(err)))return fail("This client email is already in the project.",409);
