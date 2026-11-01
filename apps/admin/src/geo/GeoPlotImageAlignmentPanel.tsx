@@ -196,6 +196,8 @@ export default function GeoPlotImageAlignmentPanel({
         source-pinned revision before pairing new points.</p>}
       <div className="geo-align-actions">
         <button type="button" disabled={!!busy} onClick={()=>void reload()}>Reload Sources / Draft</button>
+        {snapshot?.stale&&draft&&selected&&<button type="button" disabled={!!busy}
+          onClick={()=>selectSource(draft.imageAssetId)}>Rebind same approved image to current 3D release</button>}
         {snapshot&&draft&&<button type="button" onClick={()=>exportReview(slug,snapshot,draft)}>
           Download Private Review JSON</button>}
       </div>
@@ -229,6 +231,15 @@ export default function GeoPlotImageAlignmentPanel({
               fill="#ffce6d" stroke="#172638" strokeWidth=".002" pointerEvents="none"/>)}
             {draft.checkpoints.map(p=><circle key={p.id} cx={p.u} cy={p.v} r=".008"
               fill="#7ebcff" stroke="#172638" strokeWidth=".002" pointerEvents="none"/>)}
+            {assessed.result&&draft.checkpoints.map(p=>{
+              const predicted=modelPointToImage(assessed.result!.transform,[p.x,p.z]);
+              return <g key={p.id+"-residual"} pointerEvents="none">
+                <line x1={p.u} y1={p.v} x2={predicted[0]} y2={predicted[1]}
+                  stroke="#ff5674" strokeWidth=".004"/>
+                <circle cx={predicted[0]} cy={predicted[1]} r=".006"
+                  fill="none" stroke="#ff5674" strokeWidth=".002"/>
+              </g>;
+            })}
             {pending&&<circle cx={pending[0]} cy={pending[1]} r=".012"
               stroke="#ffffff" strokeWidth=".003" fill="none" pointerEvents="none"/>}
           </svg>
@@ -266,6 +277,8 @@ export default function GeoPlotImageAlignmentPanel({
           review limit {assessed.result.limitMetres.toFixed(3)} m</p>:
           <p>{assessed.error}</p>}
         {assessed.result?.issues.map((issue,i)=><p key={i} className="geo-plot-warning">{issue}</p>)}
+        <p className="geo-plot-hint">Blue dots are withheld survey checkpoints; red lines connect each to the model-predicted image location.
+          Long lines require source review before verification.</p>
         <p className="geo-plot-hint">Alignment is a read-only overlay preview after independent verification.
           A passing check does not certify survey accuracy or automatically republish polygons.</p>
         <label><input type="checkbox" checked={showOverlay}
