@@ -9,6 +9,7 @@ import { compareGeoPlotPublication } from "../shared/geo-plot-publication-diff.j
 import { normalizeImageModelAlignment } from "../shared/geo-plot-image-alignment.js";
 import { stageSelectedGeoSourceRemap } from "../shared/geo-plot-source-remap.js";
 import { geometryWithRevokedApprovals } from "../shared/geo-plot-precision-history.js";
+import { projectGeoRecoveryManifest } from "./geo-plot-recovery.mjs";
 
 const json = (value, init = {}) => Response.json(value, {headers: {"Cache-Control":"no-store"}, ...init});
 const fail = (message, status = 400) => json({error:message}, {status});
@@ -404,6 +405,8 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
     if (request.method==="GET"){
       if(url.searchParams.get("preview")==="1")
         return json(await publicationPreflight(env,ctx));
+      if(url.searchParams.get("recovery")==="1")
+        return json(await projectGeoRecoveryManifest(env,ctx));
       return json(await state(env,ctx));
     }
     if (!["PUT","POST"].includes(request.method)) return fail("Method not allowed.",405);
