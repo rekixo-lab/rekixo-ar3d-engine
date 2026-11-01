@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import {pointInScreenTriangle} from "../../../../shared/geo-plot-screen-hit.js";
+import type {GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 
 /**
  * Render clickable Geo Plot outlines INSIDE the canonical GLB's own local
@@ -16,6 +17,8 @@ export type ModelPlotLayer = {
   group:THREE.Group;
   hitMeshes:THREE.Mesh[];
   groupsById:Map<string,THREE.Group>;
+  setStatusPresentation:(enabled:boolean,filter:GeoPlotStatus|null,
+    approved:Readonly<Record<string,GeoPlotStatus>>)=>void;
   dispose:()=>void;
 };
 
@@ -118,6 +121,26 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
   const strokeMaterial=new THREE.LineBasicMaterial({
     color:PLOT_COLOR,transparent:true,opacity:.96,depthTest:true,depthWrite:false
   });
+  // Reuse one material pair for each state, not one allocation per polygon.
+  // The neutral layer remains exactly the original GLB-anchored plot display.
+  const tinted=(color:number,fillOpacity:number,strokeOpacity:number)=>{
+    const fill=fillMaterial.clone();
+    fill.color.setHex(color);
+    fill.opacity=fillOpacity;
+    const stroke=strokeMaterial.clone();
+    stroke.color.setHex(color);
+    stroke.opacity=strokeOpacity;
+    return {fill,stroke};
+  };
+  const palette={
+    neutral:{fill:fillMaterial,stroke:strokeMaterial},
+    available:tinted(0x1cd680,.20,.96),
+    booked:tinted(0xf2bf25,.21,.96),
+    sold:tinted(0xf04b58,.23,.97),
+    unknown:tinted(0x90abb3,.035,.54),
+    dim:tinted(0x708891,.003,.10)
+  };
+  const plotVisuals=new Map<string,{fill:THREE.Mesh;outline:THREE.LineLoop}>();
   for(const plot of plots){
     if(!Array.isArray(plot.corners)||plot.corners.length<3)continue;
     const surfaceY=modelPlotElevation(plot,bounds,ray,candidateMeshes,plots.length<=120?5:1);
@@ -132,9 +155,23 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
     plotGroup.add(mesh,outline);
     group.add(plotGroup);
     groupsById.set(plot.id,plotGroup);
+    plotVisuals.set(plot.id,{fill:mesh,outline});
     hitMeshes.push(mesh);
   }
-  return {group,hitMeshes,groupsById,dispose:()=>{
+  const setStatusPresentation:ModelPlotLayer["setStatusPresentation"]=
+    (enabled,filter,approved)=>{
+      for(const [id,parts] of plotVisuals){
+        const value=Object.prototype.hasOwnProperty.call(approved,id)?approved[id]:undefined;
+        const valid=value==="available"||value==="booked"||value==="sold"
+          ?value:null;
+        const style=!enabled?palette.neutral
+          :filter&&valid!==filter?palette.dim
+          :valid?palette[valid]:palette.unknown;
+        parts.fill.material=style.fill;
+        parts.outline.material=style.stroke;
+      }
+    };
+  return {group,hitMeshes,groupsById,setStatusPresentation,dispose:()=>{
     for(const mesh of hitMeshes)mesh.geometry.dispose();
     for(const plotGroup of groupsById.values()){
       const outline=plotGroup.children.find(child=>child instanceof THREE.LineLoop);
@@ -142,6 +179,11 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
     }
     fillMaterial.dispose();
     strokeMaterial.dispose();
+    for(const [name,style] of Object.entries(palette)){
+      if(name==="neutral")continue;
+      style.fill.dispose();
+      style.stroke.dispose();
+    }
     group.removeFromParent();
   }};
 }
