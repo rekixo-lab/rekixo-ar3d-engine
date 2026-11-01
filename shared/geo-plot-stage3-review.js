@@ -1,6 +1,6 @@
 // Legacy Geo Plot Studio only. Read-only diagnostic + explicitly unverified
 // template creation. Never writes published Geo releases, source inventory, or sales.
-import {polygonAreaSqm,polygonsOverlapInArea} from "../workers/geo-plot-geometry.mjs";
+import {polygonAreaSqm,polygonHasCrossings,polygonsOverlapInArea} from "../workers/geo-plot-geometry.mjs";
 import {geoInventoryReviewIssues} from "./geo-plot-source-review.js";
 const ROLES=["front","back","depthA","depthB"];
 const SQM={sqm:1,sqft:0.09290304,sqyd:0.83612736};
@@ -8,6 +8,10 @@ const METRES={m:1,ft:0.3048};
 const finite=n=>typeof n==="number"&&Number.isFinite(n);
 const unit=(value,scale)=>finite(value)&&finite(scale)?value*scale:null;
 const round=n=>finite(n)?Number(n.toFixed(5)):null;
+const sourcePage=ref=>{
+  const match=String(ref||"").match(/\b(?:page|pg\.?|p\.?)\s*#?\s*(\d{1,4})\b/i);
+  return match?match[1]:null;
+};
 function perimeterMetres(corners,edges){
   if(!Array.isArray(corners)||!Array.isArray(edges))return null;
   let sum=0;
@@ -81,7 +85,7 @@ export function geoPlotEvidenceManifest(plots,inventoryRows,geoScale=1,revision=
       const sqm=polygonAreaSqm(plot.corners);
       const area={approvedSource:row?.area>0?{
         value:row.area,unit:row.areaUnit,reference:row.areaSource,
-        rawText:row.dimensions||null,page:null,confidence:"not_assessed",
+        rawText:row.dimensions||null,page:sourcePage(row.areaSource),confidence:"not_assessed",
         approvedInMapping:Boolean(plot.area?.verified)}:null,
         mappedSource:{value:plot.area?.value??null,unit:plot.area?.unit??null,
           reference:plot.area?.source||null,verified:Boolean(plot.area?.verified)},
@@ -92,7 +96,7 @@ export function geoPlotEvidenceManifest(plots,inventoryRows,geoScale=1,revision=
         const local=perimeterMetres(plot.corners,side?.edges||[]);
         return [role,{approvedSource:ref?{
             value:row[role],unit:row.lengthUnit,reference:row.measurementSource,
-            rawText:row.dimensions||null,page:null,confidence:"not_assessed",
+            rawText:row.dimensions||null,page:sourcePage(row.measurementSource),confidence:"not_assessed",
             approvedInMapping:Boolean(side?.verified)}:null,
           mappedSource:side?{value:side.length,unit:side.unit,
             reference:side.source||null,verified:Boolean(side.verified),
@@ -127,7 +131,14 @@ export function geoPlotQualityReport(plots,inventoryRows=[],options={}){
      options.verifiedInventoryRevision!==options.inventoryRevision)
     add("blocker","project","inventoryRevision","Approved inventory revision differs from mapping verification.");
   for(const p of plots){
-    if(!Array.isArray(p.corners)||p.corners.length<3)continue;
+    if(!Array.isArray(p.corners)||p.corners.length<3){
+      add("blocker",p.id,"geometry","Plot needs three or more mapped corners.");
+      continue;
+    }
+    if(polygonAreaSqm(p.corners)<0.01||polygonHasCrossings(p.corners)){
+      add("blocker",p.id,"geometry","Plot boundary is degenerate or self-intersecting.");
+      continue;
+    }
     if(!p.area?.verified)add("review",p.id,"area","Approved mapped area is not verified.");
     if(!p.facingVerified)add("review",p.id,"facing","Compass/front facing is not verified.");
     if(!p.planeVerified)add("review",p.id,"plane","Building-local mapping plane is not verified.");
@@ -166,6 +177,7 @@ export function geoPlotQualityReport(plots,inventoryRows=[],options={}){
         add("blocker",a.plot.id+" / "+b.plot.id,"overlap","Two distinct plot footprints overlap in ground area.");
     }
   }
+  issues.sort((a,b)=>(a.severity==="blocker"?0:1)-(b.severity==="blocker"?0:1));
   return {schema:"geo-plot-quality-report-v1",advisoryOnly:true,issues,
     summary:{mapped:plots.length,inventory:inventoryRows.length,
       blockers:issues.filter(x=>x.severity==="blocker").length,
