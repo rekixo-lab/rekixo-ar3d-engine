@@ -19,6 +19,8 @@ export function newProjectStartPath(kind) {
   return kind === "masterplan_geo" ? "masterplan" : "source-pack";
 }
 export function projectModuleVisible(kind, module) {
+  // An explicit unrecognized type must never inherit legacy capabilities.
+  if (kind != null && kind !== "" && !isEngineProjectKind(kind)) return false;
   const k = selectedProjectKind(kind);
   const common = ["overview","profile","clients","assets","advanced"];
   if (common.includes(module)) return true;
@@ -31,6 +33,8 @@ export function projectModuleVisible(kind, module) {
 // Hide-only navigation is not an authorization boundary. Gate direct Admin API
 // calls too, while leaving every existing legacy project route unchanged.
 export function projectKindAllowsCloudRoute(kind,route) {
+  // Missing pre-kind rows are legacy; malformed explicit kinds fail closed.
+  if (kind != null && kind !== "" && !isEngineProjectKind(kind)) return false;
   const k=selectedProjectKind(kind);
   if(k==="legacy")return true;
   const geoRoutes=["geo-draft","geo-releases","geo-placement","geo-plots"];
