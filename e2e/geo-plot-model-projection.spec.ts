@@ -45,7 +45,8 @@ layer.dispose();
   const compiled=await build({stdin:{contents:source,resolveDir:process.cwd(),
     sourcefile:"geo-plot-projection-fixture.ts",loader:"ts"},platform:"browser",
     format:"iife",bundle:true,write:false,logLevel:"silent"});
-  await page.goto("/3Dprojects/studio");
+  // A standalone THREE projection fixture must not follow Studio auth redirects.
+  await page.goto("about:blank");
   await page.addScriptTag({content:compiled.outputFiles[0].text});
   const result=await page.evaluate(()=>(
     window as Window&{__geoPlotTest?:{
