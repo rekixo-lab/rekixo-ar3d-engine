@@ -59,7 +59,8 @@ export async function projectGeoRecoveryManifest(env,ctx){
        status:ctx.project.status},activeGeo:{
        experienceId:ctx.active.experience_id,geoReleaseId:ctx.active.geo_release_id,
        buildingReleaseId:ctx.active.source_building_release_id},
-     r2Objects,\n     draft:draft||null,inventory:inventory||null,alignment:alignment||null,
+     r2Objects,
+     draft:draft||null,inventory:inventory||null,alignment:alignment||null,
      activeMapping:active||null,mappingReleases:releases,geoReleases,assets};
   const body=JSON.stringify(payload);
   if(new TextEncoder().encode(body).byteLength>8_000_000)
