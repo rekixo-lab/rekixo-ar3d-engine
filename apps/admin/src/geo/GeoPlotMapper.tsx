@@ -1218,8 +1218,16 @@ export default function GeoPlotMapper(){
           {mode==="align"&&<button type="button" className="active"
             onClick={()=>{alignmentPickRef.current=null;setMode("pan");}}>Cancel alignment capture</button>}
           <button type="button" disabled={!editable||busy} className={mode==="pan"?"active":""}
-            title="Pan and pinch zoom (P)" aria-pressed={mode==="pan"}
-            onClick={()=>setMode("pan")}>✋ Pan</button>
+            title="Pan and pinch zoom (P) · unfinished corners stay in place"
+            aria-pressed={mode==="pan"}
+            onClick={pauseForPan}>✋ Pan</button>
+          {pausedDrawing&&<button type="button" className="geo-plot-resume-drawing"
+            disabled={!editable||busy} aria-label={"Resume Drawing Plot "+pausedDrawing.plotId}
+            title={"Continue "+(shape==="four"?"4 corners":"Irregular")+
+              " without losing "+working!.corners.length+" existing points (D/I)"}
+            onClick={()=>begin(shape)}>
+            ▶ Resume Drawing · Corner {pausedDrawing.nextCorner}
+          </button>}
           <button type="button" disabled={!editable||busy}
             className={mode==="draw"&&shape==="four"?"active":""}
             title="Draw four-corner boundary, first edge is Front (D)"
@@ -1375,7 +1383,11 @@ export default function GeoPlotMapper(){
            <b>Plot {working.id}</b>
            <span>{shape==="four"?working.corners.length+"/4":working.corners.length+" (irregular)"} corners</span>
            <span>{mode==="draw"?"Mark Front edge first":mode==="edit"?"Drag numbered corner handles":
-             mode==="side"?"Tap highlighted boundary edges to assign "+selectedRole:"Pan / pinch to inspect"}</span>
+             mode==="side"?"Tap highlighted boundary edges to assign "+selectedRole:
+             pausedDrawing?"Paused · "+pausedDrawing.nextCorner+" is next · Resume Drawing":"Pan / pinch to inspect"}</span>
+         </div>}
+         {pausedDrawing&&<div className="geo-plot-paused-banner" role="status">
+           {pausedDrawing.text}. Pan freely, then press Resume Drawing or the same 4 corners / Irregular tool.
          </div>}
          <div className="geo-plot-scene-info">{modelStatus||("Top view · model coordinates in metres · "+
            (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Click corners clockwise · wheel zoom at cursor":"Drag numbered handles · wheel zoom at cursor"))}</div>
@@ -1734,7 +1746,8 @@ export default function GeoPlotMapper(){
         </>}
         <div className="geo-plot-shortcuts">
           <strong>Keyboard shortcuts</strong>
-          <span>P Pan · D 4 corners · I Irregular · E Edit · F Fit</span>
+          <span>P Pan · D Resume 4 corners · I Resume Irregular · E Edit · F Fit</span>
+          <span>After Pan, use Resume Drawing (or the SAME shape button) to keep existing corners.</span>
           <span>Ctrl/⌘+Z Undo · Ctrl/⌘+Shift+Z Redo · Corner + arrow keys (Shift = 10×)</span>
           <span>+ / − Zoom · Backspace Remove last new corner · Ctrl/⌘+S Save draft</span>
         </div>
