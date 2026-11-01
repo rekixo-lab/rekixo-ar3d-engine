@@ -16,8 +16,21 @@ type GeoCoordinate = {
   altitudeM?: number;
 };
 
+type GeoPublicContacts={
+  projectNumber:string;ownerName:string;builderName:string;contactName:string;
+  address:string;phone:string;phoneSecondary:string;whatsapp:string;email:string;
+  websiteUrl:string;mapsUrl:string;
+};
+const safeContactDigits=(value:string)=>value.replace(/[^0-9]/g,"");
+const geoWhatsAppHref=(value:string)=>{
+  const digits=safeContactDigits(value);
+  // India local 10-digit numbers are accepted only when supplied as 10-digit mobile.
+  const number=digits.length===10&&/^[6-9]/.test(digits)?"91"+digits:digits;
+  return number.length>=11&&number.length<=15?"https://wa.me/"+number:"";
+};
 type GeoPayload = {
   project: { id: string; slug: string; name: string; location?: string };
+  publicContacts?:GeoPublicContacts;
   buildingRelease: {
     id: string;
     version: number;
@@ -929,6 +942,28 @@ export default function GeoPublicDemo() {
         </div>
       </header>
 
+      {data.publicContacts && <section className="jio-public-customer-contact" aria-label="Project contacts and location">
+        <div className="jio-public-contact-details">
+          {data.publicContacts.projectNumber&&<span>Project No. {data.publicContacts.projectNumber}</span>}
+          {data.publicContacts.builderName&&<span>Developer: {data.publicContacts.builderName}</span>}
+          {data.publicContacts.ownerName&&<span>Owner: {data.publicContacts.ownerName}</span>}
+          {data.publicContacts.contactName&&<span>Contact: {data.publicContacts.contactName}</span>}
+          {data.publicContacts.address&&<span>{data.publicContacts.address}</span>}
+        </div>
+        <nav aria-label="Contact project team" className="jio-public-contact-actions">
+          {data.publicContacts.phone&&<a href={"tel:"+data.publicContacts.phone.replace(/[^+0-9]/g,"")}
+            aria-label="Call project contact">Call</a>}
+          {geoWhatsAppHref(data.publicContacts.whatsapp||data.publicContacts.phone)&&
+            <a target="_blank" rel="noopener noreferrer"
+              href={geoWhatsAppHref(data.publicContacts.whatsapp||data.publicContacts.phone)}
+              aria-label="Contact project team on WhatsApp">WhatsApp</a>}
+          {data.publicContacts.mapsUrl&&<a target="_blank" rel="noopener noreferrer"
+            href={data.publicContacts.mapsUrl} aria-label="Open project in Google Maps">Directions</a>}
+          {data.publicContacts.websiteUrl&&<a target="_blank" rel="noopener noreferrer"
+            href={data.publicContacts.websiteUrl}>Website</a>}
+          {data.publicContacts.email&&<a href={"mailto:"+data.publicContacts.email}>Email</a>}
+        </nav>
+      </section>}
       <section className="jio-public-meta">
         <article>
           <span>GEO RELEASE</span>
