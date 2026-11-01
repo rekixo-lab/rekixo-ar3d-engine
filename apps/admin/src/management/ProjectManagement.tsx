@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import "./project-management.css";
 
 type Profile = {
+  projectNumber:string;ownerName:string;publicContactsEnabled:boolean;
   builderName:string;contactName:string;address:string;phonePrimary:string;phoneSecondary:string;
   whatsapp:string;email:string;websiteUrl:string;mapsUrl:string;brochureUrl:string;
 };
@@ -12,7 +13,9 @@ type ManagedState = {project:{id:string;name:string;slug:string;projectKind:stri
   profile:{revision:number;values:Profile};clients:ManagedClient[];clientLoginEnabled:boolean;
   invitation?:{clientId:string;role:string;expiresAt:number;inviteUrl:string}};
 type Tab = "profile"|"clients";
-const fields:Array<{key:keyof Profile;name:string;hint?:string}>= [
+const fields:Array<{key:Exclude<keyof Profile,"publicContactsEnabled">;name:string;hint?:string}>= [
+  {key:"projectNumber",name:"Project reference / registration number"},
+  {key:"ownerName",name:"Project Owner name"},
   {key:"builderName",name:"Developer / Builder name"},
   {key:"contactName",name:"Primary contact person"},
   {key:"address",name:"Project full address"},
@@ -77,12 +80,21 @@ export default function ProjectManagement({section}:{section:Tab}){
           <div className="engine-manage-grid">{fields.map(field=><label key={field.key}>{field.name}
             <input disabled={busy||state?.project.status==="archived"} value={profile[field.key]}
               maxLength={field.key==="address"?600:field.key.endsWith("Url")?1000:
+                field.key==="projectNumber"?80:field.key==="ownerName"?160:
                 field.key==="email"?254:field.key==="contactName"?160:
                 ["phonePrimary","phoneSecondary","whatsapp"].includes(field.key)?25:200}
               type={field.key==="email"?"email":field.key.endsWith("Url")?"url":
                 ["phonePrimary","phoneSecondary","whatsapp"].includes(field.key)?"tel":"text"}
               placeholder={field.hint||""}
               onChange={e=>setProfile(p=>p?{...p,[field.key]:e.target.value}:p)}/></label>)}</div>
+          <label className="engine-manage-public-contact-optin">
+            <input type="checkbox" checked={profile.publicContactsEnabled}
+              disabled={busy||state?.project.status==="archived"}
+              onChange={e=>setProfile(p=>p?{...p,publicContactsEnabled:e.target.checked}:p)}/>
+            Show approved Project Owner, Builder, address, Call, WhatsApp and Maps on the public Geo customer site
+          </label>
+          <p>OFF by default for privacy. Only the owner can enable it; private client directory,
+            commercial evidence and buyer/payment data are never made public.</p>
           <div className="engine-manage-actions"><span>Revision {state?.profile.revision||0} · Owner controlled</span>
             <button disabled={busy||state?.project.status==="archived"} type="submit">{busy?"Saving…":"Save Project Profile"}</button></div>
         </form>:<p>Loading contact details…</p>}

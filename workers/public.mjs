@@ -7,6 +7,7 @@ import {
 } from "./release-runtime.mjs";
 import { assertProjectAssetKey } from "./storage-boundary.mjs";
 import { publicGeoPlotMapping } from "./geo-plot-public.mjs";
+import { loadPublicGeoCustomerContacts } from "./public-geo-contacts.mjs";
 import { publicMasterplanResponse } from "./masterplan-geo-public.mjs";
 import { servePublicMasterplanShareCard } from "./masterplan-share-public.mjs";
 import { serveR2Object } from "./http-range.mjs";
@@ -384,10 +385,15 @@ async function publicGeo3DState(env, slug) {
   let plotMapping = null;
   try { plotMapping = await publicGeoPlotMapping(env, slug, experience.geoRelease.id); }
   catch (error) { console.error("Published Geo plot mapping unavailable", error); }
+  let publicContacts=null;
+  try{publicContacts=await loadPublicGeoCustomerContacts(env,slug);}
+  catch(error){console.error("Public Geo contact projection unavailable",error);}
+
   return {
     state: "ok",
     payload: {
       ...experience,
+      ...(publicContacts ? { publicContacts } : {}),
       ...(plotMapping ? { plotMapping, model: experience.canonicalModel || experience.model } : {}),
       maps: {
         apiKey: mapsApiKey || null,

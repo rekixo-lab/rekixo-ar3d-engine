@@ -42,7 +42,9 @@ test("Engine overview creates isolated projects through the existing cloud contr
   assert.match(dashboard, /const draft = newProject\(name\)/);
   assert.match(dashboard, /draft\.slug = projectSlug\(draft\)/);
   assert.match(dashboard, /await ensureProject\(draft, createKind\)/);
-  assert.match(dashboard, /window\.location\.assign\(projectHref\(newProjectStartPath\(createKind\), result\.project\.slug\)\)/);
+  assert.match(dashboard, /if\s*\(createKind==="building_geo"\)\s*window\.location\.assign\(/);
+  assert.match(dashboard, /`\/3Dprojects\/profile\?project=\$\{encodeURIComponent\(result\.project\.slug\)\}`/);
+  assert.match(dashboard, /projectHref\(newProjectStartPath\(createKind\), result\.project\.slug\)/);
   assert.doesNotMatch(dashboard, /DELETE FROM|DROP TABLE|geo_placements_3d/);
 });
 

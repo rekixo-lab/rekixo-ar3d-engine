@@ -138,7 +138,7 @@ const sectionMeta: Record<ShellSection, { eyebrow: string; title: string; help: 
   profile:{eyebrow:"PROJECT CONTACTS",title:"Project Profile",
     help:"Manage canonical developer, contact and location information."},
   clients:{eyebrow:"PROJECT ACCESS",title:"Clients",
-    help:"Manage project client directory and intended permissions without granting unfinished logins."},
+    help:"Owner-issued invitations, verified project-scoped sessions and revocable client permissions."},
   assets:{eyebrow:"SOURCE INVENTORY",title:"Project Assets",
     help:"Review original source files and download verified copies."},
   masterplan:{eyebrow:"IMAGE GEO AUTHORING",title:"Geo Masterplan",

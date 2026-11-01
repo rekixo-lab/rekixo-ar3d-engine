@@ -1,4 +1,6 @@
 import {useEffect,useMemo,useState} from "react";
+import GeoBulkPricingPanel,{type GeoPriceQuote} from "./GeoBulkPricingPanel";
+import GeoDealRecordsPanel from "./GeoDealRecordsPanel";
 type Review={plotId:string;status:"available"|"booked"|"sold";
   pricePaise:number|null;currency:"INR";evidenceRef:string;
   publicApproved:boolean;revision:number;updatedAt?:string};
@@ -34,6 +36,7 @@ export default function GeoPlotCommercialPanel({slug,mappingReleaseId,plotIds}:{
   const [price,setPrice]=useState("");
   const [evidenceRef,setEvidenceRef]=useState("");
   const [approved,setApproved]=useState(false);
+  const [priceQuotes,setPriceQuotes]=useState<GeoPriceQuote[]>([]);
   useEffect(()=>{
     let live=true;setSnapshot(null);setError("");
     void request<Snapshot>(url(slug)).then(data=>{
@@ -75,6 +78,7 @@ export default function GeoPlotCommercialPanel({slug,mappingReleaseId,plotIds}:{
     }catch(err){setError(err instanceof Error?err.message:String(err));}
     finally{setBusy(false);}
   };
+  const currentQuote=priceQuotes.find(q=>q.plotId.toLowerCase()===plotId.toLowerCase());
   const matched=Boolean(snapshot&&snapshot.mappingReleaseId===mappingReleaseId);
   return <details className="geo-plot-review-dashboard">
     <summary>Commercial Facts · Available / Booked / Sold / INR (owner approval)</summary>
@@ -103,6 +107,14 @@ export default function GeoPlotCommercialPanel({slug,mappingReleaseId,plotIds}:{
       <input inputMode="decimal" value={price} disabled={!matched||busy||!plotId}
         placeholder="e.g. 2500000.00 — leave blank if unverified"
         onChange={e=>setPrice(e.target.value)}/></label>
+    {matched&&currentQuote&&<p className="geo-plot-hint">Reviewed private CSV quote for Plot {plotId}:
+      {" "}₹{(currentQuote.pricePaise/100).toLocaleString("en-IN")}.
+      <button type="button" disabled={busy} onClick={()=>{
+        if(!window.confirm("Prefill listing price and source evidence from the PRIVATE pricing CSV? "+
+          "Existing status and public approval will NOT change until you explicitly save."))return;
+        setPrice(String(currentQuote.pricePaise/100));setEvidenceRef(currentQuote.evidenceRef);
+      }}>Use reviewed CSV price</button>
+    </p>}
     <label>Signed/source evidence reference
       <input value={evidenceRef} maxLength={250} disabled={!matched||busy||!plotId}
         placeholder="Approval memo / agreement or source register ID"
@@ -115,8 +127,14 @@ export default function GeoPlotCommercialPanel({slug,mappingReleaseId,plotIds}:{
       evidenceRef.trim().length<3} onClick={()=>void save()}>
       {busy?"Saving verified commercial record…":"Save Audited Commercial Record"}
     </button>
+    <GeoBulkPricingPanel endpoint={"/3Dprojects/api/cloud/projects/"+
+      encodeURIComponent(slug)+"/geo-plots/pricing"} mappingReleaseId={mappingReleaseId}
+      onQuotes={setPriceQuotes}/>
+    <GeoDealRecordsPanel endpoint={"/3Dprojects/api/cloud/projects/"+
+      encodeURIComponent(slug)+"/geo-plots/deals"} mappingReleaseId={mappingReleaseId}
+      plotIds={plotIds}/>
     <p className="geo-plot-hint">Releasing a new mapping version requires a fresh Plot ID
       and source review; old commercial records do not silently migrate.
-      Client directory contacts are not authenticated users.</p>
+      Only an explicitly invited project client with the proper role can review private pricing and commercial values.</p>
   </details>;
 }

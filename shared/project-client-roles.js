@@ -3,8 +3,8 @@ export const PROJECT_CLIENT_ROLES=Object.freeze(["viewer","editor","approver","c
 const grants={
   viewer:["project.read","commercial.read"],
   editor:["project.read","commercial.read","commercial.prepare"],
-  approver:["project.read","commercial.read","commercial.prepare","commercial.approve"],
-  client_admin:["project.read","commercial.read","commercial.prepare","commercial.approve"]
+  approver:["project.read","commercial.read","commercial.prepare","commercial.approve","deals.read"],
+  client_admin:["project.read","commercial.read","commercial.prepare","commercial.approve","deals.read","deals.write"]
 };
 export function canProjectClient(role,permission){
   return Object.hasOwn(grants,role)&&grants[role].includes(permission);

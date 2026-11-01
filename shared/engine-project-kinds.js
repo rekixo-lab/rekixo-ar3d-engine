@@ -6,7 +6,7 @@ export const ENGINE_PROJECT_KINDS = Object.freeze([
 export const PROJECT_KIND_LABELS = Object.freeze({
   legacy: "Existing Engine project",
   building: "3D Building Customer Website",
-  building_geo: "3D Building on Geo Map",
+  building_geo: "3D Geo Masterplan + Plot Mapping",
   masterplan_geo: "Geo Masterplan / Plot Mapping",
 });
 export function isEngineProjectKind(kind) {
@@ -19,22 +19,26 @@ export function newProjectStartPath(kind) {
   return kind === "masterplan_geo" ? "masterplan" : "source-pack";
 }
 export function projectModuleVisible(kind, module) {
+  // An explicit unrecognized type must never inherit legacy capabilities.
+  if (kind != null && kind !== "" && !isEngineProjectKind(kind)) return false;
   const k = selectedProjectKind(kind);
   const common = ["overview","profile","clients","assets","advanced"];
   if (common.includes(module)) return true;
   if (k === "legacy") return ["source","building","geo","geo-plots","releases","branding"].includes(module);
   if (k === "masterplan_geo") return ["masterplan","masterplan-plots","mapping-controls","sales","branding"].includes(module);
-  if (k === "building_geo") return ["source","building","geo","releases","branding"].includes(module);
+  if (k === "building_geo") return ["source","building","geo","geo-plots","releases","branding"].includes(module);
   return ["source","building","releases","branding"].includes(module);
 }
 
 // Hide-only navigation is not an authorization boundary. Gate direct Admin API
 // calls too, while leaving every existing legacy project route unchanged.
 export function projectKindAllowsCloudRoute(kind,route) {
+  // Missing pre-kind rows are legacy; malformed explicit kinds fail closed.
+  if (kind != null && kind !== "" && !isEngineProjectKind(kind)) return false;
   const k=selectedProjectKind(kind);
   if(k==="legacy")return true;
   const geoRoutes=["geo-draft","geo-releases","geo-placement","geo-plots"];
   if(k==="building")return !geoRoutes.includes(route);
-  if(k==="building_geo")return route!=="geo-plots";
+  if(k==="building_geo")return true;
   return !["draft","releases","experiences","branding",...geoRoutes].includes(route);
 }

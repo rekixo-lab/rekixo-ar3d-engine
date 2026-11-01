@@ -41,6 +41,10 @@ export default function EngineDashboard() {
   const [search, setSearch] = useState("");
   const [buildingReleases, setBuildingReleases] = useState<CloudReleaseSummary[]>([]);
   const [geoState, setGeoState] = useState<CloudGeoReleaseState>();
+  const [geoPlotState,setGeoPlotState] = useState<{
+    activeMapping?:{id:string;current:boolean}|null;
+    draft?:{plots?:Array<{id:string}>}|null;
+  }|null>(null);
   const [experienceItems, setExperienceItems] = useState<EngineExperienceSummary[]>([]);
   const [sourcePack, setSourcePack] = useState<SourcePackState["latestPack"]>(null);
   const [sourcePackError, setSourcePackError] = useState("");
@@ -83,6 +87,7 @@ export default function EngineDashboard() {
     if (!selectedSlug) {
       setBuildingReleases([]);
       setGeoState(undefined);
+      setGeoPlotState(null);
       setExperienceItems([]);
       setSourcePack(null);
       return;
@@ -92,6 +97,14 @@ export default function EngineDashboard() {
     setDetailLoading(true);
     setError("");
     setSourcePackError("");
+    setGeoPlotState(null);
+    const geoPlotRequest=fetch(
+      `${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(selectedSlug)}/geo-plots`,
+      {headers:{Accept:"application/json"},cache:"no-store"}
+    ).then(async res=>res.ok?await res.json() as {
+      activeMapping?:{id:string;current:boolean}|null;
+      draft?:{plots?:Array<{id:string}>}|null;
+    }:null).catch(()=>null);
     const sourcePackRequest = fetch(
       `${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(selectedSlug)}/source-pack-review`,
       { headers: { Accept: "application/json" }, cache: "no-store" },
@@ -119,12 +132,14 @@ export default function EngineDashboard() {
         releases: [],
       } as CloudGeoReleaseState)),
       sourcePackRequest,
+      geoPlotRequest,
     ])
-      .then(([building, experienceResult, geo, source]) => {
+      .then(([building, experienceResult, geo, source, plotState]) => {
         if (!live) return;
         setBuildingReleases(building.releases);
         setExperienceItems(experienceResult.experiences);
         setGeoState(geo);
+        setGeoPlotState(plotState);
         setSourcePack(source.latestPack || null);
       })
       .catch((reason) => {
@@ -217,13 +232,20 @@ export default function EngineDashboard() {
         action: "link" as const,
       };
     }
+    if(selectedProject.projectKind==="building_geo"&&!geoPlotState?.activeMapping?.current)
+      return {
+        label:"Map source-backed 3D plots",
+        help:"Geo is ready. Import authoritative Plot Data CSV, draw all verified 3D polygons, save, verify and publish mapping.",
+        href:`/3Dprojects/geo-plots?project=${encodeURIComponent(selectedProject.slug)}`,
+        action:"link" as const,
+      };
     return {
       label: "Everything is live",
       help: "Building aur Geo dono active immutable releases par hain.",
       href: projectHref("releases", selectedProject.slug),
       action: "link" as const,
     };
-  }, [selectedProject, sourceReady, activeBuilding, geoExperience, activeGeo, sourcePackError]);
+  }, [selectedProject, sourceReady, activeBuilding, geoExperience, activeGeo, geoPlotState, sourcePackError]);
 
   function selectProject(slug: string) {
     setSelectedSlug(slug);
@@ -245,7 +267,13 @@ export default function EngineDashboard() {
       draft.location = createLocation.trim();
       draft.slug = projectSlug(draft);
       const result = await ensureProject(draft, createKind);
-      window.location.assign(projectHref(newProjectStartPath(createKind), result.project.slug));
+      // New Building-backed Geo plot projects first collect the approved
+      // project number, owner, address and contact consent in Profile.
+      // Source/Building/Geo/Plots remain independent verifiable stages.
+      if(createKind==="building_geo")
+        window.location.assign(`/3Dprojects/profile?project=${encodeURIComponent(result.project.slug)}`);
+      else
+        window.location.assign(projectHref(newProjectStartPath(createKind), result.project.slug));
     } catch (reason) {
       setCreateError(reason instanceof Error ? reason.message : "Project create nahi ho saka.");
     } finally {
@@ -403,6 +431,17 @@ export default function EngineDashboard() {
                   <a href={projectHref("geo-mapper", selectedProject.slug)}>Open Geo</a>
                 </article>
 
+                {(selectedProject.projectKind==="building_geo"||selectedProject.projectKind==="legacy")&&
+                <article className="engine-control-card">
+                  <div className="engine-overview-card-head"><span>3D GEO PLOT MAPPING</span>
+                    <i className={statusTone(geoPlotState?.activeMapping?.current?"live":
+                      activeGeo?"warning":"idle")}>
+                      {geoPlotState?.activeMapping?.current?"PUBLISHED":activeGeo?"NEEDS MAPPING":"WAITING FOR GEO"}
+                    </i></div>
+                  <h3>{geoPlotState?.draft?.plots?.length||0} 3D plot boundaries drafted</h3>
+                  <p>Import verified CSV inventory, map each real 3D polygon, independently verify and publish.</p>
+                  <a href={`/3Dprojects/geo-plots?project=${encodeURIComponent(selectedProject.slug)}`}>Open Geo Plot Mapper</a>
+                </article>}
                 <article className="engine-control-card">
                   <div className="engine-overview-card-head">
                     <span>LATEST RELEASE</span>
@@ -422,7 +461,8 @@ export default function EngineDashboard() {
                 <div className="engine-overview-flow__steps">
                   <a href={projectHref("source-pack", selectedProject.slug)}><span>01</span><b>Source</b><small>Verify inputs</small></a>
                   <a href={projectHref("building", selectedProject.slug)}><span>02</span><b>Building</b><small>Build and publish</small></a>
-                  <a href={projectHref("geo-mapper", selectedProject.slug)}><span>03</span><b>Geo</b><small>Optional real-world placement</small></a>
+                  <a href={projectHref("geo-mapper", selectedProject.slug)}><span>03</span><b>Geo</b><small>Verified WGS84 placement</small></a>
+                  {(selectedProject.projectKind==="building_geo"||selectedProject.projectKind==="legacy")&&<a href={`/3Dprojects/geo-plots?project=${encodeURIComponent(selectedProject.slug)}`}><span>04</span><b>Geo Plot Mapper</b><small>CSV inventory → 3D polygons</small></a>}
                   <a href={projectHref("releases", selectedProject.slug)}><span>04</span><b>Release</b><small>Activate and go live</small></a>
                 </div>
               </section> : null}
@@ -450,7 +490,7 @@ export default function EngineDashboard() {
                     onChange={()=>setCreateKind(kind)} />
                   <span><b>{PROJECT_KIND_LABELS[kind]}</b>
                     <small>{kind==="building"?"Customer website, floors, units and walkthrough":
-                      kind==="building_geo"?"A separate 3D building anchored to real Geo coordinates":
+                      kind==="building_geo"?"Upload a complete 3D masterplan GLB, align it to Geo, then CSV-map every plot":
                       "An approved layout image with Geo calibration, polygons and plots"}</small>
                   </span>
                 </label>

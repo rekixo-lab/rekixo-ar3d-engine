@@ -11,6 +11,9 @@ import { stageSelectedGeoSourceRemap } from "../shared/geo-plot-source-remap.js"
 import { geometryWithRevokedApprovals } from "../shared/geo-plot-precision-history.js";
 import { projectGeoRecoveryManifest } from "./geo-plot-recovery.mjs";
 import { handleGeoPlotCommercial } from "./geo-plot-commercial.mjs";
+import { handleGeoPlotPricingSheet } from "./geo-plot-pricing.mjs";
+import { handleGeoPlotDeals } from "./geo-plot-deals.mjs";
+import { geoPlotMappingProjectKind } from "../shared/geo-plot-project-policy.js";
 
 const json = (value, init = {}) => Response.json(value, {headers: {"Cache-Control":"no-store"}, ...init});
 const fail = (message, status = 400) => json({error:message}, {status});
@@ -379,7 +382,7 @@ export function verifiedGeoPlotSourceResponse(ctx,experience) {
   });
 }
 export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.url)) {
-  const match=url.pathname.match(/^\/3Dprojects\/api\/cloud\/projects\/([^/]+)\/geo-plots(?:\/(source|inventory|alignment|commercial))?$/);
+  const match=url.pathname.match(/^\/3Dprojects\/api\/cloud\/projects\/([^/]+)\/geo-plots(?:\/(source|inventory|alignment|commercial|pricing|deals))?$/);
   if (!match) return null;
   const slug=decodeURIComponent(match[1]).toLowerCase();
   if (!validProjectSlug(slug)) return fail("Invalid project slug.");
@@ -388,8 +391,8 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
   try {
     const ctx=await context(env,slug);
     if (!ctx) return fail("Project not found.",404);
-    if ((ctx.project.project_kind||"legacy")!=="legacy")
-      return fail("The legacy Geo Plot Mapper is not enabled for this project type.",403);
+    if (!geoPlotMappingProjectKind(ctx.project.project_kind||"legacy"))
+      return fail("3D Geo Plot Mapper requires a Building-backed Geo project.",403);
     if (!ctx.active) return fail("Publish a verified Geo Experience before mapping plots.",409);
     if (match[2]==="source") {
       if(request.method!=="GET")return fail("Method not allowed.",405);
@@ -406,6 +409,14 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
     if(match[2]==="commercial"){
       if(request.method!=="GET"&&!sameOrigin(request))return fail("Same-origin request required.",403);
       return handleGeoPlotCommercial(request,env,ctx,access.actor);
+    }
+    if(match[2]==="pricing"){
+      if(request.method!=="GET"&&!sameOrigin(request))return fail("Same-origin request required.",403);
+      return handleGeoPlotPricingSheet(request,env,ctx,access.actor);
+    }
+    if(match[2]==="deals"){
+      if(request.method!=="GET"&&!sameOrigin(request))return fail("Same-origin request required.",403);
+      return handleGeoPlotDeals(request,env,ctx,access.actor);
     }
     if (request.method==="GET"){
       if(url.searchParams.get("preview")==="1")
