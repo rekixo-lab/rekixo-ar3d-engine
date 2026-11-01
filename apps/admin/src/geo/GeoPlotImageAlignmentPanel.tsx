@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useMemo,useState,type PointerEvent} from "react";
 import {downloadAsset,listAssets,type CloudAssetSummary} from "../studio/cloud";
-import {evaluateImageModelAlignment,modelPointToImage,
-  type ImageModelAlignmentDraft,type AlignmentPoint} from "../../../../shared/geo-plot-image-alignment.js";
+import {evaluateImageModelAlignment,modelPointToImage,imagePointToModel,
+  type ImageModelAlignmentDraft,type AlignmentPoint,type SimilarityTransform} from "../../../../shared/geo-plot-image-alignment.js";
 import "./geo-plot-image-alignment.css";
 
 type Point=[number,number];
@@ -9,7 +9,9 @@ type Snapshot={revision:number;verifiedRevision:number|null;stale:boolean;
   modelSha256:string;draft:ImageModelAlignmentDraft|null};
 type Props={slug:string;geoReleaseId:string|null;buildingReleaseId:string|null;
   plots:Array<{id:string;corners:Point[]}>;onCapture:(done:(point:Point)=>void)=>void;
-  onRevisionChange:(revision:number)=>void};
+  onRevisionChange:(revision:number)=>void;editable:boolean;
+  onStageImageCorner:(id:string,index:number,uv:Point,transform:SimilarityTransform,
+    alignmentRevision:number)=>{ok:boolean;reason?:string}};
 const url=(slug:string)=>"/3Dprojects/api/cloud/projects/"+encodeURIComponent(slug)+"/geo-plots/alignment";
 async function api<T>(path:string,init?:RequestInit):Promise<T>{
   const r=await fetch(path,{cache:"no-store",...init,headers:{
@@ -31,7 +33,8 @@ function exportReview(slug:string,snapshot:Snapshot,draft:ImageModelAlignmentDra
   window.setTimeout(()=>URL.revokeObjectURL(address),2000);
 }
 export default function GeoPlotImageAlignmentPanel({
-  slug,geoReleaseId,buildingReleaseId,plots,onCapture,onRevisionChange
+  slug,geoReleaseId,buildingReleaseId,plots,onCapture,onRevisionChange,
+  onStageImageCorner,editable
 }:Props){
   const [snapshot,setSnapshot]=useState<Snapshot|null>(null);
   const [draft,setDraft]=useState<ImageModelAlignmentDraft|null>(null);
@@ -46,6 +49,11 @@ export default function GeoPlotImageAlignmentPanel({
   const [error,setError]=useState("");
   const [showOverlay,setShowOverlay]=useState(true);
   const [open,setOpen]=useState(false);
+  const [imageEditMode,setImageEditMode]=useState(false);
+  const [expanded,setExpanded]=useState(false);
+  const [imagePlotId,setImagePlotId]=useState("");
+  const [imageCornerIndex,setImageCornerIndex]=useState(0);
+  const [pendingEdit,setPendingEdit]=useState<Point|null>(null);
   const sources=useMemo(()=>assets.filter(a=>a.kind==="reference"&&
     ["image/jpeg","image/png","image/webp"].includes(a.mimeType)),[assets]);
   const selected=useMemo(()=>sources.find(a=>a.id===draft?.imageAssetId),[sources,draft?.imageAssetId]);
@@ -54,7 +62,8 @@ export default function GeoPlotImageAlignmentPanel({
       api<Snapshot>(url(slug)),listAssets(slug)
     ]);
     setSnapshot(state);setDraft(state.draft);setAssets(assetList.assets);
-    setDirty(false);setPending(null);setMessage("");setError("");
+    setDirty(false);setPending(null);setPendingEdit(null);setImageEditMode(false);
+    setExpanded(false);setMessage("");setError("");
   },[slug]);
   useEffect(()=>{
     let valid=true;
@@ -89,6 +98,12 @@ export default function GeoPlotImageAlignmentPanel({
   const stale=Boolean(snapshot?.stale||draft&&(
     draft.geoReleaseId!==geoReleaseId||draft.buildingReleaseId!==buildingReleaseId||
     draft.modelSha256!==snapshot?.modelSha256));
+  const canStageImage=Boolean(isVerified&&!stale&&editable&&actualImage&&imageUrl&&
+    assessed.result?.verifiedReady&&plots.length);
+  const imagePlot=plots.find(p=>p.id===imagePlotId)||null;
+  const newModelCorner=useMemo(()=>pendingEdit&&assessed.result?
+    imagePointToModel(assessed.result.transform,pendingEdit):null,
+    [pendingEdit,assessed.result]);
   const reload=async()=>{
     if(dirty&&!window.confirm("Discard unapplied image alignment point edits and reload saved revision?"))return;
     setBusy("reload");try{await load();}catch(err){setError(String(err));}
@@ -125,7 +140,18 @@ export default function GeoPlotImageAlignmentPanel({
     if(!rect.width||!rect.height)return;
     const u=(ev.clientX-rect.left)/rect.width,v=(ev.clientY-rect.top)/rect.height;
     if(u<0||u>1||v<0||v>1)return;
-    setPending([Number(u.toFixed(7)),Number(v.toFixed(7))]);
+    const pixel:Point=[Number(u.toFixed(7)),Number(v.toFixed(7))];
+    if(imageEditMode){if(canStageImage)setPendingEdit(pixel);}
+    else setPending(pixel);
+  };
+  const stageImageCorner=()=>{
+    if(!canStageImage||!imagePlot||!pendingEdit||!snapshot||!assessed.result||
+       imageCornerIndex<0||imageCornerIndex>=imagePlot.corners.length)return;
+    const result=onStageImageCorner(imagePlot.id,imageCornerIndex,pendingEdit,
+      assessed.result.transform,snapshot.revision);
+    if(!result.ok){setError(result.reason||"Image corner edit was not staged.");return;}
+    setPendingEdit(null);setError("");
+    setMessage("Unverified image corner correction staged in the SAME canonical 3D draft. Recheck in 3D, Save, Verify and explicitly Publish.");
   };
   const capture=(kind:"anchors"|"checkpoints")=>{
     if(!draft||!pending||!evidence.trim())return;
@@ -186,7 +212,8 @@ export default function GeoPlotImageAlignmentPanel({
       modelPointToImage(assessed.result!.transform,point))}));
   },[plots,assessed.result,showOverlay,isVerified]);
   const canEdit=Boolean(geoReleaseId&&buildingReleaseId&&snapshot);
-  return <details className="geo-align-panel" open={open} onToggle={event=>setOpen(event.currentTarget.open)}>
+  return <details className={"geo-align-panel"+(expanded?" geo-align-panel--expanded":"")}
+    open={open} onToggle={event=>setOpen(event.currentTarget.open)}>
     <summary>02 · Original image ↔ verified 3D alignment
       <small> · {isVerified?"independent QA passed":snapshot?.draft?"needs review":"not set"}</small>
     </summary>
@@ -216,6 +243,46 @@ export default function GeoPlotImageAlignmentPanel({
       {!sources.length&&<p className="geo-plot-hint">First archive the original masterplan PNG/JPG/WebP in the Plot Inventory section, then Reload Sources.</p>}
       {selected&&<p className="geo-align-checksum">Image SHA-256: {selected.sha256.slice(0,20)}…
         Model SHA-256: {snapshot?.modelSha256.slice(0,20)}…</p>}
+      {draft&&<div className="geo-align-edit-controls">
+        <strong>Image / 3D Unified Plot Corner Editor</strong>
+        <p className="geo-plot-hint">Only independently verified original image alignment may reposition a mapped Plot ID.
+          Canonical coordinates always remain Building-local X/Z. Each edited corner will revoke area,
+          side, road/front, north and plane approvals, and nothing publishes automatically.</p>
+        <div className="geo-align-actions">
+          <button type="button" disabled={!imageEditMode&&!canStageImage}
+            onClick={()=>{
+              if(imageEditMode){setImageEditMode(false);setExpanded(false);setPendingEdit(null);return;}
+              if(!window.confirm("Open original-image mapping mode? Only independently verified image sources are allowed. Edited geometry will remain unpublished and unverified."))return;
+              setImageEditMode(true);setShowOverlay(true);setExpanded(true);setPendingEdit(null);
+              setImagePlotId(plots[0]?.id||"");setImageCornerIndex(0);setPending(null);
+            }}>{imageEditMode?"Exit Image Plot Editor":"Edit Existing Plot Corners on Verified Image"}</button>
+          {imageEditMode&&<button type="button" onClick={()=>setExpanded(s=>!s)}>
+            {expanded?"Compact Image Workspace":"Expand Image Workspace"}</button>}
+        </div>
+        {imageEditMode&&<>
+          <div className="geo-align-edit-selectors">
+            <label>Canonical mapped Plot ID
+              <select value={imagePlotId} disabled={!canStageImage}
+                onChange={e=>{setImagePlotId(e.target.value);setImageCornerIndex(0);setPendingEdit(null);}}>
+                {plots.map(p=><option key={p.id} value={p.id}>Plot {p.id}</option>)}
+              </select>
+            </label>
+            <label>Corner to reposition on original image
+              <select value={imageCornerIndex} disabled={!canStageImage||!imagePlot}
+                onChange={e=>{setImageCornerIndex(Number(e.target.value));setPendingEdit(null);}}>
+                {imagePlot?.corners.map((_,i)=><option key={i} value={i}>Corner {i+1}</option>)}
+              </select>
+            </label>
+          </div>
+          <p className="geo-plot-hint">Click the new source-image position for the chosen corner.
+            Gold ring = selected original corner; red ring = proposed location. You must confirm staging.</p>
+          {pendingEdit&&newModelCorner&&<p>Proposed U {pendingEdit[0].toFixed(6)},
+            V {pendingEdit[1].toFixed(6)} → model X {newModelCorner[0].toFixed(4)} m,
+            Z {newModelCorner[1].toFixed(4)} m</p>}
+          <button type="button" disabled={!canStageImage||!imagePlot||!pendingEdit||!!busy}
+            onClick={stageImageCorner}>Stage Image Corner to Unverified 3D Draft</button>
+        </>}
+      </div>}
       {draft&&<div className="geo-align-image">
         {imageUrl?<div className="geo-align-image-stage">
           <img src={imageUrl} alt="Checksum-verified original masterplan source used for image to model alignment"
@@ -226,12 +293,21 @@ export default function GeoPlotImageAlignmentPanel({
               }else setActualImage({width,height});
             }}/>
           <svg viewBox="0 0 1 1" preserveAspectRatio="none"
-            aria-label="Select a checkpoint on the original masterplan image"
+            aria-label={imageEditMode?"Select new plot corner on approved masterplan image":"Select a checkpoint on the original masterplan image"}
             onPointerDown={markImage}>
             {projected.map(p=><polygon key={p.id}
               points={p.uv.map(q=>q.join(",")).join(" ")}
               stroke="#31e0ad" fill="rgba(49,224,173,.15)" strokeWidth=".002"
               pointerEvents="none"/>)}
+            {imageEditMode&&projected.filter(p=>p.id===imagePlotId)
+              .flatMap(p=>p.uv.map((uv,index)=>({uv,index})))
+              .map(({uv,index})=><circle key={"image-corner-"+index} cx={uv[0]} cy={uv[1]}
+                r={index===imageCornerIndex?".011":".006"}
+                stroke={index===imageCornerIndex?"#ffda67":"#eeffff"}
+                strokeWidth=".003" fill="none" pointerEvents="none"/>)}
+            {pendingEdit&&imageEditMode&&<circle cx={pendingEdit[0]} cy={pendingEdit[1]}
+              r=".012" fill="none" stroke="#ff5973" strokeWidth=".004"
+              pointerEvents="none"/>}
             {draft.anchors.map(p=><circle key={p.id} cx={p.u} cy={p.v} r=".008"
               fill="#ffce6d" stroke="#172638" strokeWidth=".002" pointerEvents="none"/>)}
             {draft.checkpoints.map(p=><circle key={p.id} cx={p.u} cy={p.v} r=".008"
@@ -249,20 +325,20 @@ export default function GeoPlotImageAlignmentPanel({
               stroke="#ffffff" strokeWidth=".003" fill="none" pointerEvents="none"/>}
           </svg>
         </div>:<p className="geo-plot-hint">Loading and verifying original image bytes…</p>}
-        <p className="geo-plot-hint">Click a precise landmark on the image. Then capture its matching location on the 3D canvas.
-          Use at least 3 distributed fit anchors and 2 different withheld survey checkpoints.</p>
+        {!imageEditMode&&<p className="geo-plot-hint">Click a precise landmark on the image. Then capture its matching location on the 3D canvas.
+          Use at least 3 distributed fit anchors and 2 different withheld survey checkpoints.</p>}
         {actualImage&&<small>Original resolution {actualImage.width} × {actualImage.height} pixels · aspect-correct 3D fit</small>}
         {dimensionMismatch&&<p className="geo-plot-warning">Original image dimensions differ from the saved draft. Save and reverify this corrected image aspect before any overlay.</p>}
-        {pending&&<strong>Image point U {pending[0].toFixed(5)} · V {pending[1].toFixed(5)}</strong>}
-        <label>Signed drawing / survey evidence for new pair
+        {!imageEditMode&&pending&&<strong>Image point U {pending[0].toFixed(5)} · V {pending[1].toFixed(5)}</strong>}
+        {!imageEditMode&&<label>Signed drawing / survey evidence for new pair
           <input value={evidence} maxLength={160} placeholder="Approved plan, page and surveyed landmark"
-            onChange={e=>setEvidence(e.target.value)}/></label>
-        <div className="geo-align-actions">
+            onChange={e=>setEvidence(e.target.value)}/></label>}
+        {!imageEditMode&&<div className="geo-align-actions">
           <button type="button" disabled={!canEdit||stale||!!busy||!pending||!evidence.trim()||draft.anchors.length>=48}
             onClick={()=>capture("anchors")}>Pair Fit Point on 3D Canvas</button>
           <button type="button" disabled={!canEdit||stale||!!busy||!pending||!evidence.trim()||draft.checkpoints.length>=48}
             onClick={()=>capture("checkpoints")}>Pair Independent Checkpoint</button>
-        </div>
+        </div>}
       </div>}
       {draft&&<div className="geo-align-points">
         {(["anchors","checkpoints"] as const).map(kind=><div key={kind}>
