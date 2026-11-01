@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useState} from "react";
 import GeoBulkPricingPanel,{type GeoPriceQuote} from "./GeoBulkPricingPanel";
+import GeoDealRecordsPanel from "./GeoDealRecordsPanel";
 type Review={plotId:string;status:"available"|"booked"|"sold";
   pricePaise:number|null;currency:"INR";evidenceRef:string;
   publicApproved:boolean;revision:number;updatedAt?:string};
@@ -129,6 +130,9 @@ export default function GeoPlotCommercialPanel({slug,mappingReleaseId,plotIds}:{
     <GeoBulkPricingPanel endpoint={"/3Dprojects/api/cloud/projects/"+
       encodeURIComponent(slug)+"/geo-plots/pricing"} mappingReleaseId={mappingReleaseId}
       onQuotes={setPriceQuotes}/>
+    <GeoDealRecordsPanel endpoint={"/3Dprojects/api/cloud/projects/"+
+      encodeURIComponent(slug)+"/geo-plots/deals"} mappingReleaseId={mappingReleaseId}
+      plotIds={plotIds}/>
     <p className="geo-plot-hint">Releasing a new mapping version requires a fresh Plot ID
       and source review; old commercial records do not silently migrate.
       Only an explicitly invited project client with the proper role can review private pricing and commercial values.</p>
