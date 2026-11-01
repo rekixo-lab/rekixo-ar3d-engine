@@ -785,7 +785,7 @@ export default function GeoPlotMapper(){
   };
   const importCsv=async(file:File)=>{
     if(file.size>2_000_000)throw Error("Measurement CSV exceeds the 2 MB safety limit.");
-    const raw=(await file.text()).replace(/^\\uFEFF/,"");
+    const raw=(await file.text()).replace(/^\uFEFF/,"");
     const rows=parseRows(raw);
     if(activeProjectRef.current!==slug)throw Error("Project changed during CSV import; no data staged.");
     if(rows.length<2||rows.length>2501)throw Error("CSV requires 1–2500 measurement rows.");
