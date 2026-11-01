@@ -70,7 +70,10 @@ test("engine-only isolation, read-back, immutable publish and public release bin
   assert.match(pub,/digest\(row\.plots_json\)!==row\.sha256/);
   assert.match(entry,/handleGeoPlotMappingAdmin/);
   assert.match(viewer,/geoPlotWorldPath/);
-  assert.match(viewer,/setSelectedPlot\(plot\)/);
+  assert.match(viewer,/pickModelGeoPlot\(/);
+  assert.match(viewer,/setSelectedPlot\(plotIds\.get\(id\)\|\|null\)/);
+  assert.match(viewer,/placement\.anchorOffset\.add\(plotLayer\.group\)/);
+  assert.doesNotMatch(viewer,/new google\.maps\.Polygon\(/);
   assert.match(editor,/modelFromVerifiedSource/);
   assert.doesNotMatch(api,/rekixo-ar3d-platform/);
 });

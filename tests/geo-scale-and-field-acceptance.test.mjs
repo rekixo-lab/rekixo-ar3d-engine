@@ -85,10 +85,13 @@ test("Ten-plot field acceptance requires independent source references and rejec
  incorrect.samples[0].signedSourceRef="";
  assert.throws(()=>reviewGeoSiteSurvey(incorrect),/signed survey/);
 });
-test("Public viewer lazily creates only the polygons visible on the latest map idle event",()=>{
+test("Public GLB polygons preserve all small sites and cull large sites on map idle",()=>{
  const text=readFileSync(new URL("../apps/public/src/geo/GeoPublicDemo.tsx",import.meta.url),"utf8");
  assert.match(text,/visibleGeoPlotPaths\(preparedPaths,currentViewport\(\)\)/);
  assert.match(text,/map.addListener\("idle"/);
- assert.match(text,/listener.remove\(\)/);
+ assert.match(text,/mapClick\?\.remove\(\)/);
+ assert.match(text,/plotLayer\?\.dispose\(\)/);
+ assert.match(text,/preparedPaths.length<=160\?preparedPaths/);
+ assert.doesNotMatch(text,/new google\.maps\.Polygon\(/);
  assert.match(text,/plotRefreshRef.current\?\.\(showPlotBoundaries\)/);
 });

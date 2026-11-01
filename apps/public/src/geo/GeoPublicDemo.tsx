@@ -6,6 +6,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { Viewer3D } from "../viewer/Viewer3D";
 import { applyRigidBuildingPlacement } from "./geoRigidTransform";
+import { buildModelGeoPlotLayer,pickModelGeoPlot,type ModelPlotLayer } from "./geoPlotModelOverlay";
 import { loadPublicBranding, type PublicProjectBranding } from "../branding";
 import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shared/geo-plot-viewport.js";
 import "./geo-public-demo.css";
@@ -103,7 +104,7 @@ type GeoCameraView = "overview" | "front" | "corner" | "entry" | "aerial";
 type MapsListener = { remove(): void };
 type MapCapabilities = { isWebGLOverlayViewAvailable?: boolean };
 type GoogleMap = {
-  addListener(name: string, listener: () => void): MapsListener;
+  addListener(name: string, listener: (event?: {domEvent?:Event}) => void): MapsListener;
   setCenter(position: { lat: number; lng: number }): void;
   setZoom(zoom: number): void;
   moveCamera?(options: Record<string, unknown>): void;
@@ -145,10 +146,8 @@ type GoogleWebGLOverlay = {
   requestRedraw(): void;
 };
 
-type GooglePlotPolygon = {setMap(map:GoogleMap|null):void;setVisible(value:boolean):void;addListener(event:string,fn:()=>void):MapsListener};
 type GoogleRoot = {
   maps: {
-    Polygon?: new (options:Record<string,unknown>)=>GooglePlotPolygon;
     Map: new (node: HTMLElement, options: Record<string, unknown>) => GoogleMap;
     MaxZoomService?: new () => GoogleMaxZoomService;
     WebGLOverlayView?: new () => GoogleWebGLOverlay;
@@ -445,11 +444,9 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
   const [showPlotBoundaries, setShowPlotBoundaries] = useState(true);
   const showPlotsRef=useRef(showPlotBoundaries);
   showPlotsRef.current=showPlotBoundaries;
-  const plotPolygonsRef = useRef<GooglePlotPolygon[]>([]);
   const plotRefreshRef=useRef<((visible:boolean)=>void)|null>(null);
   useEffect(() => {
     plotRefreshRef.current?.(showPlotBoundaries);
-    for(const polygon of plotPolygonsRef.current)polygon.setVisible(showPlotBoundaries);
     if(!showPlotBoundaries)setSelectedPlot(null);
   },[showPlotBoundaries]);
   const [cameraView, setCameraView] = useState<GeoCameraView>("overview");
@@ -464,7 +461,10 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
     let mapIdle: MapsListener | undefined;
     let mapTypeChanged: MapsListener | undefined;
     let mapZoomChanged: MapsListener | undefined;
-    const handles=new Map<string,{polygon:GooglePlotPolygon;listener:MapsListener}>();
+    let mapClick: MapsListener | undefined;
+    let plotLayer:ModelPlotLayer|null=null;
+    let latestProjection:THREE.Matrix4|null=null;
+    const plotIds=new Map((data.plotMapping?.plots||[]).map(plot=>[plot.id,plot]));
     let preparedPaths:Array<{plot:GeoMappedPlot;path:Array<{lat:number;lng:number}>;bounds:GeoBounds}>=[];
     let refreshPlotPolygons:((visible:boolean)=>void)|null=null;
     let renderer: THREE.WebGLRenderer | undefined;
@@ -519,8 +519,9 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           clickableIcons: false,
         });
 
-        // Plot overlays are lazy: do not create thousands of Google Polygon
-        // objects for plots outside the current viewport on large sites.
+        // Canonical GLB-attached plot geometry is rendered by the SAME WebGL
+        // camera as the masterplan. The lat/lng paths below are for viewport
+        // culling only — Google terrain polygons must never be drawn.
         const currentViewport=():GeoBounds|null=>{
           const bounds=map.getBounds?.();
           if(!bounds)return null; // map API not yet ready / older runtime
@@ -528,26 +529,36 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           return {north:ne.lat(),east:ne.lng(),south:sw.lat(),west:sw.lng()};
         };
         refreshPlotPolygons=(enabled)=>{
-          if(cancelled||!google.maps.Polygon)return;
-          const desired=enabled?visibleGeoPlotPaths(preparedPaths,currentViewport()):[];
-          const visible=new Set(desired.map(p=>p.plot.id));
-          for(const [id,handle] of handles){
-            if(!visible.has(id)){
-              handle.listener.remove();handle.polygon.setMap(null);handles.delete(id);
-            }
-          }
-          for(const item of desired){
-            if(handles.has(item.plot.id))continue;
-            const polygon=new google.maps.Polygon({map,paths:item.path,
-              strokeColor:"#20d8a5",strokeWeight:2,strokeOpacity:.96,
-              fillColor:"#1dd5a2",fillOpacity:.13,clickable:true,zIndex:70});
-            const plot=item.plot;
-            const listener=polygon.addListener("click",()=>setSelectedPlot(plot));
-            handles.set(item.plot.id,{polygon,listener});
-          }
-          plotPolygonsRef.current=[...handles.values()].map(x=>x.polygon);
+          if(cancelled||!plotLayer)return;
+          // A small estate should never lose an edge merely because Google
+          // reports 2D ground bounds during a steep camera pitch.
+          // Large projects keep conservative viewport culling for performance.
+          const visible=new Set((enabled?
+            (preparedPaths.length<=160?preparedPaths:
+              visibleGeoPlotPaths(preparedPaths,currentViewport())):[]).map(p=>p.plot.id));
+          plotLayer.group.visible=enabled;
+          for(const [id,group] of plotLayer.groupsById)group.visible=visible.has(id);
+          overlay?.requestRedraw();
         };
         plotRefreshRef.current=visible=>refreshPlotPolygons?.(visible);
+        // Google map supplies client coordinates; raycast against the exact
+        // GLB-local THREE meshes using the WebGL frame projection. This
+        // preserves click accuracy at every tilt, unlike terrain-clamped
+        // Google Polygon hit targets.
+        mapClick=map.addListener("click",event=>{
+          if(cancelled||!plotLayer||!latestProjection||!showPlotsRef.current||
+            !hostRef.current)return;
+          const original=event?.domEvent;
+          let x:number|undefined,y:number|undefined;
+          if(original instanceof MouseEvent){x=original.clientX;y=original.clientY;}
+          else if(typeof TouchEvent!=="undefined"&&original instanceof TouchEvent){
+            const touch=original.changedTouches[0];if(touch){x=touch.clientX;y=touch.clientY;}
+          }
+          if(x===undefined||y===undefined)return;
+          const id=pickModelGeoPlot(x,y,hostRef.current.getBoundingClientRect(),
+            latestProjection,plotLayer.hitMeshes);
+          if(id)setSelectedPlot(plotIds.get(id)||null);
+        });
 
         const scene = new THREE.Scene();
         const camera = new THREE.Camera();
@@ -597,6 +608,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
             altitude: mapAltitude(data),
           });
           camera.projectionMatrix.fromArray(projection);
+          latestProjection=camera.projectionMatrix.clone();
           gl.disable(gl.SCISSOR_TEST);
           renderer.render(scene, camera);
           renderer.resetState();
@@ -642,7 +654,13 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
             loadedModel = model;
             // Measure canonical model-local ground BEFORE Geo placement converts its axes.
             const modelGroundY = new THREE.Box3().setFromObject(model).min.y;
-            applyRigidBuildingPlacement(
+            // Sample GLB surface elevations while its coordinates are still
+            // canonical model-local. After placement its world matrix is ENU;
+            // mixing those coordinates with saved X/Z plot points would drift.
+            const candidateLayer=data.plotMapping?.geoReleaseId===data.geoRelease.id &&
+              data.plotMapping.plots.length>0
+              ?buildModelGeoPlotLayer(model,data.plotMapping.plots):null;
+            const placement=applyRigidBuildingPlacement(
               modelRoot,
               model,
               data.modelAnchor.localPositionM,
@@ -656,13 +674,17 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
                 scale: data.placement.scale,
               },
             );
-            if (data.plotMapping?.geoReleaseId===data.geoRelease.id && google.maps.Polygon) {
-              preparedPaths=data.plotMapping.plots.map(plot=>{
+            if(candidateLayer){
+              // Same original X/Z frame as the model; placement is shared.
+              plotLayer=candidateLayer;
+              placement.anchorOffset.add(plotLayer.group);
+              preparedPaths=(data.plotMapping?.plots||[]).map(plot=>{
                 const path=geoPlotWorldPath(plot,data,
                   Number.isFinite(plot.planeY)?plot.planeY!:modelGroundY);
                 return {plot,path,bounds:geoPathBounds(path)};
               });
               refreshPlotPolygons?.(showPlotsRef.current);
+              overlay?.requestRedraw();
             }
             model.traverse((node) => {
               if (!(node instanceof THREE.Mesh)) return;
@@ -765,12 +787,10 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
       cameraActionRef.current = null;
       zoomActionRef.current = null;
       mapZoomChanged?.remove();
-      for(const entry of handles.values()){
-        entry.listener.remove();entry.polygon.setMap(null);
-      }
-      handles.clear();preparedPaths=[];
+      mapClick?.remove();
+      plotLayer?.dispose();
+      plotLayer=null;latestProjection=null;preparedPaths=[];
       plotRefreshRef.current=null;
-      plotPolygonsRef.current=[];
       mapIdle?.remove();
       mapTypeChanged?.remove();
       overlay?.setMap(null);
