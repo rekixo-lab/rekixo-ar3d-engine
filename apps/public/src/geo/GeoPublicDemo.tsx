@@ -22,6 +22,11 @@ type GeoPublicContacts={
   websiteUrl:string;mapsUrl:string;
 };
 const safeContactDigits=(value:string)=>value.replace(/[^0-9]/g,"");
+const geoPublicMapHref=(contacts:GeoPublicContacts)=>{
+  if(contacts.mapsUrl)return contacts.mapsUrl;
+  return contacts.address?"https://www.google.com/maps/search/?api=1&query="+
+    encodeURIComponent(contacts.address):"";
+};
 const geoWhatsAppHref=(value:string)=>{
   const digits=safeContactDigits(value);
   // India local 10-digit numbers are accepted only when supplied as 10-digit mobile.
@@ -957,8 +962,11 @@ export default function GeoPublicDemo() {
             <a target="_blank" rel="noopener noreferrer"
               href={geoWhatsAppHref(data.publicContacts.whatsapp||data.publicContacts.phone)}
               aria-label="Contact project team on WhatsApp">WhatsApp</a>}
-          {data.publicContacts.mapsUrl&&<a target="_blank" rel="noopener noreferrer"
-            href={data.publicContacts.mapsUrl} aria-label="Open project in Google Maps">Directions</a>}
+          {geoPublicMapHref(data.publicContacts)&&<a target="_blank" rel="noopener noreferrer"
+            href={geoPublicMapHref(data.publicContacts)} aria-label="Open project in Google Maps">
+            {data.publicContacts.mapsUrl?"Directions":"Find on Maps"}</a>}
+          {data.publicContacts.phoneSecondary&&<a href={"tel:"+data.publicContacts.phoneSecondary.replace(/[^+0-9]/g,"")}
+            aria-label="Call secondary project contact">Call 2</a>
           {data.publicContacts.websiteUrl&&<a target="_blank" rel="noopener noreferrer"
             href={data.publicContacts.websiteUrl}>Website</a>}
           {data.publicContacts.email&&<a href={"mailto:"+data.publicContacts.email}>Email</a>}
