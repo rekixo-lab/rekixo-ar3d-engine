@@ -241,3 +241,15 @@
   line-height:1.4;text-align:center;border-color:#5cbda3}
 .geo-plot-source-review select{max-width:100%}
 .geo-plot-editor-shell:fullscreen .geo-plot-source-review{flex-shrink:0}
+
+/* Precision editing remains scoped to the unpublished working plot. */
+.geo-plot-corner-nudge{display:grid;gap:8px;margin:12px 0;padding:11px;
+  border:1px solid #527783;border-radius:9px;background:#102b38;color:#dff8ff}
+.geo-plot-corner-nudge>strong{font-size:12px}
+.geo-plot-nudge-settings{display:grid;grid-template-columns:minmax(0,1fr) minmax(105px,0.55fr);gap:8px}
+.geo-plot-nudge-settings label{min-width:0;margin:0}
+.geo-plot-nudge-settings select{width:100%}
+.geo-plot-nudge-buttons{display:flex;gap:6px;flex-wrap:wrap}
+.geo-plot-nudge-buttons button{flex:1;min-width:54px}
+.geo-plot-corner-nudge small{color:#bdd8e0;line-height:1.4}
+@media (max-width:390px){.geo-plot-nudge-settings{grid-template-columns:1fr}}
