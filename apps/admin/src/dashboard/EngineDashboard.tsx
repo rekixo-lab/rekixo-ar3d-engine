@@ -422,7 +422,8 @@ export default function EngineDashboard() {
                 <div className="engine-overview-flow__steps">
                   <a href={projectHref("source-pack", selectedProject.slug)}><span>01</span><b>Source</b><small>Verify inputs</small></a>
                   <a href={projectHref("building", selectedProject.slug)}><span>02</span><b>Building</b><small>Build and publish</small></a>
-                  <a href={projectHref("geo-mapper", selectedProject.slug)}><span>03</span><b>Geo</b><small>Optional real-world placement</small></a>
+                  <a href={projectHref("geo-mapper", selectedProject.slug)}><span>03</span><b>Geo</b><small>Verified WGS84 placement</small></a>
+                  {(selectedProject.projectKind==="building_geo"||selectedProject.projectKind==="legacy")&&<a href={`/3Dprojects/geo-plots?project=${encodeURIComponent(selectedProject.slug)}`}><span>04</span><b>Geo Plot Mapper</b><small>CSV inventory → 3D polygons</small></a>}
                   <a href={projectHref("releases", selectedProject.slug)}><span>04</span><b>Release</b><small>Activate and go live</small></a>
                 </div>
               </section> : null}
@@ -450,7 +451,7 @@ export default function EngineDashboard() {
                     onChange={()=>setCreateKind(kind)} />
                   <span><b>{PROJECT_KIND_LABELS[kind]}</b>
                     <small>{kind==="building"?"Customer website, floors, units and walkthrough":
-                      kind==="building_geo"?"A separate 3D building anchored to real Geo coordinates":
+                      kind==="building_geo"?"Upload a complete 3D masterplan GLB, align it to Geo, then CSV-map every plot":
                       "An approved layout image with Geo calibration, polygons and plots"}</small>
                   </span>
                 </label>
