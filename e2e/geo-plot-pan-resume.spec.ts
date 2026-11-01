@@ -54,7 +54,9 @@ for(const {shape,cornerCount,toolKey,toolLabel} of [
     page.once("dialog",dialog=>dialog.accept());
     await page.getByRole("button",{name:"Restore unfinished plot"}).click();
     const overlay=page.locator(".geo-plot-overlay");
-    await expect(overlay).toHaveAttribute("data-tool-mode","draw");
+    // Recovery opens a >=3-corner outline in conservative Edit mode. Pan
+    // must still offer Resume to extend an unfinished irregular boundary.
+    await expect(overlay).toHaveAttribute("data-tool-mode",shape==="irregular"?"edit":"draw");
     const status=page.locator(".geo-plot-scene-status");
     const countText=shape==="four"?cornerCount+"/4":cornerCount+" (irregular)";
     await expect(status).toContainText(countText);
