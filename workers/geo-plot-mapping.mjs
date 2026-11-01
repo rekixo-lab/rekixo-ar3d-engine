@@ -10,6 +10,7 @@ import { normalizeImageModelAlignment } from "../shared/geo-plot-image-alignment
 import { stageSelectedGeoSourceRemap } from "../shared/geo-plot-source-remap.js";
 import { geometryWithRevokedApprovals } from "../shared/geo-plot-precision-history.js";
 import { projectGeoRecoveryManifest } from "./geo-plot-recovery.mjs";
+import { handleGeoPlotCommercial } from "./geo-plot-commercial.mjs";
 
 const json = (value, init = {}) => Response.json(value, {headers: {"Cache-Control":"no-store"}, ...init});
 const fail = (message, status = 400) => json({error:message}, {status});
@@ -378,7 +379,7 @@ export function verifiedGeoPlotSourceResponse(ctx,experience) {
   });
 }
 export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.url)) {
-  const match=url.pathname.match(/^\/3Dprojects\/api\/cloud\/projects\/([^/]+)\/geo-plots(?:\/(source|inventory|alignment))?$/);
+  const match=url.pathname.match(/^\/3Dprojects\/api\/cloud\/projects\/([^/]+)\/geo-plots(?:\/(source|inventory|alignment|commercial))?$/);
   if (!match) return null;
   const slug=decodeURIComponent(match[1]).toLowerCase();
   if (!validProjectSlug(slug)) return fail("Invalid project slug.");
@@ -401,6 +402,10 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
     if(match[2]==="alignment"){
       if(request.method!=="GET"&&!sameOrigin(request))return fail("Same-origin request required.",403);
       return handleGeoPlotAlignment(request,env,ctx,access.actor);
+    }
+    if(match[2]==="commercial"){
+      if(request.method!=="GET"&&!sameOrigin(request))return fail("Same-origin request required.",403);
+      return handleGeoPlotCommercial(request,env,ctx,access.actor);
     }
     if (request.method==="GET"){
       if(url.searchParams.get("preview")==="1")
