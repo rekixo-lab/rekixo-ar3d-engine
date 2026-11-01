@@ -5,6 +5,7 @@ import { activeGeoReleaseState,publicGeoExperienceFromState } from "./geo-releas
 import { handleGeoPlotInventory } from "./geo-plot-inventory.mjs";
 import { handleGeoPlotAlignment,requireCurrentImageAlignmentReview } from "./geo-plot-image-alignment.mjs";
 import { requireGeoInventoryReview } from "../shared/geo-plot-source-review.js";
+import { compareGeoPlotPublication } from "../shared/geo-plot-publication-diff.js";
 
 const json = (value, init = {}) => Response.json(value, {headers: {"Cache-Control":"no-store"}, ...init});
 const fail = (message, status = 400) => json({error:message}, {status});
@@ -140,6 +141,40 @@ async function verify(env,ctx,actor,body) {
   if (res.meta?.changes!==1) throw Error("Mapping changed during verification.");
   return state(env,ctx);
 }
+async function publicationPreflight(env,ctx){
+  const draft=await env.DB.prepare("SELECT revision,geo_release_id,building_release_id,plots_json FROM geo_plot_mapping_drafts_3d WHERE project_id=?")
+    .bind(ctx.project.id).first();
+  if(!draft||draft.geo_release_id!==ctx.active.geo_release_id||
+     draft.building_release_id!==ctx.active.source_building_release_id)
+    throw Error("Current Geo mapping draft is missing or stale. Rebind and review first.");
+  const live=await env.DB.prepare(`SELECT r.id,r.plots_json,r.sha256,r.version
+    FROM geo_plot_mapping_active_3d a
+    JOIN geo_plot_mapping_releases_3d r ON r.id=a.mapping_release_id
+      AND r.project_id=a.project_id AND r.experience_id=a.experience_id
+    WHERE a.project_id=? AND a.experience_id=?`)
+    .bind(ctx.project.id,ctx.active.experience_id).first();
+  if(live&&await digest(live.plots_json)!==live.sha256)
+    throw Error("Active sealed Geo mapping checksum mismatch. Publication blocked.");
+  const drafts=validateGeoPlotCollection(JSON.parse(draft.plots_json));
+  const published=live?validateGeoPlotCollection(JSON.parse(live.plots_json)):[];
+  const diff=compareGeoPlotPublication(drafts,published);
+  const inventory=await inventoryState(env,ctx.project.id);
+  const alignment=await env.DB.prepare("SELECT revision FROM geo_plot_image_alignment_drafts_3d WHERE project_id=?")
+    .bind(ctx.project.id).first();
+  const hash=await digest(draft.plots_json);
+  const activeReleaseId=live?.id||null;
+  const token=await digest(JSON.stringify({
+    project:ctx.project.id,experience:ctx.active.experience_id,
+    geoRelease:ctx.active.geo_release_id,buildingRelease:ctx.active.source_building_release_id,
+    draftRevision:draft.revision,draftHash:hash,
+    activeReleaseId,activeSha256:live?.sha256||null,
+    inventoryRevision:inventory.revision,alignmentRevision:Number(alignment?.revision||0)
+  }));
+  return {diff,draftRevision:draft.revision,activeReleaseId,activeVersion:live?.version||null,
+    activeSha256:live?.sha256||null,draftSha256:hash,
+    inventoryRevision:inventory.revision,alignmentRevision:Number(alignment?.revision||0),
+    token};
+}
 async function publish(env,ctx,actor,body) {
   const draft=await env.DB.prepare("SELECT * FROM geo_plot_mapping_drafts_3d WHERE project_id=?").bind(ctx.project.id).first();
   if (!draft || draft.revision!==body.expectedRevision || draft.verified_revision!==draft.revision ||
@@ -153,6 +188,12 @@ async function publish(env,ctx,actor,body) {
   const alignment=await requireCurrentImageAlignmentReview(env,ctx);
   if(Number(draft.verified_alignment_revision||0)!==alignment.revision)
     throw Error("Image alignment revision changed after plot verification. Verify the current mapping again.");
+  // The operator must review the exact current live-vs-draft delta.
+  // An old preview or parallel release activation is never silently accepted.
+  const preflight=await publicationPreflight(env,ctx);
+  if(typeof body.expectedPreflightToken!=="string"||body.expectedPreflightToken!==preflight.token||
+     body.expectedActiveReleaseId!==preflight.activeReleaseId)
+    throw Error("Live mapping or draft changed since publication preview. Review the diff again.");
   const text=JSON.stringify(plots),sha=await digest(text),id="geo_plot_"+crypto.randomUUID(),now=currentIso();
   const versionRow=await env.DB.prepare("SELECT COALESCE(MAX(version),0)+1 AS version FROM geo_plot_mapping_releases_3d WHERE experience_id=?")
     .bind(ctx.active.experience_id).first();
@@ -181,11 +222,13 @@ async function publish(env,ctx,actor,body) {
             (SELECT a.revision FROM geo_plot_image_alignment_drafts_3d a WHERE a.project_id=d.project_id),0)
           AND NOT EXISTS(SELECT 1 FROM geo_plot_image_alignment_drafts_3d a
             WHERE a.project_id=d.project_id
-            AND (a.verified_revision IS NULL OR a.verified_revision<>a.revision)))`).bind(id,ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
+            AND (a.verified_revision IS NULL OR a.verified_revision<>a.revision))
+          AND COALESCE((SELECT a.mapping_release_id FROM geo_plot_mapping_active_3d a
+            WHERE a.project_id=d.project_id AND a.experience_id=d.experience_id),'')=?)`).bind(id,ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
       ctx.active.source_building_release_id,versionRow.version,draft.revision,text,sha,actor.email,now,
       ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,ctx.active.source_building_release_id,
       ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
-      ctx.active.source_building_release_id,draft.revision,inventory.revision),
+      ctx.active.source_building_release_id,draft.revision,inventory.revision,preflight.activeReleaseId||""),
     env.DB.prepare(`INSERT INTO geo_plot_mapping_active_3d(experience_id,project_id,mapping_release_id,updated_by,updated_at)
       VALUES (?,?,?,?,?) ON CONFLICT(experience_id) DO UPDATE SET
       mapping_release_id=excluded.mapping_release_id,updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
@@ -270,7 +313,11 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
       if(request.method!=="GET"&&!sameOrigin(request))return fail("Same-origin request required.",403);
       return handleGeoPlotAlignment(request,env,ctx,access.actor);
     }
-    if (request.method==="GET") return json(await state(env,ctx));
+    if (request.method==="GET"){
+      if(url.searchParams.get("preview")==="1")
+        return json(await publicationPreflight(env,ctx));
+      return json(await state(env,ctx));
+    }
     if (!["PUT","POST"].includes(request.method)) return fail("Method not allowed.",405);
     if (!sameOrigin(request)) return fail("Same-origin request required.",403);
     if (ctx.project.status==="archived") return fail("Archived project is read-only.",409);
