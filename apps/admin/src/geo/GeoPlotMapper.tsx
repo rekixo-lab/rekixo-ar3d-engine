@@ -1469,6 +1469,31 @@ export default function GeoPlotMapper(){
            <div><small>PROJECT PLOT INVENTORY</small><h3>Plot Editor</h3></div>
            <span>{displayedPlots.length}/{plots.length}</span>
          </div>
+         {working&&!inventoryRows.some(p=>p.id.toLowerCase()===working.id.toLowerCase())&&inventoryRows.length>0&&
+          <p className="geo-plot-warning" role="alert">
+            Plot {working.id} is NOT in the approved CSV ({progress.inventory} IDs).
+            Cancel this unfinished plot and select a CSV Plot ID before Confirm.
+          </p>}
+         {working&&working.corners.length>=3&&<div className="geo-plot-visual-side-panel">
+          <strong>Assign Front / Back / Depth on the 3D boundary</strong>
+          <div className="geo-plot-side-role-buttons">
+            {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>
+              <button type="button" key={role} aria-pressed={mode==="side"&&selectedRole===role}
+                className={mode==="side"&&selectedRole===role?"active":""}
+                disabled={busy||!editable}
+                onClick={()=>{setSelectedRole(role);setMode("side");}}>
+                {role==="depthA"?"Depth A":role==="depthB"?"Depth B":role==="front"?"Front":"Back"}
+              </button>)}
+          </div>
+          {working.corners.length>4&&<label className="geo-plot-check">
+            <input type="checkbox" checked={extendSide}
+              onChange={e=>setExtendSide(e.target.checked)}/> Add connected irregular boundary segments
+          </label>}
+          <small>Select a side, then tap its actual 3D plot edge. Front must touch
+            the real road. Every change resets source/facing approvals.</small>
+          {mode==="side"&&<button type="button" onClick={()=>setMode("edit")}>
+            Done assigning sides · Edit corners</button>}
+        </div>}
          {state&&state.draft.revision>0&&state.draft.verifiedInventoryRevision!==state.inventoryRevision&&
           state.draft.verifiedRevision===state.draft.revision&&
           <p className="geo-plot-warning" role="status">Source inventory was updated after verification.
@@ -1480,7 +1505,8 @@ export default function GeoPlotMapper(){
           {inventoryIssues.slice(0,7).map((issue,i)=><p key={issue.plotId+issue.field+i}>
             Plot {issue.plotId} · {issue.field}: {issue.reason}</p>)}
           {inventoryIssues.length>7&&<small>+ {inventoryIssues.length-7} more issues. Review each mapped plot.</small>}
-          {!inventoryIssues.length&&<small>All mapped plots match the approved CSV values and source references.</small>}
+          {!inventoryIssues.length&&<small>{progress.confirmed} mapped Plot IDs match current CSV references.
+            {progress.pending>0?" "+progress.pending+" approved IDs still need mapping.":""}</small>}
         </div>}
         <label className="geo-plot-inventory-search">Find plot
            <input type="search" placeholder="Search plot number" value={inventoryQuery}
@@ -1650,6 +1676,12 @@ export default function GeoPlotMapper(){
           </div>
           </details>
         </>}
+        </>}
+        {inspectorTab==="publish"&&<>
+        {state?.activeMapping?.current&&slug&&<GeoPlotCommercialPanel
+          key={slug+"-commercial-"+state.activeMapping.id}
+          slug={slug} mappingReleaseId={state.activeMapping.id}
+          plotIds={plots.map(p=>p.id)}/>}
         <div className="geo-plot-draft-actions">
           <h3>Save, review & publish</h3>
           <button type="button" disabled={!state||busy||!slug} onClick={()=>void downloadGeoRecovery()}>
@@ -1686,6 +1718,7 @@ export default function GeoPlotMapper(){
               void execute("activate",r.id);
           }}>Activate Mapping v{r.version}</button>)}
         </div>
+        </>}
         <div className="geo-plot-shortcuts">
           <strong>Keyboard shortcuts</strong>
           <span>P Pan · D 4 corners · I Irregular · E Edit · F Fit</span>
