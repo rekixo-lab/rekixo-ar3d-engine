@@ -91,7 +91,9 @@ export default function GeoPlotImageAlignmentPanel({
     const asset=sources.find(a=>a.id===id);
     if(!asset)return;
     const old=draft;
-    const switched=old&&old.imageAssetId!==asset.id;
+    const switched=Boolean(old&&(old.imageAssetId!==asset.id||
+      old.imageSha256!==asset.sha256.toLowerCase()||old.geoReleaseId!==geoReleaseId||
+      old.buildingReleaseId!==buildingReleaseId||old.modelSha256!==snapshot.modelSha256));
     if(switched){
       if(!window.confirm("Switch original image? The image alignment draft points will be cleared. "+
         "The CURRENT review JSON will be downloaded first. Published plot data will remain unchanged."))return;
@@ -169,7 +171,7 @@ export default function GeoPlotImageAlignmentPanel({
     return plots.map(plot=>({id:plot.id,uv:plot.corners.map(point=>
       modelPointToImage(assessed.result!.transform,point))}));
   },[plots,assessed.result,showOverlay,isVerified]);
-  const canEdit=Boolean(geoReleaseId&&buildingReleaseId&&snapshot&&!snapshot.stale);
+  const canEdit=Boolean(geoReleaseId&&buildingReleaseId&&snapshot);
   return <details className="geo-align-panel" open={open} onToggle={event=>setOpen(event.currentTarget.open)}>
     <summary>02 · Original image ↔ verified 3D alignment
       <small> · {isVerified?"independent QA passed":snapshot?.draft?"needs review":"not set"}</small>
@@ -180,7 +182,9 @@ export default function GeoPlotImageAlignmentPanel({
       {error&&<p className="geo-plot-warning" role="alert">{error}</p>}
       {message&&<p className="geo-plot-message" role="status">{message}</p>}
       {stale&&<p className="geo-plot-warning">A source or Geo/Building release changed.
-        Do not reuse this alignment. Save a new source-controlled draft before any new verification.</p>}
+        Select the same approved image again to rebind safely, or select a new image.
+        A review JSON is downloaded before old fit points are cleared. Save an empty
+        source-pinned revision before pairing new points.</p>}
       <div className="geo-align-actions">
         <button type="button" disabled={!!busy} onClick={()=>void reload()}>Reload Sources / Draft</button>
         {snapshot&&draft&&<button type="button" onClick={()=>exportReview(slug,snapshot,draft)}>
@@ -221,9 +225,9 @@ export default function GeoPlotImageAlignmentPanel({
           <input value={evidence} maxLength={160} placeholder="Approved plan, page and surveyed landmark"
             onChange={e=>setEvidence(e.target.value)}/></label>
         <div className="geo-align-actions">
-          <button type="button" disabled={!canEdit||!!busy||!pending||!evidence.trim()||draft.anchors.length>=48}
+          <button type="button" disabled={!canEdit||stale||!!busy||!pending||!evidence.trim()||draft.anchors.length>=48}
             onClick={()=>capture("anchors")}>Pair Fit Point on 3D Canvas</button>
-          <button type="button" disabled={!canEdit||!!busy||!pending||!evidence.trim()||draft.checkpoints.length>=48}
+          <button type="button" disabled={!canEdit||stale||!!busy||!pending||!evidence.trim()||draft.checkpoints.length>=48}
             onClick={()=>capture("checkpoints")}>Pair Independent Checkpoint</button>
         </div>
       </div>}
