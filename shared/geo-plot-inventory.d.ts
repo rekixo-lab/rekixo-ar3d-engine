@@ -2,7 +2,7 @@ export type GeoInventoryRow={
   id:string;area:number;areaUnit:"sqft"|"sqm"|"sqyd"|"";areaSource:string;
   front:number;back:number;depthA:number;depthB:number;
   lengthUnit:"ft"|"m"|"";measurementSource:string;road:string;facing:string;
-  facingSource:string;dimensions:string;notes:string;
+  facingSource:string;dimensions:string;sideDimensions:string;notes:string;
 };
 export type GeoInventoryDiff={added:string[];changed:string[];missing:string[];
   mappedChanged:string[];mappedMissing:string[];mapped:number;unmapped:number;unchanged:number};

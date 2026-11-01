@@ -90,12 +90,15 @@ export default function GeoPlotInventoryPanel({slug,mappedIds,workingId,blocked,
   const taken=new Set(mappedIds.map(x=>x.toLowerCase()));
   const pending=nextUnmappedInventory(rows,mappedIds,workingId);
   const filtered=rows.filter(p=>p.id.toLowerCase().includes(query.toLowerCase()));
-  return <details className="geo-plot-inventory-first">
+  return <details className="geo-plot-inventory-first" open={!rows.length}>
     <summary>01 · Plot Inventory & original sources
       <small> · {rows.length} IDs / {rows.filter(p=>!taken.has(p.id.toLowerCase())).length} pending</small>
     </summary>
     <div className="geo-plot-inventory-first-body">
-      <p className="geo-plot-hint">Upload approved Plot Data <strong>before</strong> mapping. Imported data remains unverified draft metadata. No published polygon, sale or Building/Geo release is changed.</p>
+      <p className="geo-plot-hint">Upload Platform Plot Data CSV <strong>before</strong> drawing any polygon.
+        Plot No, Sqft, Sqm, Road Access, Front/Back/Depth, and feet-inch measurements are supported.
+        The explicit source note and irregular CAD edge details are kept for review.
+        Import does not create geometry, assert approval or change any published release.</p>
       {error&&<p className="geo-plot-inventory-error" role="alert">{error}</p>}
       {success&&<p className="geo-plot-inventory-success" role="status">{success}</p>}
       <div className="geo-plot-inventory-summary">
@@ -111,7 +114,7 @@ export default function GeoPlotInventoryPanel({slug,mappedIds,workingId,blocked,
       </label>
       {preview&&<div className="geo-plot-inventory-preview">
         <strong>Review: {preview.name}</strong>
-        <p>{preview.summary.rowCount} records · {preview.summary.added.length} added ·
+        <p>{preview.summary.rowCount} source plots · {preview.summary.added.length} added ·
           {" "+preview.summary.changed.length} updated · {preview.summary.mappedChanged.length} already-mapped metadata rows for review</p>
         {preview.summary.missing.length>0&&<p className="geo-plot-inventory-error">Existing IDs absent from CSV: {preview.summary.missing.slice(0,12).join(", ")}. Re-import with every existing ID.</p>}
         <button type="button" className="geo-plot-action-primary"

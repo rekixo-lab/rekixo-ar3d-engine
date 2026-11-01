@@ -9,7 +9,8 @@ import {adjacentPlot,boundedZoom,hasPendingPlotEdits,isTextEditingTarget,
 import GeoPlotInventoryPanel from "./GeoPlotInventoryPanel";
 import GeoPlotImageAlignmentPanel from "./GeoPlotImageAlignmentPanel";
 import GeoPlotCommercialPanel from "./GeoPlotCommercialPanel";
-import {nextUnmappedInventory,type GeoInventoryRow} from "../../../../shared/geo-plot-inventory.js";
+import {nextUnmappedInventory,parseGeoInventoryCsv,normalizeGeoInventoryRows,
+  type GeoInventoryRow} from "../../../../shared/geo-plot-inventory.js";
 import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
 import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
@@ -155,6 +156,7 @@ export default function GeoPlotMapper(){
   const [geo,setGeo]=useState<GeoPublic|null>(null);
   const [plots,setPlots]=useState<Plot[]>([]);
   const [inventoryRows,setInventoryRows]=useState<GeoInventoryRow[]>([]);
+  const [inventoryImportNonce,setInventoryImportNonce]=useState(0);
   // Each draft plot has its own bounded, reversible local edit history.
   // Switching plots or projects clears that history; no release is modified.
   const dragStartRef=useRef<Plot|null>(null);
@@ -736,12 +738,65 @@ export default function GeoPlotMapper(){
     }catch(e){setMessage("ERROR: "+(e instanceof Error?e.message:"Mapping operation failed."));}
     finally{setBusy(false);}
   };
+  const importSourceInventory=async(raw:string,fileName:string)=>{
+    if(!editable||!state||busy||dirty||hasUnapplied)
+      throw Error("Save/discard current plot changes before importing a Plot Data CSV.");
+    const parsed=normalizeGeoInventoryRows(parseGeoInventoryCsv(raw));
+    const inventoryApi=api+"/inventory";
+    setBusy(true);
+    try{
+      const current=await callApi<{revision:number;rows:GeoInventoryRow[]}>(inventoryApi);
+      if(activeProjectRef.current!==slug)throw Error("Project changed during source review.");
+      const payload={expectedRevision:current.revision,rows:parsed};
+      const preview=await callApi<{preview:{
+        rowCount:number;added:string[];changed:string[];missing:string[];
+        mappedChanged:string[];mappedMissing:string[]
+      }}>(inventoryApi,{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...payload,action:"preflight"})});
+      if(preview.preview.missing.length)
+        throw Error("CSV omits "+preview.preview.missing.length+
+          " existing inventory Plot IDs: "+preview.preview.missing.slice(0,12).join(", ")+
+          ". No rows were removed. Reconcile the complete inventory before import.");
+      if(activeProjectRef.current!==slug)throw Error("Project switched while reviewing CSV.");
+      const info=preview.preview;
+      const confirmation="PLATFORM PLOT DATA CSV — "+fileName+"\\n"+
+        info.rowCount+" source plots (including irregular/corner plots); "+
+        info.added.length+" added, "+info.changed.length+" updated.\\n"+
+        info.mappedChanged.length+" existing mapped Plot IDs need subsequent measurement review.\\n"+
+        "Feet-inch values will be converted to decimal feet; original source details are preserved.\\n"+
+        "This imports source INVENTORY ONLY: it will NOT invent any 3D polygon, verify measurements, "+
+        "publish mapping or change a customer release. Continue?";
+      if(!window.confirm(confirmation)){
+        setMessage("CSV source inventory import cancelled; nothing changed.");
+        return;
+      }
+      const saved=await callApi<{inventory:{revision:number;rows:GeoInventoryRow[]}}>(
+        inventoryApi,{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...payload,action:"import"})});
+      if(activeProjectRef.current!==slug)return;
+      setInventoryRows(saved.inventory.rows);
+      setState(prev=>prev?{...prev,inventoryRevision:saved.inventory.revision}:prev);
+      setInventoryImportNonce(v=>v+1);
+      setMessage("Imported "+saved.inventory.rows.length+" source Plot IDs into Inventory (revision "+
+        saved.inventory.revision+"). Mapped polygons: "+plots.length+
+        ". Open 01 · Plot Inventory and use Start Next Unmapped; irregular plots "+
+        "require manual boundary/edge review. No live release changed.");
+    }finally{setBusy(false);}
+  };
   const importCsv=async(file:File)=>{
     if(file.size>2_000_000)throw Error("Measurement CSV exceeds the 2 MB safety limit.");
-    const rows=parseRows(await file.text());
+    const raw=(await file.text()).replace(/^\uFEFF/,"");
+    const rows=parseRows(raw);
     if(activeProjectRef.current!==slug)throw Error("Project changed during CSV import; no data staged.");
     if(rows.length<2||rows.length>2501)throw Error("CSV requires 1–2500 measurement rows.");
     const keys=rows[0].map(s=>s.trim().toLowerCase().replace(/[^a-z0-9]/g,""));
+    // Platform Plot Data CSV is an inventory, not a geometry-snapshot CSV.
+    // Route it to the safe, revisioned inventory preflight even with zero polygons.
+    if(keys.includes("plotno")||keys.includes("sqft")||keys.includes("sqm")||
+       keys.includes("sqyd")||keys.includes("roadaccess")){
+      await importSourceInventory(raw,file.name);
+      return;
+    }
     if(new Set(keys).size!==keys.length)throw Error("Duplicate CSV column headings.");
     const modern=keys.includes("frontlength");
     const required=modern
@@ -1088,7 +1143,8 @@ export default function GeoPlotMapper(){
            (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Click corners clockwise · wheel zoom at cursor":"Drag numbered handles · wheel zoom at cursor"))}</div>
       </div>
       <aside className="geo-plot-dock">
-        <GeoPlotInventoryPanel key={slug} slug={slug} mappedIds={plots.map(p=>p.id)}
+        <GeoPlotInventoryPanel key={slug+"-inventory-"+inventoryImportNonce}
+          slug={slug} mappedIds={plots.map(p=>p.id)}
           workingId={working?.id} blocked={!editable||busy||dirty||hasUnapplied}
           onRowsChange={onInventoryRowsChange}
           onStart={row=>{
@@ -1234,6 +1290,13 @@ export default function GeoPlotMapper(){
             <p>Area {selectedInventory.area||"not supplied"} {selectedInventory.areaUnit} ·
               Front {selectedInventory.front||"—"} · Back {selectedInventory.back||"—"} ·
               Depth A {selectedInventory.depthA||"—"} · Depth B {selectedInventory.depthB||"—"} {selectedInventory.lengthUnit}</p>
+            {selectedInventory.sideDimensions&&<p className="geo-plot-hint">
+              Original CAD side detail: {selectedInventory.sideDimensions}</p>}
+            {selectedInventory.notes&&<p className="geo-plot-hint">
+              Source notes: {selectedInventory.notes}</p>}
+            {!selectedInventory.depthA&&<p className="geo-plot-warning">
+              Source Depth A missing. Use irregular polygon mode and review individual source edges;
+              do not invent a missing segment length.</p>}
             <button type="button" disabled={!editable||busy} onClick={applyCurrentSource}>
               Apply Latest Approved CSV to Selected Plot (unverified)</button>
           </div>}
@@ -1354,7 +1417,10 @@ export default function GeoPlotMapper(){
           <p className="geo-plot-hint">Apply each plot, save the draft, reconcile the approved CSV, then verify. A new inventory revision blocks Publish until re-reviewed.</p>
         <button disabled={!editable||busy||!dirty} onClick={()=>void execute("save")}>{busy?"Saving…":"Save Mapping Draft"}</button>
         <button disabled={!editable||busy||dirty||Boolean(working)||!state?.draft.revision||inventoryIssues.length>0} onClick={()=>void execute("verify")}>Verify All Plots</button>
-        <label className="geo-plot-import">Import Measurements CSV<input type="file" accept=".csv,text/csv" onChange={e=>{
+        <label className="geo-plot-import">Import Measurements CSV / Platform Plot Data CSV
+          <small>Platform Plot Data is safely routed to Inventory first, even with zero mapped plots.</small>
+          <input type="file" accept=".csv,text/csv" disabled={!editable||busy||dirty||hasUnapplied}
+          onChange={e=>{
           const file=e.target.files?.[0];e.target.value="";if(file)void importCsv(file).catch(x=>setMessage("ERROR: "+String(x)));
         }}/></label>
         <button disabled={!plots.length} onClick={exportCsv}>Export Measurement CSV</button>
