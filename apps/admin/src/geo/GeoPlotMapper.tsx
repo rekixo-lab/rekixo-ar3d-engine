@@ -38,7 +38,7 @@ type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | n
   draft: {revision:number;verifiedRevision:number|null;verifiedInventoryRevision:number|null;
     verifiedAlignmentRevision:number|null;
     stale:boolean;plots:Plot[]};
-  activeMapping:{id:string;version:number;current:boolean;publicationMode:"verified"|"preliminary"}|null;
+  activeMapping:{id:string;version:number;draftRevision?:number;current:boolean;publicationMode:"verified"|"preliminary"}|null;
   releases:Array<{id:string;version:number;geoReleaseId:string;publicationMode:"verified"|"preliminary"}> };
 type GeoPublic = { geoRelease:{id:string}; buildingRelease:{id:string};
   model:{url:string;sha256?:string;byteSize?:number}; canonicalModel?:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number;scale:number} };
@@ -891,7 +891,16 @@ export default function GeoPlotMapper(){
     finally{setBusy(false);}
   };
   const execute=async(action:"save"|"verify"|"publish"|"publish-preliminary"|"activate"|"rebind-reset",id?:string)=>{
-    if(!state||!geo) return;setBusy(true);setMessage("");
+    if(!state||!geo)return;
+    if((action==="publish"||action==="publish-preliminary")&&state.activeMapping?.current&&
+      state.activeMapping.draftRevision===state.draft.revision&&
+      state.activeMapping.publicationMode===(action==="publish"?"verified":"preliminary")){
+      setMessage("✓ Draft r"+state.draft.revision+" is already LIVE as Mapping v"+
+        state.activeMapping.version+". To publish updates, open any Plot, edit it, Confirm/Save "+
+        "the new draft revision, then publish the next version.");
+      return;
+    }
+    setBusy(true);setMessage("");
     try{
       let approvedPreflight:NonNullable<typeof publishedPreview>|null=null;
       if(action==="publish"||action==="publish-preliminary"){
@@ -1789,6 +1798,14 @@ export default function GeoPlotMapper(){
               +{publishedPreview.diff.changes.length-12} additional differences.
               Download private evidence/quality review before publishing.</p>}
           </div>}
+          {state?.activeMapping?.current&&
+            state.activeMapping.draftRevision===state.draft.revision&&
+            <p className="geo-plot-message" role="status">
+              ✓ Current Draft r{state.draft.revision} is already LIVE as Mapping v{state.activeMapping.version}
+              {" · "}{state.activeMapping.publicationMode}.
+              To update the customer site, edit any Plot, Confirm Plot to save a new revision,
+              then Publish that revision. Re-publishing unchanged data will not create a duplicate release.
+            </p>}
           <p className="geo-plot-hint">Once the mapped boundaries are server-saved, Publish Preliminary can go live without waiting for Road, Area, Facing, Side or alignment reviews. Unapproved facts remain hidden on the customer site. Edit any Plot, save, and republish a new version whenever needed. Verified Publish still requires full source review.</p>
         <button disabled={!editable||busy||!dirty} onClick={()=>void execute("save")}>{busy?"Saving…":"Save Mapping Draft"}</button>
         <button type="button" className="geo-plot-preliminary-button"
