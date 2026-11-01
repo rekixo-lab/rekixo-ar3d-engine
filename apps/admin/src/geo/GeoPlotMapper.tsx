@@ -16,6 +16,9 @@ import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-revie
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import {cloneUnverifiedGeoPlot,geoPlotEvidenceManifest,geoPlotQualityReport} from "../../../../shared/geo-plot-stage3-review.js";
 import {stageVerifiedImageCorner} from "../../../../shared/geo-plot-image-corner.js";
+import {nextCsvPlotForDrawing,positionCursorLoupe,assignVisiblePlotEdge,
+  draftStorageKey,packLocalPlotDraft,unpackLocalPlotDraft,visibleMappingProgress
+} from "../../../../shared/geo-plot-mapper-ux.js";
 import type {SimilarityTransform} from "../../../../shared/geo-plot-image-alignment.js";
 import {newPlotEditHistory,replacePlotEditHistory,updatePlotEditHistory,
   closeGroupedPlotEdit,undoPlotEdit,redoPlotEdit,geometryWithRevokedApprovals,nudgePlotCorner
@@ -37,7 +40,7 @@ type MappingState = { geoReleaseId: string | null; buildingReleaseId: string | n
   releases:Array<{id:string;version:number;geoReleaseId:string}> };
 type GeoPublic = { geoRelease:{id:string}; buildingRelease:{id:string};
   model:{url:string;sha256?:string;byteSize?:number}; canonicalModel?:{url:string;sha256?:string;byteSize?:number}; placement:{headingDeg:number;scale:number} };
-type ToolMode = "pan" | "draw" | "edit" | "align";
+type ToolMode = "pan" | "draw" | "edit" | "align" | "side";
 type PointerPreview = {clientX:number;clientY:number;rawScreen:Point;screen:Point;
   point:Point;kind:"none"|"vertex"|"edge";pointerType:string};
 type PointerStart = {id:number;x:number;y:number;cancelled?:boolean};
@@ -193,6 +196,11 @@ export default function GeoPlotMapper(){
   // Like the Platform mapper, snapping is opt-in: don't silently move approved corners.
   const [snap,setSnap]=useState(false);
   const [selectedRole,setSelectedRole]=useState<Role>("front");
+  const [extendSide,setExtendSide]=useState(false);
+  const [inspectorTab,setInspectorTab]=useState<"sources"|"plot"|"quality"|"publish">("sources");
+  const [recoveredLocalDraft,setRecoveredLocalDraft]=useState<{
+    plot:Plot;originalId:string|null;shape:"four"|"irregular";checkedAt:number
+  }|null>(null);
   const [inventoryQuery,setInventoryQuery]=useState("");
   const [publishedPreview,setPublishedPreview]=useState<{
     draftRevision:number;activeReleaseId:string|null;token:string;
@@ -220,6 +228,13 @@ export default function GeoPlotMapper(){
   const pointerPreviewRef=useRef<PointerPreview|null>(null);
   const pointerRafRef=useRef(0);
   const pointerPendingRef=useRef<{x:number;y:number;kind:string;skip?:number}|null>(null);
+  const dragFrameRef=useRef(0);
+  const pendingDragRef=useRef<{index:number;x:number;y:number}|null>(null);
+  const pointerStatePaintRef=useRef(0);
+  const loupeLastSampleRef=useRef("");
+  const loupeRef=useRef<HTMLDivElement>(null);
+  const crosshairRef=useRef<HTMLDivElement>(null);
+  const pointerOriginRef=useRef<HTMLDivElement>(null);
   const overlayRef=useRef<SVGSVGElement>(null);
   const loupeCanvasRef=useRef<HTMLCanvasElement>(null);
   const renderFramesRef=useRef(0);
@@ -248,6 +263,53 @@ export default function GeoPlotMapper(){
     setState(prev=>prev?{...prev,alignmentRevision:revision}:prev);
   },[]);
   const hasUnapplied=hasPendingPlotEdits(working,originalId?plots.find(p=>p.id===originalId):null);
+  const progress=useMemo(()=>visibleMappingProgress(inventoryRows,plots),[inventoryRows,plots]);
+  useEffect(()=>{
+    const key=draftStorageKey(slug);
+    if(!key||!state?.geoReleaseId||!state?.buildingReleaseId)return;
+    try{
+      const raw=window.localStorage.getItem(key);
+      const restored=unpackLocalPlotDraft(raw,{
+        projectSlug:slug,geoReleaseId:state.geoReleaseId,
+        buildingReleaseId:state.buildingReleaseId,mappingRevision:state.draft.revision
+      }) as {plot:Plot;originalId:string|null;shape:"four"|"irregular";checkedAt:number}|null;
+      setRecoveredLocalDraft(restored);
+      if(raw&&!restored)window.localStorage.removeItem(key);
+    }catch{setRecoveredLocalDraft(null);}
+  },[slug,state?.geoReleaseId,state?.buildingReleaseId,state?.draft.revision]);
+  useEffect(()=>{
+    const key=draftStorageKey(slug);
+    if(!key||!working||!hasUnapplied||!state?.geoReleaseId||!state?.buildingReleaseId)return;
+    const timer=window.setTimeout(()=>{
+      const raw=packLocalPlotDraft({
+        projectSlug:slug,geoReleaseId:state.geoReleaseId!,buildingReleaseId:state.buildingReleaseId!,
+        mappingRevision:state.draft.revision,plot:working,originalId,shape
+      });
+      if(raw)try{window.localStorage.setItem(key,raw);}catch{/* Private browser storage optional. */}
+    },350);
+    return()=>window.clearTimeout(timer);
+  },[slug,working,originalId,shape,hasUnapplied,state?.geoReleaseId,
+    state?.buildingReleaseId,state?.draft.revision]);
+  const clearLocalPlotDraft=()=>{
+    const key=draftStorageKey(slug);
+    if(key)try{window.localStorage.removeItem(key);}catch{/* Storage may be disabled. */}
+    setRecoveredLocalDraft(null);
+  };
+  const restoreLocalPlotDraft=()=>{
+    if(!recoveredLocalDraft||!state||dirty||busy)return;
+    const p=recoveredLocalDraft.plot;
+    const original=recoveredLocalDraft.originalId;
+    const sameSource=(!original||plots.some(x=>x.id===original))&&
+      (original||!plots.some(x=>x.id===p.id))&&
+      (!inventoryRows.length||inventoryRows.some(x=>x.id===p.id));
+    if(!sameSource){clearLocalPlotDraft();setMessage("ERROR: Local draft conflicts with current mapped inventory. Original data preserved.");return;}
+    if(!confirmUnapplied()||!window.confirm("Recover only the unfinished private Plot "+p.id+
+      " in this browser? The published customer website is unchanged."))return;
+    resetWorking(p);setOriginalId(original);setShape(recoveredLocalDraft.shape);
+    setMode(p.corners.length>=3?"edit":"draw");setInspectorTab("plot");
+    setRecoveredLocalDraft(null);
+    setMessage("Recovered unfinished local Plot "+p.id+". Review its corners and source before confirming.");
+  };
   const api=slug?`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/geo-plots`:"";
   const refresh=useCallback(async(isCurrent:()=>boolean)=>{
     if(!slug){setState(null);setGeo(null);setPlots([]);return;}
@@ -866,10 +928,15 @@ export default function GeoPlotMapper(){
   const begin=(kind:"four"|"irregular")=>{
     const selected=working&&!originalId&&!working.corners.length&&
       inventoryRows.some(p=>p.id.toLowerCase()===working.id.toLowerCase());
+    const pending=nextCsvPlotForDrawing(inventoryRows,plots);
+    if(!selected&&!pending){
+      setMessage("ERROR: No pending approved CSV Plot ID. Import an inventory revision or edit a mapped plot; Plot 37 will not be invented.");
+      setInspectorTab("sources");return;
+    }
     if(!selected&&!confirmUnapplied())return;
-    setShape(kind);setMode("draw");setOriginalId(null);
-    if(!selected)resetWorking({...blank(nextFreePlotId([...plots,...inventoryRows])),planeY:groundY,planeSource:"",planeVerified:false});
-    setMessage("Start at the road-facing Front edge, then tap corners clockwise. Complete the boundary before entering surveyed sizes.");
+    setShape(kind);setMode("draw");setOriginalId(null);setInspectorTab("plot");
+    if(!selected&&pending)resetWorking(fromInventory(pending,groundY));
+    setMessage("Plot "+(selected?working!.id:pending?.id)+": start at the road-facing Front edge; tap corners clockwise.");
   };
   const undoCorner=()=>{
     if(!working?.corners.length||busy||originalId)return;
