@@ -3,7 +3,7 @@ import GeoBulkPricingPanel,{type GeoPriceQuote} from "../geo/GeoBulkPricingPanel
 import GeoDealRecordsPanel from "../geo/GeoDealRecordsPanel";
 import "./project-management.css";
 import "./project-client-admin.css";
-type Identity={displayName:string;email:string;role:string;projectSlug:string;projectName:string;projectKind?:string};
+type Identity={displayName:string;email:string;role:string;projectSlug:string;projectName:string;projectKind?:string;mustChangePassword?:boolean;loginId?:string|null};
 type Session={authenticated:boolean;user:Identity|null};
 type Commercial={plotId:string;status:"available"|"booked"|"sold";
   pricePaise:number|null;revision:number;publicApproved:boolean;evidenceRef:string};
@@ -58,6 +58,13 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
   const [invite,setInvite]=useState("");
   const [identity,setIdentity]=useState<Identity|null>(null);
   const [email,setEmail]=useState("");
+  const [loginId,setLoginId]=useState("");
+  const [password,setPassword]=useState("");
+  const [oldPassword,setOldPassword]=useState("");
+  const [newPassword,setNewPassword]=useState("");
+  const [confirmPassword,setConfirmPassword]=useState("");
+  const [projectTitle,setProjectTitle]=useState("");
+  const [showPassword,setShowPassword]=useState(false);
   const [overview,setOverview]=useState<Overview|null>(null);
   const [commercial,setCommercial]=useState<CommercialState|null>(null);
   const [masterplan,setMasterplan]=useState<MasterplanInventory|null>(null);
@@ -83,6 +90,10 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       setContact(null);
       return;
     }
+    if(s.user.mustChangePassword){
+      setIdentity(s.user);setOverview(null);setCommercial(null);setMasterplan(null);setContact(null);
+      return;
+    }
     const path="/projects/"+encodeURIComponent(s.user.projectSlug);
     const o=await api<Overview>(path+"/overview");
     if(o.project.slug!==s.user.projectSlug)throw Error("Project scope verification failed.");
@@ -106,6 +117,8 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       setInvite(token);
       history.replaceState(null,"",location.pathname+location.search);
     }
+    if(scopedSlug)void api<{projectName:string}>("/projects/"+encodeURIComponent(scopedSlug)+"/login-meta")
+      .then(v=>setProjectTitle(v.projectName)).catch(()=>setProjectTitle("Project Client Admin"));
     void load().catch(e=>setError(e instanceof Error?e.message:"Client session unavailable."));
   },[scopedSlug]);
   const selected=commercial?.rows.find(r=>r.plotId.toLowerCase()===plotId.toLowerCase());
@@ -117,13 +130,34 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     setRupees(row?.pricePaise===null||row?.pricePaise===undefined?"":String(row.pricePaise/100));
     setEvidence(row?.evidenceRef||"");setPublicApproved(Boolean(row?.publicApproved));
   };
+  const passwordLogin=async()=>{
+    if(!scopedSlug||!loginId.trim()||!password)return;
+    setBusy(true);setError("");setMessage("");
+    try{
+      await api("/login","POST",{projectSlug:scopedSlug,loginId:loginId.trim(),password});
+      setPassword("");
+      await load();
+    }catch(e){setError(e instanceof Error?e.message:"Invalid login ID or password.");}
+    finally{setBusy(false);}
+  };
+  const changePassword=async()=>{
+    if(!oldPassword||newPassword!==confirmPassword||newPassword.length<8)return;
+    setBusy(true);setError("");setMessage("");
+    try{
+      await api("/change-password","POST",{oldPassword,newPassword});
+      setOldPassword("");setNewPassword("");setConfirmPassword("");
+      setIdentity(null);setLoginId("");
+      setMessage("Password changed successfully. Sign in using your new password.");
+    }catch(e){setError(e instanceof Error?e.message:"Password change failed.");}
+    finally{setBusy(false);}
+  };
   const login=async()=>{
     if(!invite||!email.trim())return;
     setBusy(true);setError("");setMessage("");
     try{
       await api("/enroll","POST",{token:invite,email:email.trim().toLowerCase(),
         ...(scopedSlug?{projectSlug:scopedSlug}:{})});
-      setInvite("");setEmail("");
+      setInvite("");setEmail("");setPassword("");
       await load();
       setMessage("Your project admin session is active.");
     }catch(e){setError(e instanceof Error?e.message:String(e));}
@@ -195,7 +229,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     row.id.toLowerCase().includes(plotSearch.trim().toLowerCase()));
   const filteredCommercial=(commercial?.rows||[]).filter(row=>
     row.plotId.toLowerCase().includes(plotSearch.trim().toLowerCase()));
-  const projectLabel=identity?.projectName||"Project Client Admin";
+  const projectLabel=identity?.projectName||projectTitle||"Project Client Admin";
 
   return <main className="engine-client-admin">
     <header className="engine-client-admin-head">
@@ -204,7 +238,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
           <i/><i/><i/><i/>
         </span>
         <div>
-          <small>AR3D ENGINE · PERSONAL CLIENT ADMIN</small>
+          <small>AR3D STUDIO · CLIENT ADMIN</small>
           <h1>{projectLabel}</h1>
           <p>{identity?"Private project workspace · "+nameOfRole(identity.role):
             "Project-specific secure sign-in"}</p>
@@ -219,17 +253,67 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     {message&&<p className="engine-manage-ok" role="status">{message}</p>}
     {!identity?<section className="engine-client-admin-signin">
       <h2>Project Client Admin</h2>
-      <p>Only an owner-approved administrator can access this project's private data.
-        Ask the project owner for a one-time invitation. Links expire after 24 hours.</p>
-      {!invite?<p role="status">Open your project's private invitation link to sign in.</p>:
+      <p>Sign in with the Client ID and temporary password provided by your AR3D
+        project administrator. Your account can only access this project.</p>
+      {!invite?<form className="engine-client-admin-login-form" onSubmit={e=>{
+        e.preventDefault();void passwordLogin();
+      }}>
+        <label>Mobile Number or Email ID
+          <input autoFocus autoComplete="username" value={loginId} maxLength={254} required
+            placeholder="Client mobile number or email"
+            onChange={e=>setLoginId(e.target.value)}/>
+        </label>
+        <label>Password
+          <span className="engine-client-admin-password-field">
+            <input type={showPassword?"text":"password"} autoComplete="current-password"
+              value={password} maxLength={128} required placeholder="Enter password"
+              onChange={e=>setPassword(e.target.value)}/>
+            <button type="button" aria-label={showPassword?"Hide password":"Show password"}
+              onClick={()=>setShowPassword(v=>!v)}>{showPassword?"Hide":"Show"}</button>
+          </span>
+        </label>
+        <button type="submit" disabled={busy||!loginId.trim()||!password}>
+          {busy?"Signing in…":"Sign In to Client Admin"}</button>
+        <p className="engine-client-admin-login-hint">
+          Forgot your password? Contact your project Super Admin to reset it.
+        </p>
+      </form>:
         <form onSubmit={e=>{e.preventDefault();void login();}}>
+          <p>Owner-approved one-time invitation · Valid for 24 hours.</p>
           <label>Invited email address
             <input type="email" autoComplete="email" value={email}
               maxLength={254} required onChange={e=>setEmail(e.target.value)}/>
           </label>
           <button type="submit" disabled={busy||!email.trim()}>
             {busy?"Verifying…":"Activate project access"}</button>
+          <button type="button" onClick={()=>setInvite("")}>Sign in with ID and Password</button>
         </form>}
+    </section>:identity.mustChangePassword?<section className="engine-client-admin-signin">
+      <h2>Change Temporary Password</h2>
+      <p>For account security, create your own password before opening the dashboard.
+        Use at least 8 characters with a letter and a number.</p>
+      <form className="engine-client-admin-login-form" onSubmit={e=>{
+        e.preventDefault();void changePassword();
+      }}>
+        <label>Current Temporary Password
+          <input type="password" autoComplete="current-password" value={oldPassword}
+            required minLength={8} maxLength={128} onChange={e=>setOldPassword(e.target.value)}/>
+        </label>
+        <label>New Password
+          <input type="password" autoComplete="new-password" value={newPassword}
+            required minLength={8} maxLength={128} onChange={e=>setNewPassword(e.target.value)}/>
+        </label>
+        <label>Confirm New Password
+          <input type="password" autoComplete="new-password" value={confirmPassword}
+            required minLength={8} maxLength={128} onChange={e=>setConfirmPassword(e.target.value)}/>
+        </label>
+        {confirmPassword&&newPassword!==confirmPassword&&
+          <p role="alert">New passwords do not match.</p>}
+        <button type="submit" disabled={busy||newPassword.length<8||
+          !/[A-Za-z]/.test(newPassword)||!/[0-9]/.test(newPassword)||
+          !oldPassword||newPassword!==confirmPassword}>
+          {busy?"Updating…":"Change Password"}</button>
+      </form>
     </section>:<>
       <nav className="engine-client-admin-tabs" aria-label="Client admin sections">
         {availablePanels.map(item=><button key={item} type="button"
