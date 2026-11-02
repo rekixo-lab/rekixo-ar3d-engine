@@ -134,7 +134,7 @@ export function GeoPlotDetailsDrawer({
                 <b>{formatMeasurement(area.value,area.unit)}</b>
               </div>
             ) : <div className="geo-plot-drawer__fact">
-              <span>Verified plot area</span><b>Not published</b>
+              <span>Verified plot area</span><b>Awaiting source approval</b>
             </div>}
             {allRoles.map(role=>{
               const side=shown.sides[role];
@@ -154,10 +154,10 @@ export function GeoPlotDetailsDrawer({
               <span>Approved price</span><b>{approvedPrice}</b>
             </div>:null}
             {!commercial?<p className="geo-plot-drawer__muted">
-              Commercial status and price are not independently approved for public display.
+              Availability and price appear only after verified mapping and owner approval.
             </p>:null}
             {publicationMode==="preliminary"?<p className="geo-plot-drawer__review-note">
-              Preliminary mapped boundary. Unreviewed measurements and directions are not displayed.
+              Preliminary boundary: only individually reviewed measurements and directions can be shown.
             </p>:null}
             {shown.notes?<p className="geo-plot-drawer__notes">{shown.notes}</p>:null}
           </section>
