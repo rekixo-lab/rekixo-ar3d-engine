@@ -165,3 +165,14 @@
 .geo-integrated-scene:has(> .geo-plot-drawer.is-open) .geo-integrated-map .gm-style a[href*="maps.google"] {
   z-index:101 !important;
 }
+
+/* Per-road-side geographical facing: arrows point toward the mapped physical edge,
+   while the compact compass labels remain legible within the actual polygon. */
+.geo-plot-drawer__facing-label{
+  fill:#f9fffe;stroke:#092332;stroke-width:2.7px;paint-order:stroke;
+  stroke-linejoin:round;font-weight:850;dominant-baseline:middle;
+  letter-spacing:.01em;pointer-events:none}
+.geo-plot-drawer__facing-arrow{
+  stroke:var(--geo-plot-shape-stroke);stroke-width:1.45;
+  stroke-linecap:round;opacity:.92;pointer-events:none}
+.geo-plot-drawer__facing-tip{fill:var(--geo-plot-shape-stroke)}
