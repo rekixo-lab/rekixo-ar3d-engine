@@ -246,6 +246,7 @@ async function adminBrandingState(env, project, slug) {
   const origin = "https://ar3dstudio.in";
   const logoDraftVersion = branding?.draftLogoVersion || "";
   const logoPublishedVersion = branding?.publishedLogoVersion || "";
+  const logoAssetExperience = geoLive ? "geo" : "building";
   const logoPreviewVersion = logoDraftVersion || logoPublishedVersion;
   const shareRows = new Map((shares.results || []).map((row) => [row.experienceType, row]));
   const experiences = {};
@@ -298,10 +299,10 @@ async function adminBrandingState(env, project, slug) {
         ? `${CLOUD_PATH}/projects/${encodeURIComponent(slug)}/branding/assets/favicon?v=${encodeURIComponent(logoPreviewVersion)}`
         : "",
       publishedLogoUrl: logoPublishedVersion
-        ? `${origin}${BASE_PATH}/api/projects/${encodeURIComponent(slug)}/branding/logo?v=${encodeURIComponent(logoPublishedVersion)}`
+        ? `${origin}${BASE_PATH}/api/projects/${encodeURIComponent(slug)}/branding/logo?v=${encodeURIComponent(logoPublishedVersion)}&experience=${logoAssetExperience}`
         : "",
       publishedFaviconUrl: logoPublishedVersion
-        ? `${origin}${BASE_PATH}/api/projects/${encodeURIComponent(slug)}/branding/favicon?v=${encodeURIComponent(logoPublishedVersion)}`
+        ? `${origin}${BASE_PATH}/api/projects/${encodeURIComponent(slug)}/branding/favicon?v=${encodeURIComponent(logoPublishedVersion)}&experience=${logoAssetExperience}`
         : "",
       publishedAt: branding?.publishedAt || "",
     },
@@ -623,8 +624,8 @@ async function publishGeoSite(request, env, actor, project, slug) {
         mimeType: row.draftCardKey.endsWith(".jpg") ? "image/jpeg" : "image/webp", kind } : null;
   const fromPublished = (row, kind) => row?.cardKey && row?.sourceKey && row?.mimeType
     ? { cardKey: row.cardKey, sourceKey: row.sourceKey, mimeType: row.mimeType, kind } : null;
-  const buildingPoster = fromPublished(buildingPublished, "building-published") ||
-    fromDraft(building, "building-draft");
+  const buildingPoster = fromDraft(building, "building-draft") ||
+    fromPublished(buildingPublished, "building-published");
   const useBuildingPoster = body.useBuildingPoster === true;
   const poster = useBuildingPoster ? buildingPoster :
     fromDraft(geo, "geo-draft") || fromPublished(geoPublished, "geo-published") || buildingPoster;
@@ -878,6 +879,8 @@ export async function injectPublicBrandingMetadata(request, env, response, url =
     `<meta property="og:title" content="${title}">`,
     `<meta property="og:description" content="${description}">`,
     imageUrl ? `<meta property="og:image" content="${imageUrl}">` : "",
+    imageUrl ? `<meta property="og:image:secure_url" content="${imageUrl}">` : "",
+    imageUrl && snapshot.hasShareCard ? `<meta property="og:image:type" content="${htmlEscape(snapshot.cardMimeType)}">` : "",
     imageUrl ? `<meta property="og:image:alt" content="${title}">` : "",
     `<meta name="twitter:card" content="${snapshot.hasShareCard ? "summary_large_image" : "summary"}">`,
     `<meta name="twitter:title" content="${title}">`,
