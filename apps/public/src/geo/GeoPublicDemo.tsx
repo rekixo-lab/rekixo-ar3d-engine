@@ -865,12 +865,6 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           else void scene.requestFullscreen?.().catch(() => undefined);
         }}>⛶</button>
       </nav>
-      {closeupMode&&selectedPlot&&<button type="button"
-        className="geo-closeup-focus" onClick={()=>{
-          closeupControlRef.current?.focus(selectedPlot);
-          setSelectedPlot(null);
-        }}>Focus Plot {selectedPlot.id}</button>}
-
       {statusSummary.total>0&&<section className={`geo-plot-status${statusEnabled?" is-open":""}`}
         aria-label="Plot availability status">
         <div id="geo-plot-status-options" className="geo-plot-status-options"
@@ -911,6 +905,10 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         publicPhone={data.publicContacts?.phone}
         publicWhatsappHref={geoWhatsAppHref(data.publicContacts?.whatsapp||"")}
         onClose={()=>setSelectedPlot(null)}
+        onFocusPlot={closeupMode&&selectedPlot?()=>{
+          closeupControlRef.current?.focus(selectedPlot);
+          setSelectedPlot(null);
+        }:undefined}
       />
       {zoomNotice ? <div className="geo-zoom-notice" role="status">{zoomNotice}</div> : null}
       {toolbarContainer ? createPortal(<nav className="geo-camera-toolbar geo-camera-toolbar--normal-row" aria-label="Geo map navigation">
