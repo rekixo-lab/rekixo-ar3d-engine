@@ -13,9 +13,7 @@ CREATE TABLE IF NOT EXISTS project_client_passwords_3d (
  active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
  created_at TEXT NOT NULL,
  updated_at TEXT NOT NULL,
- last_login_at TEXT,
- FOREIGN KEY(client_id,project_id)
- REFERENCES project_client_grants_3d(client_id,project_id)
+ last_login_at TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_project_client_password_login
  ON project_client_passwords_3d(project_id,login_id);
