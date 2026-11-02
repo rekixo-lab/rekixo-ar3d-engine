@@ -5,7 +5,7 @@ test("Project-specific invite fragment stripped before Client Admin login, no ow
  await page.route("**/3Dprojects/api/client-portal/session?project=demo-a",async route=>
   route.fulfill({status:200,contentType:"application/json",
    body:JSON.stringify({authenticated:false,user:null})}));
- await page.goto("http://127.0.0.1:5174/3Dprojects/demo-a/client-admin#invite="+token);
+ await page.goto("http://127.0.0.1:5184/3Dprojects/demo-a/client-admin#invite="+token);
  await expect(page.getByRole("heading",{name:"Project Client Admin",level:2})).toBeVisible();
  await expect.poll(()=>page.url()).not.toContain("#invite=");
  await expect(page.getByLabel("Invited email address")).toBeVisible();
@@ -45,7 +45,7 @@ test("Viewer sees scoped dashboard and plot list without editing or owner action
   }
   return route.abort();
  });
- await page.goto("http://127.0.0.1:5174/3Dprojects/demo-a/client-admin#invite="+"a".repeat(64));
+ await page.goto("http://127.0.0.1:5184/3Dprojects/demo-a/client-admin#invite="+"a".repeat(64));
  await page.getByLabel("Invited email address").fill("viewer@example.test");
  await page.getByRole("button",{name:"Activate project access"}).click();
  await expect(page.getByRole("heading",{name:"Demo A"})).toBeVisible();
@@ -66,7 +66,7 @@ test("Project client admin on small phones does not horizontally overflow",async
  await page.route("**/3Dprojects/api/client-portal/session?project=demo-a",async route=>
   route.fulfill({status:200,contentType:"application/json",
    body:JSON.stringify({authenticated:false,user:null})}));
- await page.goto("http://127.0.0.1:5174/3Dprojects/demo-a/client-admin");
+ await page.goto("http://127.0.0.1:5184/3Dprojects/demo-a/client-admin");
  await expect(page.getByRole("heading",{name:"Project Client Admin",level:2})).toBeVisible();
  const bounds=await page.evaluate(()=>({
   width:document.documentElement.scrollWidth,view:window.innerWidth
