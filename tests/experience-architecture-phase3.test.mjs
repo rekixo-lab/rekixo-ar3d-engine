@@ -7,7 +7,7 @@ const read = (path) => fs.readFileSync(path, "utf8");
 test("Phase 3 overview remains Building-first and keeps Geo optional", () => {
   const dashboard = read("apps/admin/src/dashboard/EngineDashboard.tsx");
 
-  assert.match(dashboard, /SOURCE PACK/);
+  assert.match(dashboard, /Review Source Pack/);
   assert.match(dashboard, /<span>BUILDING<\/span>/);
   assert.match(dashboard, /<span>GEO<\/span>/);
   assert.match(dashboard, /\{geoLive \? "LIVE" : geoExperience \? "SETUP" : "OPTIONAL"\}/);
