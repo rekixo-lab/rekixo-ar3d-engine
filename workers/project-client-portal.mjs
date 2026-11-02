@@ -6,6 +6,7 @@ import {handleGeoPlotCommercial} from "./geo-plot-commercial.mjs";
 import {handleGeoPlotPricingSheet} from "./geo-plot-pricing.mjs";
 import {handleGeoPlotDeals} from "./geo-plot-deals.mjs";
 import {validProjectSlug} from "../shared/project-slug-policy.js";
+import {clientMasterplanInventory} from "./project-client-masterplan-inventory.mjs";
 const PREFIX="/3Dprojects/api/client-portal";
 const COOKIE="rekixo_3d_project_client";
 const SESSION_MS=8*60*60*1000;
@@ -112,7 +113,7 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
    ).bind(Date.now(),await clientTokenHash(value)).run();
    return response({ok:true},200,{"Set-Cookie":clear()});
   }
-  const match=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/(overview|commercial|pricing|deals)$/);
+  const match=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/(overview|commercial|pricing|deals|masterplan-inventory)$/);
   if(!match)return response({error:"Unknown project client route."},404);
   const s=await projectClientSession(request,env);
   if(!s)return response({error:"Client sign-in required."},401);
@@ -129,6 +130,17 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
       commercialRead:canProjectClient(s.role,"commercial.read"),
       commercialPrepare:canProjectClient(s.role,"commercial.prepare"),
       commercialApprove:canProjectClient(s.role,"commercial.approve")}});
+  }
+  // Image Geo has a different immutable mapping + private sales ledger.
+  // Its first client view is strictly read-only until separate sales roles and
+  // revision-safe booking writes are reviewed, never routed through owner APIs.
+  if(section==="masterplan-inventory"){
+   if(request.method!=="GET")return response({error:"Method not allowed."},405);
+   if(!canProjectClient(s.role,"project.read"))
+    return response({error:"Project read permission required."},403);
+   if(s.projectKind!=="masterplan_geo")
+    return response({error:"Only image masterplan Geo projects use this inventory."},404);
+   return response(await clientMasterplanInventory(env,s.projectId));
   }
   if(section==="commercial"||section==="pricing"||section==="deals"){
    if(!(section==="pricing"?["GET","POST"]:["GET","PUT"]).includes(request.method))
