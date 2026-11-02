@@ -40,6 +40,7 @@ function fixture(){
  CREATE TABLE engine_admin_audit(id TEXT PRIMARY KEY,actor_email TEXT,action TEXT,
    project_id TEXT,target_id TEXT,details_json TEXT,created_at TEXT);`);
  db.exec(read("database/migrations/0047_scoped_project_client_access.sql"));
+ db.exec(read("database/migrations/0052_project_client_password_access.sql"));
  for(const slug of ["demo-a","demo-b"])
   db.prepare("INSERT INTO projects_3d VALUES(?,?,?,'published','legacy')")
    .run(slug,slug,"Demo "+slug);
@@ -69,7 +70,7 @@ test("Owner issues a one-use project invite; enrollment creates secure cookie, n
   const id="11111111-1111-4111-8111-111111111111";
   const grant=await provisionProjectClient(f.env,f.actor,f.project,{id,role:"viewer"},
    request("/3Dprojects/clients"));
-  assert.match(grant.inviteUrl,/^https:\/\/admin\.rekixo\.com\/3Dprojects\/demo-a\/client-admin#invite=[a-f0-9]{64}$/);
+  assert.match(grant.inviteUrl,/^https:\/\/ar3dstudio\.in\/3Dprojects\/demo-a\/client-admin#invite=[a-f0-9]{64}$/);
   const token=grant.inviteUrl.split("invite=")[1];
   const row=f.sqlite.prepare("SELECT token_hash FROM project_client_invitations_3d").get();
   assert.notEqual(row.token_hash,token,"secrets are stored hashed only");
