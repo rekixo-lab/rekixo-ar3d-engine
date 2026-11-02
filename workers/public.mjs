@@ -411,6 +411,11 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // AR3D customer-host Client Admin: its D1 credentials/sessions are isolated
+    // from the Engine Owner Cloudflare administration routes.
+    const clientResponse = await handleProjectClientPortal(request,env,url);
+    if(clientResponse)return addSecurityHeaders(clientResponse);
+
     const releaseResponse = await handleReleaseReadRequest(request, env, url);
     if (releaseResponse) return releaseResponse;
 
