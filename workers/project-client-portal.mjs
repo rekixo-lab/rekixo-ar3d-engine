@@ -7,6 +7,7 @@ import {handleGeoPlotPricingSheet} from "./geo-plot-pricing.mjs";
 import {handleGeoPlotDeals} from "./geo-plot-deals.mjs";
 import {validProjectSlug} from "../shared/project-slug-policy.js";
 import {clientMasterplanInventory} from "./project-client-masterplan-inventory.mjs";
+import {clientProjectContact} from "./project-client-contact.mjs";
 const PREFIX="/3Dprojects/api/client-portal";
 const COOKIE="rekixo_3d_project_client";
 const SESSION_MS=8*60*60*1000;
@@ -113,7 +114,7 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
    ).bind(Date.now(),await clientTokenHash(value)).run();
    return response({ok:true},200,{"Set-Cookie":clear()});
   }
-  const match=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/(overview|commercial|pricing|deals|masterplan-inventory)$/);
+  const match=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/(overview|commercial|pricing|deals|masterplan-inventory|contact)$/);
   if(!match)return response({error:"Unknown project client route."},404);
   const s=await projectClientSession(request,env);
   if(!s)return response({error:"Client sign-in required."},401);
@@ -130,6 +131,13 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
       commercialRead:canProjectClient(s.role,"commercial.read"),
       commercialPrepare:canProjectClient(s.role,"commercial.prepare"),
       commercialApprove:canProjectClient(s.role,"commercial.approve")}});
+  }
+  if(section==="contact"){
+   if(!["GET","PUT"].includes(request.method))
+    return response({error:"Method not allowed."},405);
+   if(request.method==="PUT"&&!sameOrigin(request))
+    return response({error:"Same-origin request required."},403);
+   return clientProjectContact(request,env,s);
   }
   // Image Geo has a different immutable mapping + private sales ledger.
   // Its first client view is strictly read-only until separate sales roles and
