@@ -126,3 +126,10 @@
 @media(prefers-reduced-motion:reduce){
   .geo-plot-drawer{transition-duration:.01ms;transition-delay:0s;will-change:auto}
 }
+
+/* The status filter is retained in React state and restored after the drawer
+   closes. Never stack its expanded legend under the active plot details. */
+.geo-integrated-scene:has(> .geo-plot-drawer.is-open) > .geo-plot-status {
+  visibility:hidden;
+  pointer-events:none;
+}
