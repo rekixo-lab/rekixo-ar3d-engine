@@ -9,10 +9,12 @@ type Profile = {
 };
 type ManagedClient = {id:string;displayName:string;email:string;phone:string;proposedRole:string;
   accessState:"not_provisioned"|"disabled";notes:string;createdAt:string;
-  grantActive?:boolean;grantedRole?:string;grantEpoch?:number};
+  grantActive?:boolean;grantedRole?:string;grantEpoch?:number;
+  credentialLoginId?:string|null;credentialLoginType?:string|null;passwordActive?:number;mustChangePassword?:number};
 type ManagedState = {project:{id:string;name:string;slug:string;projectKind:string;status:string};
   profile:{revision:number;values:Profile};clients:ManagedClient[];clientLoginEnabled:boolean;
-  invitation?:{clientId:string;role:string;expiresAt:number;inviteUrl:string}};
+  invitation?:{clientId:string;role:string;expiresAt:number;inviteUrl:string};
+  credential?:{clientId:string;loginId:string;loginType:string;password:string;mustChangePassword:boolean}};
 type Tab = "profile"|"clients";
 const fields:Array<{key:Exclude<keyof Profile,"publicContactsEnabled">;name:string;hint?:string}>= [
   {key:"projectNumber",name:"Project reference / registration number"},
@@ -42,11 +44,18 @@ export default function ProjectManagement({section}:{section:Tab}){
   const [state,setState]=useState<ManagedState|null>(null);
   const [profile,setProfile]=useState<Profile|null>(null);
   const [name,setName]=useState("");const [email,setEmail]=useState("");
-  const [phone,setPhone]=useState("");const [role,setRole]=useState("viewer");
+  const [phone,setPhone]=useState("");const [role,setRole]=useState("client_admin");
+  const [loginType,setLoginType]=useState<"mobile"|"email">("mobile");
   const [notes,setNotes]=useState("");
   const [error,setError]=useState("");const [message,setMessage]=useState("");
   const [busy,setBusy]=useState(false);
   const [invitation,setInvitation]=useState<ManagedState["invitation"]|null>(null);
+  const [credential,setCredential]=useState<ManagedState["credential"]|null>(null);
+  useEffect(()=>{
+    if(!credential)return;
+    const timer=setTimeout(()=>setCredential(null),5*60*1000);
+    return()=>clearTimeout(timer);
+  },[credential]);
   const load=useCallback(async()=>{
     if(!slug){setState(null);setProfile(null);return;}
     const next=await request<ManagedState>(endpoint);
@@ -59,7 +68,9 @@ export default function ProjectManagement({section}:{section:Tab}){
     try{const next=await request<ManagedState>(endpoint,method,body);
       setState(next);setProfile(next.profile.values);
       if(next.invitation)setInvitation(next.invitation);
-      setMessage(next.invitation?"Client invitation created. Share this one-time secret privately with the intended person; it will not be shown again.":"Saved and verified from Engine database.");
+      if(next.credential)setCredential(next.credential);
+      setMessage(next.credential?"Client Admin ID and temporary password created. Copy them securely; the password is shown only once.":
+        next.invitation?"Client invitation created. Share the secret privately; it is shown only once.":"Saved and verified from Engine database.");
       return true;
     }catch(e){setError(e instanceof Error?e.message:"Operation failed.");return false;}
     finally{setBusy(false);}
@@ -110,12 +121,30 @@ export default function ProjectManagement({section}:{section:Tab}){
             Copy Client Admin URL
           </button>
         </div>
-        <p>Select <strong>Client Admin</strong> as the role, add the client contact and issue its
-          one-time invitation. The client only sees the approved project and permitted modules.</p>
-        <p>Directory contacts are NOT logins. A separate owner-issued, one-use invite is required
-          to activate a strictly project-scoped session. Viewer can read; Editor can prepare
-          private commercial facts; Approver / Client Admin can explicitly approve public listing
-          facts. No role receives Engine Owner access, buyer ledgers or cross-project access.</p>
+        <p><strong>AR3D Platform-style Client Admin:</strong> enter the client's name, mobile
+          number and email. Creating a Client Admin automatically generates a personal login ID
+          and temporary password for this project. First sign-in requires a password change.</p>
+        <p>Other Viewer/Editor/Approver roles can continue using scoped invitations.
+          Client Admin access can be reset or revoked here. Mapping, Geo releases and
+          owner-only financial controls stay restricted.</p>
+        {credential&&<section className="engine-manage-card engine-manage-credential" role="status">
+          <h3>Client Admin credentials — copy now</h3>
+          <p>Project: <strong>{state?.project.name}</strong> · Password changes on first login.
+            The temporary password cannot be recovered after closing this card.</p>
+          <label>Client Login ID<input readOnly aria-label="New Client Admin Login ID"
+            value={credential.loginId} onFocus={e=>e.currentTarget.select()}/></label>
+          <label>Temporary Password<input readOnly aria-label="Temporary Client Admin Password"
+            value={credential.password} onFocus={e=>e.currentTarget.select()}/></label>
+          <label>Personal Client Admin URL<input readOnly value={projectClientAdminUrl(slug)}
+            aria-label="Personal AR3D Client Admin URL" onFocus={e=>e.currentTarget.select()}/></label>
+          <div className="engine-manage-actions">
+            <button type="button" onClick={()=>void navigator.clipboard.writeText(
+              "AR3D Client Admin\n"+projectClientAdminUrl(slug)+"\nLogin ID: "+credential.loginId+
+              "\nTemporary Password: "+credential.password)}>
+              Copy Login Details</button>
+            <button type="button" onClick={()=>setCredential(null)}>Hide Credentials</button>
+          </div>
+        </section>}
         {invitation&&<div className="engine-manage-card" role="status">
           <strong>One-time private invitation — copy now</strong>
           <p>Expires {new Date(invitation.expiresAt).toLocaleString()} · {invitation.role}.
@@ -130,19 +159,30 @@ export default function ProjectManagement({section}:{section:Tab}){
           </div>
         </div>}
         <form onSubmit={e=>{e.preventDefault();void perform("POST",{
-          action:"create-client",displayName:name,email,phone,proposedRole:role,notes
+          action:"create-client",displayName:name,email,phone,proposedRole:role,loginType,notes
         }).then(saved=>{if(saved){setName("");setEmail("");setPhone("");setNotes("");}});}}>
           <div className="engine-manage-grid">
             <label>Client / Staff name<input required value={name} maxLength={160} onChange={e=>setName(e.target.value)}/></label>
             <label>Email<input type="email" value={email} maxLength={254} onChange={e=>setEmail(e.target.value)}/></label>
-            <label>Phone<input value={phone} maxLength={25} onChange={e=>setPhone(e.target.value)}/></label>
+            <label>Mobile Number<input type="tel" value={phone} maxLength={25} onChange={e=>setPhone(e.target.value)}/></label>
             <label>Proposed role<select value={role} onChange={e=>setRole(e.target.value)}>
               {["viewer","editor","approver","client_admin"].map(v=><option key={v} value={v}>{v}</option>)}
             </select></label>
+            {role==="client_admin"&&<label>Login ID Type
+              <select value={loginType} onChange={e=>setLoginType(e.target.value as "mobile"|"email")}>
+                <option value="mobile">Mobile number</option>
+                <option value="email">Email</option>
+              </select></label>}
             <label>Notes<input value={notes} maxLength={500} onChange={e=>setNotes(e.target.value)}/></label>
           </div>
-          <div className="engine-manage-actions"><span>No access until explicit one-time invitation</span>
-            <button disabled={busy||!name.trim()||(!email&&!phone)||state?.project.status==="archived"}>Add Client Record</button></div>
+          <div className="engine-manage-actions">
+            <span>{role==="client_admin"?"Secure ID and password generated automatically":"Invitation required for non-admin roles"}</span>
+            <button disabled={busy||!name.trim()||
+              !(role==="client_admin"?(loginType==="mobile"?phone:email):(email||phone))||
+              state?.project.status==="archived"}>
+              {role==="client_admin"?"Create Client Admin & Login":"Add Client Record"}
+            </button>
+          </div>
         </form>
       </section>
       <section className="engine-manage-card"><h2>Clients ({state?.clients.length||0})</h2>
@@ -151,13 +191,25 @@ export default function ProjectManagement({section}:{section:Tab}){
             <div><strong>{client.displayName}</strong><small>{client.email||client.phone} · proposed {client.proposedRole}</small>
               <small>{client.accessState==="disabled"?"Revoked / disabled":
                 client.grantActive?"Active grant · "+client.grantedRole+" · epoch "+client.grantEpoch:
-                "Not invited · no access"}</small></div>
+                "Not invited · no access"}</small>
+              {client.credentialLoginId&&<small>Login ID: {client.credentialLoginId} ·
+                {client.mustChangePassword?" Temporary password pending change":" Password active"}</small>}
+            </div>
             {client.accessState==="not_provisioned"&&<div className="engine-manage-actions">
-              <button disabled={busy||!client.email} onClick={()=>{
+              {client.proposedRole==="client_admin"&&<button type="button"
+                disabled={busy||(!client.email&&!client.phone)}
+                onClick={()=>{
+                  if(confirm("Generate "+(client.credentialLoginId?"a NEW":"a")+" temporary Client Admin password for "+
+                    client.displayName+"? Previous sessions and passwords will be revoked."))
+                    void perform("POST",{action:client.credentialLoginId?
+                      "reset-client-password":"provision-client-password",id:client.id,
+                      loginType:client.credentialLoginType||(client.phone?"mobile":"email")});
+                }}>{client.credentialLoginId?"Reset Client Password":"Create Client Login"}</button>}
+              {client.proposedRole!=="client_admin"&&<button disabled={busy||!client.email} onClick={()=>{
                 if(confirm("Grant "+client.proposedRole+" access ONLY to this project for "+client.displayName+
                   "? A 24h one-time invite will be generated. Confirm identity before sharing."))
                   void perform("POST",{action:"grant-client-access",id:client.id,role:client.proposedRole});
-              }}>{client.grantActive?"Rotate invite / revoke previous sessions":"Issue scoped invitation"}</button>
+              }}>{client.grantActive?"Rotate invite / revoke previous sessions":"Issue scoped invitation"}</button>}
               <button disabled={busy} onClick={()=>{
                 if(confirm("Permanently revoke ALL sessions and invitations for "+client.displayName+
                    " in this project?"))

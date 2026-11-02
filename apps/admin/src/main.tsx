@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import "./source-pack/source-pack-control-center.css";
 import EngineAdminShell from "./layout/EngineAdminShell";
+import {projectClientAdminUrl} from "../../../shared/project-client-admin-url.js";
 
 const EngineDashboard = lazy(() => import("./dashboard/EngineDashboard"));
 const SourcePackReview = lazy(() => import("./source-pack/SourcePackReview"));
@@ -49,6 +50,18 @@ function LegacyStudioRedirect() {
   return <RouteLoading label="Opening Review Source Pack…" />;
 }
 
+function ClientAdminRedirect({slug}:{slug:string}){
+  useEffect(()=>{
+    // Preserve legacy one-use invitation fragments while moving the browser to
+    // the customer's AR3D domain. Tokens never appear in HTTP requests.
+    window.location.replace(projectClientAdminUrl(slug)+window.location.hash);
+  },[slug]);
+  return <div className="route-loading">
+    <small>AR3D STUDIO</small><p className="eyebrow">CLIENT ADMIN</p>
+    <h1>Opening your project Client Admin…</h1>
+  </div>;
+}
+
 function AdminRouter() {
   const path = window.location.pathname.replace(/\/$/, "");
 
@@ -62,11 +75,7 @@ function AdminRouter() {
 
   // Project-specific client admin never enters the Engine Owner shell.
   const projectClientAdmin=path.match(/^\/3Dprojects\/([a-z0-9-]+)\/client-admin$/);
-  if(projectClientAdmin){
-    return <Suspense fallback={<RouteLoading label="Opening project client admin…" />}>
-      <ProjectClientPortal projectSlug={projectClientAdmin[1]} />
-    </Suspense>;
-  }
+  if(projectClientAdmin)return <ClientAdminRedirect slug={projectClientAdmin[1]} />;
 
   if (path === "/3Dprojects/client-portal") {
     return <Suspense fallback={<RouteLoading label="Opening secure client portal…" />}>

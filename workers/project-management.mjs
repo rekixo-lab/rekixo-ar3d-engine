@@ -1,5 +1,6 @@
 // Engine-owned project profile and client directory. No Platform integration.
 import {provisionProjectClient,revokeProjectClient} from "./project-client-access.mjs";
+import {ownerProvisionClientPassword,ownerCreateClientPassword} from "./project-client-passwords.mjs";
 // Directory roles are proposals only: never permissions, sessions or credentials.
 const json = (payload, status = 200) => Response.json(payload,{
   status, headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"},
@@ -71,9 +72,12 @@ async function getState(env,project){
          c.proposed_role AS proposedRole,c.access_state AS accessState,c.notes,
          c.created_at AS createdAt,c.updated_at AS updatedAt,
          g.role AS grantedRole,g.active AS grantActive,
-         g.epoch AS grantEpoch
+         g.epoch AS grantEpoch,
+         pwd.login_type AS credentialLoginType,pwd.login_id AS credentialLoginId,
+         pwd.must_change_password AS mustChangePassword,pwd.active AS passwordActive
       FROM project_client_directory_3d c
       LEFT JOIN project_client_grants_3d g ON g.client_id=c.id AND g.project_id=c.project_id
+      LEFT JOIN project_client_passwords_3d pwd ON pwd.client_id=c.id AND pwd.project_id=c.project_id
       WHERE c.project_id=? ORDER BY c.updated_at DESC,c.id ASC LIMIT 200`)
       .bind(project.id).all(),
   ]);
@@ -131,6 +135,14 @@ export async function handleProjectManagementAdmin(request,env,actor,project,par
         .bind(project.id).first();
       if(Number(count?.total||0)>=200)return fail("Client directory project limit reached.",409);
       const id=crypto.randomUUID(),now=new Date().toISOString();
+      if(role==="client_admin"){
+        // One transaction: client directory, grant, credentials and audit.
+        // On a duplicate login ID nothing is left half-created.
+        const credential=await ownerCreateClientPassword(env,actor,project,{
+          id,displayName:name,email:mail,phone:mobile,notes,loginType:body.loginType
+        });
+        return json({...(await getState(env,project)),credential},201);
+      }
       await env.DB.prepare(`INSERT INTO project_client_directory_3d
        (id,project_id,display_name,email,phone,proposed_role,access_state,notes,
         created_by,created_at,updated_by,updated_at)
@@ -138,6 +150,10 @@ export async function handleProjectManagementAdmin(request,env,actor,project,par
         .bind(id,project.id,name,mail,mobile,role,notes,actor.email,now,actor.email,now).run();
       await audit(env,actor,"project.client_record_added",project.id,id,{proposedRole:role});
       return json(await getState(env,project),201);
+    }
+    if(request.method==="POST"&&["provision-client-password","reset-client-password"].includes(body.action)){
+      const credential=await ownerProvisionClientPassword(env,actor,project,body.id,body.loginType);
+      return json({...(await getState(env,project)),credential});
     }
     if(request.method==="POST"&&body.action==="grant-client-access"){
       const invitation=await provisionProjectClient(env,actor,project,body,request);

@@ -12,6 +12,7 @@ import { publicMasterplanResponse } from "./masterplan-geo-public.mjs";
 import { servePublicMasterplanShareCard } from "./masterplan-share-public.mjs";
 import { serveR2Object } from "./http-range.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
+import {handleProjectClientPortal} from "./project-client-portal.mjs";
 import {
   activeGeoReleaseState,
   publicGeoExperienceFromState,
@@ -409,6 +410,11 @@ async function publicGeo3DState(env, slug) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // AR3D customer-host Client Admin: its D1 credentials/sessions are isolated
+    // from the Engine Owner Cloudflare administration routes.
+    const clientResponse = await handleProjectClientPortal(request,env,url);
+    if(clientResponse)return addSecurityHeaders(clientResponse);
 
     const releaseResponse = await handleReleaseReadRequest(request, env, url);
     if (releaseResponse) return releaseResponse;

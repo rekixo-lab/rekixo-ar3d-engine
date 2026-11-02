@@ -8,6 +8,7 @@ import {handleGeoPlotDeals} from "./geo-plot-deals.mjs";
 import {validProjectSlug} from "../shared/project-slug-policy.js";
 import {clientMasterplanInventory} from "./project-client-masterplan-inventory.mjs";
 import {clientProjectContact} from "./project-client-contact.mjs";
+import {passwordClientLogin,passwordClientChange} from "./project-client-passwords.mjs";
 const PREFIX="/3Dprojects/api/client-portal";
 const COOKIE="rekixo_3d_project_client";
 const SESSION_MS=8*60*60*1000;
@@ -29,10 +30,11 @@ export async function projectClientSession(request,env){
  if(!validClientBearer(token))return null;
  const now=Date.now(),hash=await clientTokenHash(token);
  const s=await env.DB.prepare(
-  "SELECT s.project_id AS projectId,s.client_id AS clientId,g.role,c.email,c.display_name AS displayName,p.slug,p.name AS projectName,p.status AS projectStatus,p.project_kind AS projectKind "+
+  "SELECT s.project_id AS projectId,s.client_id AS clientId,g.role,COALESCE(NULLIF(c.email,''),pwd.login_id,'') AS email,c.display_name AS displayName,p.slug,p.name AS projectName,p.status AS projectStatus,p.project_kind AS projectKind,COALESCE(pwd.must_change_password,0) AS mustChangePassword,pwd.login_id AS loginId "+
   "FROM project_client_sessions_3d s JOIN project_client_grants_3d g ON g.client_id=s.client_id AND g.project_id=s.project_id "+
   "JOIN project_client_directory_3d c ON c.id=s.client_id AND c.project_id=s.project_id "+
   "JOIN projects_3d p ON p.id=s.project_id "+
+  "LEFT JOIN project_client_passwords_3d pwd ON pwd.client_id=s.client_id AND pwd.project_id=s.project_id AND pwd.active=1 "+
   "WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>? "+
   "AND g.active=1 AND g.epoch=s.grant_epoch AND c.access_state='not_provisioned' AND p.status<>'archived' LIMIT 1"
  ).bind(hash,now).first();
@@ -93,6 +95,29 @@ async function enroll(request,env){
 export async function handleProjectClientPortal(request,env,url=new URL(request.url)){
  if(url.pathname!==PREFIX&&!url.pathname.startsWith(PREFIX+"/"))return null;
  try{
+  if(url.pathname===PREFIX+"/login"){
+   if(!sameOrigin(request))return response({error:"Same-origin request required."},403);
+   const result=await passwordClientLogin(request,env);
+   return response(result.body,result.status,{
+    ...(result.cookie?{"Set-Cookie":issue(result.cookie)}:{}),
+    ...(result.retryAfter?{"Retry-After":String(result.retryAfter)}:{})
+   });
+  }
+  if(url.pathname===PREFIX+"/change-password"){
+   if(!sameOrigin(request))return response({error:"Same-origin request required."},403);
+   const s=await projectClientSession(request,env);
+   if(!s)return response({error:"Client sign-in required."},401);
+   const result=await passwordClientChange(request,env,s);
+   return response(result.body,result.status,result.clearCookie?{"Set-Cookie":clear()}:{});
+  }
+  const meta=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/login-meta$/);
+  if(meta){
+   if(request.method!=="GET")return response({error:"Method not allowed."},405);
+   if(!validProjectSlug(meta[1]))return response({error:"Invalid project."},404);
+   const p=await env.DB.prepare("SELECT name FROM projects_3d WHERE slug=? AND status<>'archived' LIMIT 1")
+    .bind(meta[1]).first();
+   return response({projectName:p?.name||"Project Client Admin"});
+  }
   if(url.pathname===PREFIX+"/enroll")return enroll(request,env);
   if(url.pathname===PREFIX+"/session"){
    if(request.method!=="GET")return response({error:"Method not allowed."},405);
@@ -103,7 +128,8 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
    const s=found&&(!requestedSlug||found.slug===requestedSlug)?found:null;
    return response({authenticated:Boolean(s),user:s?{
     displayName:s.displayName,email:s.email,role:s.role,
-    projectSlug:s.slug,projectName:s.projectName,projectKind:s.projectKind}:null});
+    projectSlug:s.slug,projectName:s.projectName,projectKind:s.projectKind,
+    mustChangePassword:Boolean(s.mustChangePassword),loginId:s.loginId||null}:null});
   }
   if(url.pathname===PREFIX+"/logout"){
    if(request.method!=="POST")return response({error:"Method not allowed."},405);
@@ -119,6 +145,7 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
   const s=await projectClientSession(request,env);
   if(!s)return response({error:"Client sign-in required."},401);
   const slug=match[1],section=match[2];
+  if(s.mustChangePassword)return response({error:"Change temporary password before using the project dashboard."},403);
   if(!validProjectSlug(slug)||slug!==s.slug)
    return response({error:"Project access is restricted."},403);
   if(section==="overview"){

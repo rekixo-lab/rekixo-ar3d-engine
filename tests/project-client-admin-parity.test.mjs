@@ -7,24 +7,25 @@ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 test("Personal Client Admin uses isolated canonical project-scoped path",()=>{
  assert.equal(projectClientAdminPath("satharai-50a45356"),"/3Dprojects/satharai-50a45356/client-admin");
  assert.equal(projectClientAdminUrl("satharai-50a45356"),
-  "https://admin.rekixo.com/3Dprojects/satharai-50a45356/client-admin");
+  "https://ar3dstudio.in/3Dprojects/satharai-50a45356/client-admin");
  assert.throws(()=>projectClientAdminUrl("../logout"),/Invalid project/);
  const routes=read("apps/admin/src/main.tsx");
  assert.match(routes,/projectClientAdmin=path.match/);
- assert.match(routes,/ProjectClientPortal projectSlug=\{projectClientAdmin\[1\]\}/);
+ assert.match(routes,/ClientAdminRedirect slug=\{projectClientAdmin\[1\]\}/);
  assert.ok(routes.indexOf("projectClientAdmin=path.match")<
   routes.indexOf('path === "/3Dprojects/login"'));
  const owner=read("apps/admin/src/layout/EngineAdminShell.tsx");
  assert.doesNotMatch(routes.slice(routes.indexOf("projectClientAdmin=path.match"),
   routes.indexOf('path === "/3Dprojects/client-portal"')),/<EngineAdminShell/);
  assert.match(owner,/session\(\)/);
+ assert.match(routes,/window.location.replace\(projectClientAdminUrl\(slug\)\+window.location.hash\)/);
 });
 test("Owner creates invites, customer Geo and masterplan link to Client Admin rather than owner",()=>{
  const access=read("workers/project-client-access.mjs");
  const owner=read("apps/admin/src/management/ProjectManagement.tsx");
  const geo=read("apps/public/src/geo/GeoPublicDemo.tsx");
  const image=read("apps/public/src/masterplan/MasterplanPublic.tsx");
- assert.match(access,/projectClientAdminPath\(project.slug\)/);
+ assert.match(access,/projectClientAdminUrl\(project.slug\)/);
  assert.match(owner,/grant-client-access/);
  assert.match(owner,/revoke-client-access/);
  assert.match(owner,/projectClientAdminUrl\(slug\)/);
@@ -49,6 +50,10 @@ test("Session cannot be shared across projects and retains least privilege",()=>
  assert.match(ui,/GeoDealRecordsPanel/);
  assert.match(ui,/saveContact/);
  assert.match(ui,/Contact & Location/);
+ assert.match(ui,/Sign In to Client Admin/);
+ assert.match(ui,/Change Temporary Password/);
+ assert.match(ui,/AR3D STUDIO · CLIENT ADMIN/);
+ assert.doesNotMatch(ui,/REKIXO · PERSONAL CLIENT ADMIN/i);
  assert.match(portal,/clientProjectContact\(request,env,s\)/);
  assert.doesNotMatch(portal,/handleMasterplanSalesAdmin|engineAdminReadAccess/);
 });

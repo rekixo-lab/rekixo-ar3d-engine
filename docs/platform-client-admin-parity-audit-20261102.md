@@ -22,13 +22,13 @@ Audited 2026-11-02 against
 4. Server APIs independently enforce project scope, same-origin writes, immutable
    mapped inventory constraints, explicit financial roles and audit logs.
 
-## Engine parity state (this PR)
+## Engine parity state (PR #376 + password/branding follow-up #377)
 
 | Capability | Platform | Engine in this PR |
 | --- | --- | --- |
 | Dedicated client login URL | /projects/:slug/admin-login | /3Dprojects/:slug/client-admin |
 | Project isolation & client session | Yes | Yes, checked on enrollment/session/data requests |
-| Super Admin client provisioning | Yes | Existing directory + one-time invite, now linked from Clients |
+| Super Admin client provisioning | Yes | New Client Admin creates mobile/email ID + temporary password atomically; invitations remain available |
 | Dashboard | Counts + masterplan preview | Counts + status summary (source-backed) |
 | Plot statuses | Available / Booked / Sold, Metro special | 3D Geo review/commercial approvals; Image Geo read-only booked/confirmed |
 | Private prices | Optional, permissions | Existing 3D Geo CSV review and commercial records |
@@ -38,17 +38,18 @@ Audited 2026-11-02 against
 | Gallery images | Upload/delete | **Not yet available** |
 | Customer contact editing | Whitelisted | Client Admin-only customer-facing fields with revision and audit; Owner identity and public-consent remain restricted |
 | Plot notices | Optional drafts/publish | **Not yet available** |
-| Email/mobile password login | Yes | **Not yet available**; current 24h one-time invitation and 8h session |
-| Password reset & forced rotation | Yes | **Not yet available**; Owner can revoke or reissue invite |
-| Project custom domain | Yes | Uses canonical admin.rekixo.com project route |
+| Email/mobile password login | Yes | Project-scoped PBKDF2 password login, hashed rate limits and 8-hour HttpOnly session; legacy invite retained |
+| Password reset & forced rotation | Yes | Owner one-time password issuance/reset, revoked sessions and required first-login password change |
+| Project custom domain | Yes | Canonical `ar3dstudio.in/3Dprojects/:slug/client-admin` (legacy Engine Owner host remains separate) |
 | Client access to mapper/CAD/releases | No | No |
 
 ## Security requirements before enabling remaining modules
 
-- **Passwords:** add a separate project-bound credential table and login endpoint;
-  password hashing, rate-limiting, login-enumeration safety, session rotation,
-  password change/reset and optional mobile normalization must be tested. Never
-  reuse Engine Owner Cloudflare access tokens or credentials.
+- **Passwords:** this follow-up adds an independent project-bound credential table,
+  PBKDF2 hashing, identifier/IP rate limits, session revocation, password reset,
+  mandatory change and Platform-compatible India/E.164 mobile normalization.
+  Never reuse Engine Owner credentials. Production deployment must apply the
+  additive D1 migration before enabling the new login UI.
 - **Sales:** distinguish 3D Geo commercial *listing* records from legal sales and
   the Image Geo masterplan financial ledger. Build a separate role-controlled
   client API, version checks, transaction/audit rows and cash reconciliation

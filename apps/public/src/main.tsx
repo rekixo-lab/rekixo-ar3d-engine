@@ -13,6 +13,7 @@ import { clientViewerCapabilities } from "./clientPresentation";
 
 const GeoPublicDemo = lazy(() => import("./geo/GeoPublicDemo"));
 const MasterplanPublic = lazy(() => import("./masterplan/MasterplanPublic"));
+const ProjectClientAdmin = lazy(() => import("../../admin/src/management/ProjectClientPortal"));
 const loadViewer3D = () => import("./viewer/Viewer3D");
 const Viewer3D = lazy(() => loadViewer3D().then((module) => ({ default: module.Viewer3D })));
 
@@ -789,10 +790,12 @@ const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root mount node");
 const geoRoute = /^\/3Dprojects\/[^/]+\/geo\/?$/.test(window.location.pathname);
 const masterplanRoute = /^\/3Dprojects\/[^/]+\/masterplan\/?$/.test(window.location.pathname);
+const clientAdminMatch = window.location.pathname.match(/^\/3Dprojects\/([a-z0-9]+(?:-[a-z0-9]+)*)\/client-admin\/?$/);
 createRoot(root).render(
   <React.StrictMode>
     <Suspense fallback={<LoadingPage />}>
-      {masterplanRoute ? <MasterplanPublic /> : geoRoute ? <GeoPublicDemo /> : <App />}
+      {clientAdminMatch ? <ProjectClientAdmin projectSlug={clientAdminMatch[1]} /> :
+       masterplanRoute ? <MasterplanPublic /> : geoRoute ? <GeoPublicDemo /> : <App />}
     </Suspense>
   </React.StrictMode>,
 );
