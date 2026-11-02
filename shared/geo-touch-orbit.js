@@ -1,76 +1,45 @@
 /**
- * Mobile Geo orbit: one horizontal finger turns the public Google vector
- * camera, while native two-finger pan/pinch remains owned by Google Maps.
- * requestAnimationFrame smooths irregular touch-move delivery and coalesces
- * camera writes to one per display frame. It never changes published geometry.
+ * Customer Geo viewer: a single finger directly drives the Google vector
+ * camera's heading. Two-finger navigation stays with Google Maps.
+ *
+ * Do not ease or queue heading writes after touchend: delayed camera updates
+ * made the map appear frozen under the finger and rotate after release.
+ * All changes are camera-only; published GLB/plot geometry is untouched.
  */
 const DEGREES_PER_PIXEL=0.46;
 const ORBIT_THRESHOLD_PX=5;
 const POST_ORBIT_CLICK_GUARD_MS=480;
-const ORBIT_FRAME_EASING=0.42;
-const HEADING_SNAP_EPSILON=0.075;
 
 export function normalizeGeoOrbitHeading(value){
   return ((value%360)+360)%360;
-}
-function shortestTurn(current,target){
-  return ((target-current+540)%360)-180;
 }
 
 export function createGeoOneFingerOrbit({
   getHeading,
   setHeading,
   onRotate=()=>{},
+  onCaptureChange=()=>{},
   shouldIgnoreTarget=()=>false,
   now=()=>performance.now(),
-  requestFrame=typeof requestAnimationFrame==="function"?requestAnimationFrame:null,
-  cancelFrame=typeof cancelAnimationFrame==="function"?cancelAnimationFrame:()=>{},
 }){
   let active=null;
   let multiTouchLock=false;
   let lastRotationAt=-Infinity;
-  let renderedHeading=null;
-  let targetHeading=null;
-  let frameHandle=null;
+  let heading=null;
+  let capturing=false;
   let disposed=false;
 
-  function haltFrames(){
-    if(frameHandle!==null)cancelFrame(frameHandle);
-    frameHandle=null;
-  }
-  function stepFrame(){
-    frameHandle=null;
-    if(disposed||renderedHeading===null||targetHeading===null)return;
-    const delta=shortestTurn(renderedHeading,targetHeading);
-    const done=Math.abs(delta)<=HEADING_SNAP_EPSILON;
-    renderedHeading=done?targetHeading:
-      normalizeGeoOrbitHeading(renderedHeading+delta*ORBIT_FRAME_EASING);
-    setHeading(renderedHeading);
-    onRotate();
-    if(!done&&requestFrame)frameHandle=requestFrame(stepFrame);
-  }
-  function schedule(){
-    if(frameHandle!==null||disposed)return;
-    if(requestFrame)frameHandle=requestFrame(stepFrame);
-    else {
-      // Non-browser consumers and deterministic sync unit tests.
-      renderedHeading=targetHeading;
-      setHeading(renderedHeading);
-      onRotate();
-    }
-  }
-  function beginHeading(){
-    const heading=getHeading();
-    if(!Number.isFinite(heading))return false;
-    renderedHeading=normalizeGeoOrbitHeading(heading);
-    targetHeading=renderedHeading;
-    return true;
+  function setCapturing(value){
+    if(capturing===value)return;
+    capturing=value;
+    // Disable Maps' own touch gesture only while our one-finger orbit owns
+    // the interaction. Restore native two-finger pan/pinch immediately.
+    onCaptureChange(value);
   }
   function abortOrbit(){
     active=null;
-    haltFrames();
-    renderedHeading=null;
-    targetHeading=null;
+    heading=null;
+    setCapturing(false);
   }
   function onTouchStart(event){
     if(disposed)return;
@@ -83,15 +52,15 @@ export function createGeoOneFingerOrbit({
        shouldIgnoreTarget(event.target))return;
     const finger=event.touches[0];
     if(!Number.isFinite(finger.clientX))return;
-    // Never let an old inertial tail fight a new tap or camera interaction.
-    haltFrames();
-    renderedHeading=null;
-    targetHeading=null;
     active={id:finger.identifier,startX:finger.clientX,
       lastX:finger.clientX,rotating:false};
+    heading=null;
     lastRotationAt=-Infinity;
+    setCapturing(true);
+    // Prevent the single touch from entering Google's competing gesture
+    // detector (and its "use two fingers" instructional overlay).
+    event.stopPropagation();
   }
-
   function onTouchMove(event){
     if(disposed)return;
     if(event.touches.length>1){
@@ -110,24 +79,23 @@ export function createGeoOneFingerOrbit({
     const deltaX=finger.clientX-active.lastX;
     active.lastX=finger.clientX;
     if(!deltaX)return;
-    if(targetHeading===null&&!beginHeading())return;
-    // Accumulate *finger* deltas, not the eased camera position. This keeps
-    // the final rotation accurate when touch events outrun frame rendering.
-    targetHeading=normalizeGeoOrbitHeading(targetHeading-deltaX*DEGREES_PER_PIXEL);
+    if(heading===null){
+      const current=getHeading();
+      if(!Number.isFinite(current))return;
+      heading=normalizeGeoOrbitHeading(current);
+    }
+    // Right drag -> clockwise map-content turn (decreasing camera heading).
+    // Direct camera writes make the 3D masterplan track the finger in real
+    // time, without a frame-easing backlog or any rotation after release.
+    heading=normalizeGeoOrbitHeading(heading-deltaX*DEGREES_PER_PIXEL);
+    setHeading(heading);
+    onRotate();
     lastRotationAt=now();
-    schedule();
   }
-
   function onTouchEnd(event){
     if(disposed)return;
-    if(event.touches.length===0){
-      active=null;
-      multiTouchLock=false;
-      // A completed orbit eases into its final precise target after release.
-    }else{
-      abortOrbit();
-      multiTouchLock=true;
-    }
+    abortOrbit();
+    multiTouchLock=event.touches.length>0;
   }
   function onTouchCancel(){
     abortOrbit();

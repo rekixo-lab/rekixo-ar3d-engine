@@ -20,11 +20,13 @@ test("mobile one-finger drag is orbit, real tap stays tappable, two fingers reac
     const tile=document.getElementById("tiles")!;
     const button=document.getElementById("control")!;
     let heading=90,redraws=0,nativeMoves=0,buttonClicks=0;
+    const captures:boolean[]=[];
     const orbit=(window as typeof window & {__geoOrbitFactory:(args:unknown)=>any})
       .__geoOrbitFactory({
         getHeading:()=>heading,
         setHeading:(value:number)=>{heading=value;},
         onRotate:()=>{redraws++;},
+        onCaptureChange:(value:boolean)=>{captures.push(value);},
         shouldIgnoreTarget:(target:EventTarget|null)=>Boolean((target as Element|null)?.closest?.("button")),
       });
     scene.addEventListener("touchstart",orbit.onTouchStart,true);
@@ -42,20 +44,13 @@ test("mobile one-finger drag is orbit, real tap stays tappable, two fingers reac
     dispatch("touchstart",[finger(1,120)]);
     const noMovement=dispatch("touchmove",[finger(1,122)]);
     const rotated=dispatch("touchmove",[finger(1,180)]);
-    // Heading is eased on requestAnimationFrame, not jumped per touch event.
-    // Run enough real browser frames to settle without a Maps API dependency.
-    await new Promise<void>(resolve=>{
-      let frames=0;
-      const advance=()=>{
-        frames++;
-        if(frames>=18)resolve();
-        else requestAnimationFrame(advance);
-      };
-      requestAnimationFrame(advance);
-    });
-    const afterOrbit=heading;
-    const suppressed=orbit.suppressClick();
+    const liveHeading=heading; // Must change while the finger is STILL down.
+    dispatch("touchmove",[finger(1,140)]); // Reverse direction immediately.
+    const afterReverse=heading;
     dispatch("touchend",[]);
+    await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
+    const afterOrbit=heading; // No delayed camera motion after release.
+    const suppressed=orbit.suppressClick();
     dispatch("touchstart",[finger(1,210)]);
     const tapAllowed=!orbit.suppressClick();
     dispatch("touchend",[]);
@@ -69,14 +64,17 @@ test("mobile one-finger drag is orbit, real tap stays tappable, two fingers reac
     dispatch("touchmove",[finger(1,155)],button);
     dispatch("touchend",[],button);
     button.click();
-    return {noMovement,rotated,afterOrbit,redraws,suppressed,tapAllowed,
-      pinchBlocked,oneFingerAfterPinchBlocked,nativeMoves,buttonClicks,heading};
+    return {noMovement,rotated,liveHeading,afterReverse,afterOrbit,redraws,suppressed,tapAllowed,
+      pinchBlocked,oneFingerAfterPinchBlocked,nativeMoves,buttonClicks,heading,captures};
   });
   expect(outcome.noMovement,"minor finger drift should not pan").toBe(true);
   expect(outcome.rotated,"one-finger swipe should be consumed by orbit").toBe(true);
-  expect(outcome.afterOrbit).toBeCloseTo(90-60*.46,4);
-  expect(outcome.redraws,"orbit should render over multiple smooth animation frames").toBeGreaterThan(1);
-  expect(outcome.redraws,"one RAF camera write per frame").toBeLessThanOrEqual(20);
+  expect(outcome.liveHeading,"heading changes before touchend").toBeCloseTo(90-60*.46,4);
+  expect(outcome.afterReverse,"left swipe immediately reverses").toBeCloseTo(90-20*.46,4);
+  expect(outcome.afterOrbit,"no post-release rotation tail").toBeCloseTo(outcome.afterReverse,4);
+  expect(outcome.redraws,"one redraw per actual drag update").toBe(2);
+  expect(outcome.captures,"map gesture ownership is restored for native pinch and taps")
+    .toEqual([true,false,true,false,true,false]);
   expect(outcome.suppressed,"rotation must prevent synthetic plot clicks").toBe(true);
   expect(outcome.tapAllowed,"a subsequent genuine tap remains clickable").toBe(true);
   expect(outcome.pinchBlocked,"two-finger native gesture should not be prevented").toBe(false);

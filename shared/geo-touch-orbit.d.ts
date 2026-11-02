@@ -23,8 +23,7 @@ export function createGeoOneFingerOrbit(options:{
   getHeading:()=>number;
   setHeading:(heading:number)=>void;
   onRotate?:()=>void;
+  onCaptureChange?:(capturing:boolean)=>void;
   shouldIgnoreTarget?:(target:EventTarget|null)=>boolean;
   now?:()=>number;
-  requestFrame?:((callback:(timestamp:number)=>void)=>number)|null;
-  cancelFrame?:(handle:number)=>void;
 }):GeoOrbitController;
