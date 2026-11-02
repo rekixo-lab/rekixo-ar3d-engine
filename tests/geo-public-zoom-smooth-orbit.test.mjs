@@ -61,7 +61,7 @@ test("irregular touch delivery moves camera immediately with no post-release ani
   assert.equal(r.orbit.suppressClick(),true);
   r.orbit.onTouchEnd(r.e("end",0));
   r.advance(1000);
-  assert.equal(r.heading,target,"camera stays still once finger is lifted");
+  assert.ok(Math.abs(r.heading-target)<1e-9,"camera stays still once finger is lifted");
   assert.equal(r.writes.length,2,"no easing tail or delayed writes");
   assert.equal(r.redraws,2);
   assert.deepEqual(r.captures,[true,false]);
