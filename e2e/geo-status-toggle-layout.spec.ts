@@ -35,7 +35,7 @@ test("Geo status opens upward without background cards at mobile and desktop siz
     // The scene has a 1px border at some device widths, which is part of
     // the positioned containing block, not extra Status spacing.
     expect(Math.abs(before.left-(viewport.width<=640?8:12))).toBeLessThanOrEqual(1);
-    expect(Math.abs(before.bottom-(viewport.width<=640?29:34))).toBeLessThan(1);
+    expect(Math.abs(before.bottom-(viewport.width<=640?29:34))).toBeLessThanOrEqual(1);
     expect(before.attributionGap).toBeGreaterThanOrEqual(4);
     expect(await page.locator(".geo-plot-status-pending").count()).toBe(0);
     expect(await page.locator(".geo-plot-status-toggle-state").count()).toBe(0);
