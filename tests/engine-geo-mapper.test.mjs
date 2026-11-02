@@ -42,14 +42,14 @@ test("3D Geo Mapper remains an Engine-owned route and the V2 workflow preserves 
   assert.match(main, /path === "\/3Dprojects\/geo-mapper"/);
   assert.match(main, /<GeoWorkspace \/>/);
   assert.match(workspace, /GeoMapper3DV2/);
-  assert.match(workspace, /Source → Place → Align → Fine Tune → Publish/);
+  assert.doesNotMatch(workspace, /geo-control-flow/);
   assert.match(mapper, /Enable 3D Geo for this project/);
   assert.match(mapper, /Publish one Building release before enabling Geo/);
   assert.match(mapper, /createGeoExperience\(selectedSlug, source\.id\)/);
   assert.match(mapper, /sourceReleaseId !== state\.project\.activeBuildingReleaseId/);
   assert.match(mapper, /Save Geo V2 Draft/);
   assert.match(mapper, /Verify Current Preview/);
-  assert.match(mapper, /Publish Immutable Geo Release/);
+  assert.match(mapper, /Publish Update/);
   assert.doesNotMatch(mapper, /saveGeoPlacement|removeGeoPlacement/);
   assert.doesNotMatch(mapper, /Public 3D Jio demo|type="checkbox"/);
   assert.doesNotMatch(mapper, /tiyansh-production|rekixo-ar3d-platform|geo_3d_placements/);

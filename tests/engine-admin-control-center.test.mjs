@@ -4,9 +4,9 @@ import fs from "node:fs";
 
 const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Engine admin exposes one systematic six-section control center", () => {
+test("Engine admin shows focused project-type navigation instead of technical subpages", () => {
   const shell = read("apps/admin/src/layout/EngineAdminShell.tsx");
-  for (const label of ["Overview", "Source Pack", "Building", "Geo", "Releases", "Advanced"]) {
+  for (const label of ["Projects", "Clients", "Project Profile", "3D Building Editor", "3D Building Geo Editor", "Masterplan Plot Mapper", "3D Geo Plot Mapper", "Share & Branding"]) {
     assert.match(shell, new RegExp(`label:\\s*\\"${label}\\"`));
   }
   assert.match(shell, /ACTIVE PROJECT/);
@@ -34,14 +34,14 @@ test("Source Pack presents the approved five-step operator workflow", () => {
   assert.match(source, /Seal Source Pack/);
 });
 
-test("Geo keeps the proven V2 mapper and adds guided placement navigation", () => {
+test("Geo uses exactly one mapping editor without duplicate outer step menus", () => {
   const geo = read("apps/admin/src/geo/GeoWorkspace.tsx");
+  const mapper = read("apps/admin/src/geo/GeoMapper3DV2.tsx");
   assert.match(geo, /GeoMapper3DV2/);
-  for (const label of ["Source", "Place", "Align", "Fine Tune", "Publish"]) {
-    assert.match(geo, new RegExp(`<b>${label}<\\/b>`));
-  }
-  assert.match(geo, /Engine Advanced/);
-  assert.match(geo, /MutationObserver/);
+  assert.doesNotMatch(geo, /geo-control-flow|MutationObserver/);
+  assert.match(mapper, /Save Geo V2 Draft/);
+  assert.match(mapper, /Verify Current Preview/);
+  assert.match(mapper, /Publish Update/);
 });
 
 test("Building, Releases and Advanced separate operator concerns", () => {
@@ -49,9 +49,10 @@ test("Building, Releases and Advanced separate operator concerns", () => {
   const releases = read("apps/admin/src/releases/EngineReleases.tsx");
   const advanced = read("apps/admin/src/advanced/EngineAdvanced.tsx");
 
-  for (const label of ["SOURCE & BUILD", "REVIEW", "PRESENTATION", "PUBLISH"]) {
-    assert.match(building, new RegExp(label.replace("&", "&")));
+  for (const marker of ["SourcePackReview", "ComponentMapper", "Building Editor", "Publish & History", "Restore Version"]) {
+    assert.match(building, new RegExp(marker));
   }
+  assert.doesNotMatch(building, /building-workspace__flow/);
   assert.match(releases, /activateRelease/);
   assert.match(releases, /activateGeoRelease/);
   assert.match(releases, /Immutable Building history/);

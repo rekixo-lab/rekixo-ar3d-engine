@@ -108,7 +108,7 @@ export default function ProjectManagement({section}:{section:Tab}){
           <p>OFF by default for privacy. Only the owner can enable it; private client directory,
             commercial evidence and buyer/payment data are never made public.</p>
           <div className="engine-manage-actions"><span>Revision {state?.profile.revision||0} · Owner controlled</span>
-            <button disabled={busy||state?.project.status==="archived"} type="submit">{busy?"Saving…":"Save Project Profile"}</button></div>
+            <button disabled={busy||state?.project.status==="archived"} type="submit">{busy?"Saving…":"Save / Update Profile"}</button></div>
         </form>:<p>Loading contact details…</p>}
       </section>
     </>:<>

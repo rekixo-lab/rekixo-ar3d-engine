@@ -13,6 +13,7 @@ import {
   getProjectBranding,
   publishProjectLogo,
   publishGeoSiteBranding,
+  publishBuildingSiteBranding,
   publishProjectShare,
   saveProjectShareDetails,
   uploadProjectLogo,
@@ -29,7 +30,7 @@ const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 type PreparedLogo = { sourceFile: File; logoFile: File; faviconFile: File };
 type PreparedCard = { sourceFile: File; cardFile: File };
 type ShareDraft = { title: string; description: string };
-type BusyAction = "load" | "logo" | "share" | "details" | "publish-logo" | "publish-share" | "update-geo" | "";
+type BusyAction = "load" | "logo" | "share" | "details" | "publish-logo" | "publish-share" | "update-geo" | "update-building" | "";
 
 function fileFromBlob(blob: Blob, name: string, type: string) {
   return new File([blob], name, { type, lastModified: Date.now() });
@@ -291,6 +292,32 @@ export default function ProjectShareBuilder() {
     }
   }
 
+  async function updateBuildingSite() {
+    if (!slug || !state || busy || brandBusy) return;
+    if (logoFiles || shareFiles.building || shareFiles.geo) {
+      setError("Upload the chosen Logo / Share poster first, then publish the Building update.");
+      return;
+    }
+    setBusy("update-building");
+    setError("");
+    setMessage("");
+    try {
+      const result = await publishBuildingSiteBranding(slug, {
+        title: drafts.building.title,
+        description: drafts.building.description,
+        expectedLogoDraftVersion: state.logo.draftVersion || "",
+        expectedBuildingCardVersion: state.experiences.building.draftCardVersion || "",
+      });
+      setMessage("Building site branding updated: logo, favicon and WhatsApp share preview are published.");
+      await loadState();
+      if (!result.shareUrl) setError("Refresh and verify the new Building share link.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Building update failed. Previously published branding is unchanged.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function updateGeoSite() {
     if (!slug || !state || busy || brandBusy) return;
     if (logoFiles || shareFiles.geo || shareFiles.building) {
@@ -371,10 +398,15 @@ export default function ProjectShareBuilder() {
         </div>
         <div className="engine-branding-hero__actions">
           <button type="button" className="engine-control-button engine-control-button--primary"
-            onClick={() => void updateGeoSite()} disabled={busyNow || !state?.experiences.geo.live}
-            title={state?.experiences.geo.live ? "Publish uploaded logo and Geo WhatsApp poster together" : "Publish Geo experience first"}>
-            <BrandingIcon name={busy === "update-geo" ? "loader" : "map"} size={16} />
-            {busy === "update-geo" ? "Updating Geo Site…" : "Update Geo Site"}
+            onClick={() => void (activeExperience === "geo" ? updateGeoSite() : updateBuildingSite())}
+            disabled={busyNow || !state?.experiences[activeExperience].live}
+            title={state?.experiences[activeExperience].live
+              ? "Publish the selected site's logo and WhatsApp share preview as one versioned update"
+              : "Publish this experience first"}>
+            <BrandingIcon name={busy === "update-geo" || busy === "update-building" ? "loader" :
+              activeExperience === "geo" ? "map" : "building"} size={16} />
+            {busy === "update-geo" || busy === "update-building" ? "Publishing…" :
+              activeExperience === "geo" ? "Update Geo Site" : "Update Building Site"}
           </button>
           <button type="button" className="engine-control-button" onClick={() => void loadState()} disabled={busyNow}>
             {busy === "load" ? <BrandingIcon name="loader" size={17} className="engine-branding-spin" /> : "Refresh"}
@@ -389,11 +421,11 @@ export default function ProjectShareBuilder() {
       </section>
 
       <p className="engine-branding-update-hint">
-        {state?.experiences.geo.live
-          ? (stagedFiles
-              ? "Upload selected image drafts first. Update Geo Site publishes the saved logo and share poster."
-              : "Update Geo Site publishes Logo & Favicon + a new Geo WhatsApp preview together. A Geo poster takes priority; otherwise the existing Building poster is reused.")
-          : "Geo experience publish hone par Update Geo Site available hoga."}
+        {!state?.experiences[activeExperience].live
+          ? "Publish the selected experience first. No draft changes will appear on the live site until then."
+          : stagedFiles
+            ? "Upload selected logo and poster files before publishing. The current public site remains unchanged."
+            : "Update publishes the selected experience's logo and WhatsApp preview as a versioned change, without replacing other experiences or prior releases."}
       </p>
       {error ? <div className="engine-branding-alert engine-branding-alert--error" role="alert">{error}</div> : null}
       {message ? <div className="engine-branding-alert engine-branding-alert--ok" role="status"><BrandingIcon name="check" size={17} />{message}</div> : null}
@@ -440,9 +472,12 @@ export default function ProjectShareBuilder() {
                 {busy === "logo" ? "Uploading draft…" : "Upload logo draft"}
               </button>
             ) : null}
-            <button className="engine-control-button engine-control-button--primary" type="button" onClick={() => void publishLogo()} disabled={busyNow || !state?.logo.draftVersion}>
-              {busy === "publish-logo" ? "Publishing…" : "Publish Logo & Favicon"}
-            </button>
+            <details className="engine-branding-advanced-action">
+              <summary>Advanced · Publish logo only</summary>
+              <button className="engine-control-button" type="button" onClick={() => void publishLogo()} disabled={busyNow || !state?.logo.draftVersion}>
+                {busy === "publish-logo" ? "Publishing…" : "Publish Logo & Favicon"}
+              </button>
+            </details>
             {state?.logo.publishedLogoUrl ? <a className="engine-branding-small-link" href={state.logo.publishedLogoUrl} target="_blank" rel="noreferrer"><BrandingIcon name="external" size={14} /> Open published logo</a> : null}
             {state?.logo.sourceUrl ? <a className="engine-branding-small-link" href={state.logo.sourceUrl} target="_blank" rel="noreferrer" download><BrandingIcon name="external" size={14} /> Download original logo</a> : null}
           </div>
@@ -512,9 +547,12 @@ export default function ProjectShareBuilder() {
                 <BrandingIcon name="upload" size={16} />{busy === "share" ? "Uploading poster…" : "Upload share poster draft"}
               </button>
             ) : null}
-            <button className="engine-control-button engine-control-button--primary" type="button" onClick={() => void publishShare()} disabled={busyNow || !currentShare?.live || !titleValid || !descriptionValid || (!currentShare?.draftCardVersion && !currentShare?.publishedVersion && !(activeExperience === "geo" && reuseBuildingPoster && state?.experiences.building.publishedCardUrl))}>
-              <BrandingIcon name="share" size={16} />{busy === "publish-share" ? "Publishing share…" : `Publish ${activeExperience === "geo" ? "Geo" : "Building"} Share`}
-            </button>
+            <details className="engine-branding-advanced-action">
+              <summary>Advanced · Publish share poster only</summary>
+              <button className="engine-control-button" type="button" onClick={() => void publishShare()} disabled={busyNow || !currentShare?.live || !titleValid || !descriptionValid || (!currentShare?.draftCardVersion && !currentShare?.publishedVersion && !(activeExperience === "geo" && reuseBuildingPoster && state?.experiences.building.publishedCardUrl))}>
+                <BrandingIcon name="share" size={16} />{busy === "publish-share" ? "Publishing share…" : `Publish ${activeExperience === "geo" ? "Geo" : "Building"} Share`}
+              </button>
+            </details>
             <div className="engine-branding-share-actions">
               <button type="button" className="engine-control-button" disabled={!currentShare?.shareUrl} onClick={() => void copyLink()}><BrandingIcon name="copy" size={15} />Copy published link</button>
               {currentShare?.shareUrl ? <a className="engine-control-link" href={currentShare.shareUrl} target="_blank" rel="noreferrer"><BrandingIcon name="external" size={15} />Open shared link</a> : null}

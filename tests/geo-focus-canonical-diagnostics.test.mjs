@@ -49,7 +49,9 @@ test("Top-reference zoom and ground-plane point capture are opt-in", () => {
 test("Geo anchor visibility inspects model-anchor select rather than height-mode select", () => {
   const work = file("apps/admin/src/geo/GeoWorkspace.tsx");
   const mapper = file("apps/admin/src/geo/GeoMapper3DV2.tsx");
-  assert.match(work, /\[data-geo-model-anchor\]/);
+  assert.match(work, /GeoMapper3DV2/);
   assert.match(mapper, /select data-geo-model-anchor/);
-  assert.doesNotMatch(work, /\[data-geo-section="fine"\] select:last-of-type/);
+  assert.match(mapper, /!state\.anchors\.some\(anchor => anchor\.sourceBuildingReleaseId === sourceReleaseId\)/);
+  assert.match(mapper, /showAnchorEditor/);
+  assert.doesNotMatch(work, /MutationObserver/);
 });

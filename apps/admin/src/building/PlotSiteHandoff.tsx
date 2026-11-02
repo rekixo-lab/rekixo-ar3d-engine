@@ -117,7 +117,7 @@ export default function PlotSiteHandoff({
   }
 
   async function publish() {
-    if (busy || !processingReady || !draft || draftRevision === null || !approved || hasRelease) return;
+    if (busy || !processingReady || !draft || draftRevision === null || !approved) return;
     setBusy(true);
     setError("");
     setMessage("");
@@ -129,14 +129,18 @@ export default function PlotSiteHandoff({
         throw Error("Canonical processing is no longer succeeded. Release blocked.");
       // No mutation unless the operator explicitly approves the actual site model.
       if (!window.confirm(
-        "Publish the verified canonical 3D plot/site model as this project's FIRST public 3D release? " +
-        "Confirm its dimensions, orientation and materials were checked. Geo placement will remain unpublished."
+        (hasRelease
+          ? "Publish a NEW immutable Building version with the latest verified canonical model and current reviewed draft? "
+          : "Publish the verified canonical Building model as this project's FIRST public release? ") +
+        "Confirm actual geometry, dimensions, orientation and materials. Existing Geo releases stay pinned until you separately verify and update Geo."
       )) return;
-      await publishRelease(slug, draftRevision, true);
+      // First release uses a strict canonical-first gate; later updates use the
+      // existing immutable release publisher, which revalidates current source.
+      await publishRelease(slug, draftRevision, !hasRelease);
       const state = await releases(slug);
       onReleaseReady(state.releases);
       setApproved(false);
-      setMessage("3D Site release is active. Open it and check the model before setting up Geo.");
+      setMessage(hasRelease ? "Building update published as a new immutable version. Recheck the live site; Geo is unchanged." : "First Building release is active. Check the live site before any Geo placement.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Canonical site release failed.");
     } finally {
@@ -182,27 +186,28 @@ export default function PlotSiteHandoff({
         <li>
           <b>3 · Review and Publish 3D Site</b>
           <span>Plot-specific node mapping is optional. Confirm site geometry, scale and gate orientation before publication.</span>
-          {!hasRelease ? (
+          {draft ? (
             <>
               <label className="plot-site-handoff__confirm">
                 <input type="checkbox" checked={approved} disabled={!draft || busy || !processingReady}
                   onChange={(event) => setApproved(event.target.checked)} />
-                I reviewed the actual GLB/site bounds, orientation and materials and approve creating the first public 3D release.
+                I reviewed the actual GLB/site bounds, orientation and materials, and approve {hasRelease ? "publishing a new Building update" : "creating the first Building release"}.
               </label>
               <button type="button" disabled={busy || !draft || draftRevision === null || !processingReady || !approved}
                 onClick={() => void publish()}>
-                {busy ? "Working…" : "Publish First 3D Site Release"}
+                {busy ? "Working…" : hasRelease ? "Publish Update" : "Publish First 3D Site Release"}
               </button>
             </>
-          ) : <a href={publicProjectPath(slug)} target="_blank" rel="noreferrer">Open 3D Site</a>}
+          ) : <span>Initialize the reviewed project draft to unlock publishing.</span>}
+          {hasRelease && <a href={publicProjectPath(slug)} target="_blank" rel="noreferrer">Open Current Live Building</a>}
         </li>
-        <li>
+        {(project.projectKind === "building_geo" || project.projectKind === "legacy") && <li>
           <b>4 · Place on Geo Satellite Map</b>
           <span>Geo requires an active 3D release and a verified real-world site location. It never auto-publishes.</span>
           {releaseItems.some((item) => item.active)
             ? <a href={`/3Dprojects/geo-mapper?project=${encodeURIComponent(slug)}`}>Open Geo Alignment</a>
             : <span className="plot-site-handoff__done">Unlocks after site release</span>}
-        </li>
+        </li>}
       </ol>
       {hasRelease && !releaseItems.some((item) => item.active) ?
         <p className="plot-site-handoff__error">An immutable release exists but is not active. Open Releases to activate it before Geo.</p> : null}

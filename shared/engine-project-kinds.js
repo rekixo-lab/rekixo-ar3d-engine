@@ -5,9 +5,9 @@ export const ENGINE_PROJECT_KINDS = Object.freeze([
 ]);
 export const PROJECT_KIND_LABELS = Object.freeze({
   legacy: "Existing Engine project",
-  building: "3D Building Customer Website",
-  building_geo: "3D Geo Masterplan + Plot Mapping",
-  masterplan_geo: "Geo Masterplan / Plot Mapping",
+  building: "3D Building Website",
+  building_geo: "3D Building on Geo Map",
+  masterplan_geo: "Geo Masterplan + Plot Mapping",
 });
 export function isEngineProjectKind(kind) {
   return typeof kind === "string" && ENGINE_PROJECT_KINDS.includes(kind);

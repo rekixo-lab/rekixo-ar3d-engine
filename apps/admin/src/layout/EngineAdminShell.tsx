@@ -23,97 +23,48 @@ type NavItem = {
   description: string;
 };
 
+// Only true operator workspaces belong in navigation. Historical routes,
+// diagnostics and accounting remain available through their contextual owners.
 const navItems: NavItem[] = [
   {
-    id: "overview",
-    label: "Overview",
-    short: "OV",
+    id: "overview", label: "Projects", short: "PR",
     href: (slug) => `/3Dprojects${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Project status and next action",
+    description: "Select or create a project",
   },
   {
-    id: "clients",label:"Clients",short:"CL",
-    href:slug=>`/3Dprojects/clients${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Owner-managed client directory and intended roles",
+    id: "clients", label: "Clients", short: "CL",
+    href: (slug) => `/3Dprojects/clients${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
+    description: "Accounts and project access",
   },
   {
-    id: "profile",label:"Project Profile",short:"PF",
-    href:slug=>`/3Dprojects/profile${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Builder, contacts, address, WhatsApp and maps",
+    id: "profile", label: "Project Profile", short: "PF",
+    href: (slug) => `/3Dprojects/profile${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
+    description: "Builder, contacts and location",
   },
   {
-    id: "assets",label:"Project Assets",short:"AS",
-    href:slug=>`/3Dprojects/assets${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Original source inventory and checksum downloads",
+    id: "masterplan-plots", label: "Masterplan Plot Mapper", short: "MP",
+    href: (slug) => `/3Dprojects/masterplan-plots${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
+    description: "Original image, GPS and polygon plots",
   },
   {
-    id: "masterplan",label:"Geo Masterplan",short:"IM",
-    href:slug=>`/3Dprojects/masterplan${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Approved image source and GPS control points",
-  },
-  {
-    id: "masterplan-plots",label:"Plot Mapper",short:"PL",
-    href:slug=>`/3Dprojects/masterplan-plots${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Draw polygon plots on the approved image",
-  },
-  {
-    id: "mapping-controls",label:"Mapping Controls",short:"MC",
-    href:slug=>`/3Dprojects/mapping-controls${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Dimensions, facing, road and source verification",
-  },
-  {
-    id: "sales",label:"Sales & Accounts",short:"SA",
-    href:slug=>`/3Dprojects/sales${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Plot inventory and separate financial records",
-  },
-  {
-    id: "source",
-    label: "Source Pack",
-    short: "SP",
-    href: (slug) => `/3Dprojects/source-pack${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Sources, scale, components and processing",
-  },
-  {
-    id: "building",
-    label: "Building",
-    short: "3D",
+    id: "building", label: "3D Building Editor", short: "3D",
     href: (slug) => `/3Dprojects/building${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Build, review, presentation and publish",
+    description: "Model, components, presentation and publish",
   },
   {
-    id: "geo",
-    label: "Geo",
-    short: "GO",
+    id: "geo", label: "3D Building Geo Editor", short: "GO",
     href: (slug) => `/3Dprojects/geo-mapper${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Real-world placement and Geo publish",
+    description: "Position and publish on Geo map",
   },
   {
-    id: "geo-plots",
-    label: "Geo Plot Mapper",
-    short: "PL",
+    id: "geo-plots", label: "3D Geo Plot Mapper", short: "PL",
     href: (slug) => `/3Dprojects/geo-plots${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "3D polygon plots, measurements and facing",
+    description: "3D polygon mapping and measurements",
   },
   {
-    id: "releases",
-    label: "Releases",
-    short: "RL",
-    href: (slug) => `/3Dprojects/releases${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Immutable Building and Geo history",
-  },
-  {
-    id: "branding",
-    label: "Share & Branding",
-    short: "BR",
+    id: "branding", label: "Share & Branding", short: "BR",
     href: (slug) => `/3Dprojects/share${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Project logo, favicon and Building/Geo share previews",
-  },
-  {
-    id: "advanced",
-    label: "Advanced",
-    short: "AD",
-    href: (slug) => `/3Dprojects/advanced${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Diagnostics, provider settings and danger zone",
+    description: "Logo, poster and share links",
   },
 ];
 
@@ -143,15 +94,15 @@ const sectionMeta: Record<ShellSection, { eyebrow: string; title: string; help: 
     help:"Review original source files and download verified copies."},
   masterplan:{eyebrow:"IMAGE GEO AUTHORING",title:"Geo Masterplan",
     help:"Upload approved masterplan imagery and calibrate its real-world GPS location."},
-  "masterplan-plots":{eyebrow:"PLOT POLYGONS",title:"Plot Mapper",
+  "masterplan-plots":{eyebrow:"PLOT POLYGONS",title:"Masterplan Plot Mapper",
     help:"Draw and verify plots on the Geo Masterplan image."},
   "mapping-controls":{eyebrow:"PLOT DIMENSIONS",title:"Mapping Controls",
     help:"Review Front/Back/Depth, plot area, directions, road access and source documents."},
   sales:{eyebrow:"PRIVATE BUSINESS",title:"Sales & Accounts",
     help:"Project-isolated inventory and ledger with explicit sale confirmation."},
   overview: {
-    eyebrow: "CONTROL CENTER",
-    title: "Project Overview",
+    eyebrow: "PROJECT DIRECTORY",
+    title: "Projects",
     help: "Current state, next action and customer-facing deliverables.",
   },
   source: {
@@ -161,12 +112,12 @@ const sectionMeta: Record<ShellSection, { eyebrow: string; title: string; help: 
   },
   building: {
     eyebrow: "BUILDING WORKSPACE",
-    title: "3D Building",
+    title: "3D Building Editor",
     help: "Build, review, presentation and immutable Building release workflow.",
   },
   geo: {
     eyebrow: "GEO WORKSPACE",
-    title: "3D Geo Mapper",
+    title: "3D Building Geo Editor",
     help: "Place the immutable Building in the real world, verify it and publish Geo.",
   },
   "geo-plots": {

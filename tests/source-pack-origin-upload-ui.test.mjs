@@ -38,6 +38,6 @@ test("Source Pack UI offers immutable original upload via resumable and verified
 test("Dashboard does not misrepresent failed Source Pack requests as Not Started", () => {
   const code = read("apps/admin/src/dashboard/EngineDashboard.tsx");
   assert.match(code, /sourcePackError/);
-  assert.match(code, /API ERROR/);
+  assert.match(code, /Source Pack API unavailable/);
   assert.doesNotMatch(code, /if \(!response.ok\) return \{ latestPack: null \}/);
 });

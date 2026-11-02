@@ -582,6 +582,94 @@ async function publishShare(request, env, actor, project, slug) {
   return json({ ok: true, experience, version, publishedAt: now });
 }
 
+// One atomic Building branding update, separate from Geo releases and public snapshots.
+async function publishBuildingSite(request, env, actor, project, slug) {
+  const body = await request.json().catch(() => ({}));
+  const title = String(body.title || "").trim();
+  const description = String(body.description || "").trim();
+  const controlChars = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/;
+  if (title.length < 3 || title.length > 120 || controlChars.test(title) ||
+      description.length < 10 || description.length > 280 || controlChars.test(description))
+    return json({ error: "Building title must be 3–120 characters and description 10–280 characters." }, { status: 400 });
+  if (!(await experienceReadiness(env, project, slug, "building")))
+    return json({ error: "Publish the Building experience before updating its share preview." }, { status: 409 });
+
+  const [branding, building] = await Promise.all([
+    env.DB.prepare("SELECT draft_logo_version AS draftVersion,published_logo_version AS publishedVersion FROM project_branding_3d WHERE project_id=?").bind(project.id).first(),
+    env.DB.prepare("SELECT draft_card_version AS draftVersion,draft_card_key AS draftCardKey,draft_source_key AS draftSourceKey,published_version AS publishedVersion FROM project_branding_shares_3d WHERE project_id=? AND experience_type='building'").bind(project.id).first(),
+  ]);
+  for (const [key, current] of [
+    ["expectedLogoDraftVersion", branding?.draftVersion || ""],
+    ["expectedBuildingCardVersion", building?.draftVersion || ""],
+  ]) {
+    if (typeof body[key] !== "string" || body[key] !== current)
+      return json({ error: "Branding drafts changed. Refresh before updating the Building site." }, { status: 409 });
+  }
+  const logoVersion = branding?.draftVersion || branding?.publishedVersion || "";
+  const logo = logoVersion ? await readLogoVersion(env, project.id, logoVersion) : null;
+  if (!logo?.logoKey || !logo?.faviconKey)
+    return json({ error: "Upload Logo & Favicon before updating the Building site." }, { status: 409 });
+
+  const published = building?.publishedVersion
+    ? await readShareVersion(env, project.id, "building", building.publishedVersion)
+    : null;
+  const poster = building?.draftCardKey && building?.draftSourceKey
+    ? { cardKey: building.draftCardKey, sourceKey: building.draftSourceKey,
+        mimeType: building.draftCardKey.endsWith(".jpg") ? "image/jpeg" : "image/webp" }
+    : published?.cardKey && published?.sourceKey && published?.mimeType
+      ? { cardKey: published.cardKey, sourceKey: published.sourceKey, mimeType: published.mimeType }
+      : null;
+  if (!poster)
+    return json({ error: "Upload a Building WhatsApp poster before updating the site." }, { status: 409 });
+
+  const prefix = "projects/" + slug + "/branding/";
+  const keys = [logo.logoKey, logo.faviconKey, poster.cardKey, poster.sourceKey];
+  if (keys.some(key => !key.startsWith(prefix) || key.includes("..") || key.includes("\\")))
+    return json({ error: "An asset is outside this project's branding storage." }, { status: 409 });
+  const objects = await Promise.all(keys.map(key => env.MODEL_ASSETS.head(key)));
+  if (objects.some(value => !value))
+    return json({ error: "An uploaded logo or poster is missing from storage. Re-upload it before publishing." }, { status: 409 });
+
+  const version = versionToken();
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE project_branding_logo_versions_3d SET published_at=COALESCE(published_at,?) WHERE project_id=? AND version=?")
+      .bind(now, project.id, logoVersion),
+    env.DB.prepare(`INSERT INTO project_branding_3d
+      (project_id,draft_logo_version,published_logo_version,updated_by,updated_at,published_at)
+      VALUES (?,NULL,?,?,?,?)
+      ON CONFLICT(project_id) DO UPDATE SET
+        draft_logo_version=NULL,published_logo_version=excluded.published_logo_version,
+        updated_by=excluded.updated_by,updated_at=excluded.updated_at,
+        published_at=excluded.published_at`)
+      .bind(project.id, logoVersion, actor.email, now, now),
+    env.DB.prepare(`INSERT INTO project_branding_share_versions_3d
+      (project_id,experience_type,version,share_title,share_description,card_key,source_key,mime_type,created_by,created_at)
+      VALUES (?,'building',?,?,?,?,?,?,?,?)`)
+      .bind(project.id, version, title, description, poster.cardKey, poster.sourceKey, poster.mimeType, actor.email, now),
+    env.DB.prepare(`INSERT INTO project_branding_shares_3d
+      (project_id,experience_type,draft_title,draft_description,draft_use_building_card,published_version,updated_by,updated_at)
+      VALUES (?,'building',?,?,0,?,?,?)
+      ON CONFLICT(project_id,experience_type) DO UPDATE SET
+        draft_title=excluded.draft_title,draft_description=excluded.draft_description,
+        draft_use_building_card=0,
+        published_version=excluded.published_version,
+        updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
+      .bind(project.id, title, description, version, actor.email, now),
+    env.DB.prepare(`INSERT INTO engine_admin_audit
+      (id,actor_email,action,project_id,target_id,details_json,created_at)
+      VALUES (?,?,?,?,?,?,?)`)
+      .bind(crypto.randomUUID(), actor.email, "branding.building_site_updated", project.id, project.id,
+        JSON.stringify({ version, logoVersion }), now),
+  ]);
+  return json({
+    ok: true, experience: "building", version, logoVersion,
+    shareUrl: "https://ar3dstudio.in" + BASE_PATH + "/" + encodeURIComponent(slug) +
+      "?share=" + encodeURIComponent(version),
+    publishedAt: now,
+  });
+}
+
 // One atomic publish for the customer's Geo logo and immutable WhatsApp card.
 // Preserve Building, previous Geo share versions, drafts and all existing R2 assets.
 async function publishGeoSite(request, env, actor, project, slug) {
@@ -763,6 +851,7 @@ export async function handleProjectBrandingAdmin(request, env, actor, project, s
   const action = String(body.action || "");
   if (action === "save-share") return saveShareDetails(new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, actor, project);
   if (action === "publish-logo") return publishLogo(new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, actor, project);
+  if (action === "publish-building-site") return publishBuildingSite(new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, actor, project, slug);
   if (action === "publish-geo-site") return publishGeoSite(new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, actor, project, slug);
   if (action === "publish-share") return publishShare(new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, actor, project, slug);
   return json({ error: "Unsupported branding action." }, { status: 400 });

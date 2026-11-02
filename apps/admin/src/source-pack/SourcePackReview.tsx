@@ -296,7 +296,7 @@ export default function SourcePackReview() {
         <a href="#source-step-sources"><span>01</span><b>Sources</b><small>Verified originals</small></a>
         <a href="#source-step-review"><span>02</span><b>Review</b><small>Authority and roles</small></a>
         <a href="#source-step-processing"><span>03</span><b>Scale & Processing</b><small>Durable canonical output</small></a>
-        <a href={`/3Dprojects/component-mapper?project=${encodeURIComponent(slug)}`}><span>04</span><b>Components</b><small>Canonical node mapping</small></a>
+        <a href={`/3Dprojects/building?project=${encodeURIComponent(slug)}&tab=components`}><span>04</span><b>Components</b><small>Canonical node mapping</small></a>
         <a href="#source-step-ready"><span>05</span><b>Ready</b><small>Building handoff</small></a>
       </nav>
 
@@ -483,8 +483,8 @@ export default function SourcePackReview() {
           </span>
         </div>
         <div>
-          <a href={`/3Dprojects/component-mapper?project=${encodeURIComponent(slug)}`}>Open Components</a>
-          <a className={packReady ? "source-review__ready-primary" : "source-review__ready-disabled"} href={packReady ? `/3Dprojects/building?project=${encodeURIComponent(slug)}` : "#source-step-review"}>
+          <a href={`/3Dprojects/building?project=${encodeURIComponent(slug)}&tab=components`}>Open Components</a>
+          <a className={packReady ? "source-review__ready-primary" : "source-review__ready-disabled"} href={packReady ? `/3Dprojects/building?project=${encodeURIComponent(slug)}&tab=presentation` : "#source-step-review"}>
             Continue to Building
           </a>
         </div>

@@ -17,3 +17,6 @@
 .engine-manage-client-list>div>div{display:grid;gap:3px}
 .engine-manage-client-list button{background:#48312b;border-color:#a2745e}
 @media(max-width:650px){.engine-manage{padding:10px 6px 50px}.engine-manage-card{padding:13px}.engine-manage-client-list>div{align-items:start;flex-direction:column}}
+
+/* Do not repeat the shell heading inside Profile and Clients pages. */
+.engine-admin-content .engine-manage > header { display: none; }

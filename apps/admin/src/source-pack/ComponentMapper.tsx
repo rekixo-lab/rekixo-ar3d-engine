@@ -316,7 +316,7 @@ export default function ComponentMapper() {
   return (
     <main className="component-mapper">
       <header className="component-mapper__topbar">
-        <a href={`/3Dprojects/source-pack?project=${encodeURIComponent(slug)}`}>← Source Pack</a>
+        <a href={`/3Dprojects/building?project=${encodeURIComponent(slug)}&tab=source`}>← Source Pack</a>
         <div>
           <small>REKIXO AR3D ENGINE</small>
           <strong>Reviewed Component Mapper</strong>
