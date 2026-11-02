@@ -200,201 +200,101 @@
 }
 
 
-/* Fullscreen camera presets use the same transparent, compact treatment. */
-.geo-camera-toolbar--fullscreen-clone {
-  display: grid !important;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  align-items: stretch !important; justify-content: stretch !important;
-  gap: clamp(1px, .4vw, 6px) !important;
-  width: min(900px, calc(100% - 24px)) !important;
-  max-width: calc(100% - 24px) !important;
-  padding: 0 !important; border: 0 !important; border-radius: 0 !important;
-  background: transparent !important; box-shadow: none !important;
-  backdrop-filter: none !important; -webkit-backdrop-filter: none !important; overflow: visible !important;
-}
-.geo-camera-toolbar--fullscreen-clone button,
-.geo-camera-toolbar--fullscreen-clone .geo-building-link {
-  position: relative !important; width: 100% !important; min-width: 0 !important; min-height: 34px !important;
-  padding: 7px 1px !important; border: 0 !important; border-radius: 0 !important;
-  background: transparent !important; box-shadow: none !important; backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important; color: #d7e4ee !important;
-  font-size: clamp(9px, .85vw, 12px) !important; letter-spacing: -.025em !important; transform: none !important;
-}
-.geo-camera-toolbar--fullscreen-clone button:hover,
-.geo-camera-toolbar--fullscreen-clone button:focus-visible,
-.geo-camera-toolbar--fullscreen-clone .geo-building-link:hover,
-.geo-camera-toolbar--fullscreen-clone .geo-building-link:focus-visible {
-  background: transparent !important; box-shadow: none !important; color: #8df2c7 !important; transform: none !important;
-}
-.geo-camera-toolbar--fullscreen-clone button.is-active {
-  border: 0 !important; border-radius: 0 !important; background: transparent !important;
-  box-shadow: none !important; color: #79efc0 !important;
-}
-.geo-camera-toolbar--fullscreen-clone button.is-active::after {
-  content: ""; position: absolute; left: 18%; right: 18%; bottom: 1px;
-  height: 2px; border-radius: 2px; background: #51ebbe;
-}
-@media (max-width: 640px) {
-  .geo-camera-toolbar--fullscreen-clone {
-    left: 8px !important; right: 8px !important; width: calc(100% - 16px) !important;
-    max-width: none !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    gap: 0 !important; padding: 0 !important; background: transparent !important;
-    border: 0 !important; box-shadow: none !important;
-  }
-  .geo-camera-toolbar--fullscreen-clone button,
-  .geo-camera-toolbar--fullscreen-clone .geo-building-link {
-    min-height: 34px !important; padding: 6px 0 8px !important;
-    font-size: clamp(8px, 2.45vw, 10px) !important; letter-spacing: -.035em !important;
-  }
-}
-
-
-/* Fullscreen controls intentionally retain the original high-contrast button
-   treatment. Only the normal-view row is transparent; do not let its styles
-   flatten the cloned controls when Google Maps enters native fullscreen. */
-.geo-camera-toolbar--fullscreen-clone {
+/* Geo fullscreen: four independent, rounded camera buttons, like the normal board.
+   Only the buttons receive backgrounds; the shared dock remains invisible. */
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone {
   position: absolute !important;
   z-index: 2147483646 !important;
-  top: 14px !important;
-  left: 50% !important;
-  right: auto !important;
-  display: flex !important;
-  flex-flow: row nowrap !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: clamp(3px, .5vw, 7px) !important;
-  width: max-content !important;
-  max-width: calc(100% - 24px) !important;
-  min-width: 0 !important;
-  margin: 0 !important;
-  padding: 5px !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
-  transform: translateX(-50%) !important;
-  border: 1px solid rgba(117, 157, 178, .30) !important;
-  border-radius: 14px !important;
-  background: rgba(5, 18, 27, .76) !important;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, .22) !important;
-  backdrop-filter: blur(10px) saturate(120%) !important;
-  -webkit-backdrop-filter: blur(10px) saturate(120%) !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
-  scrollbar-width: none;
-}
-.geo-camera-toolbar--fullscreen-clone::-webkit-scrollbar { display: none; }
-
-.geo-camera-toolbar--fullscreen-clone button,
-.geo-camera-toolbar--fullscreen-clone .geo-building-link {
-  position: relative !important;
-  inset: auto !important;
-  float: none !important;
-  grid-column: auto !important;
-  display: inline-flex !important;
-  flex: 0 1 auto !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: auto !important;
-  min-width: max-content !important;
-  max-width: none !important;
-  min-height: 36px !important;
-  margin: 0 !important;
-  padding: 7px 12px !important;
-  border: 1px solid rgba(150, 190, 211, .42) !important;
-  border-radius: 10px !important;
-  background: rgba(8, 22, 32, .88) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 5px 13px rgba(0, 0, 0, .16) !important;
-  color: #f4fafd !important;
-  font-size: 11px !important;
-  font-weight: 850 !important;
-  letter-spacing: 0 !important;
-  line-height: 1.1 !important;
-  text-align: center !important;
-  text-decoration: none !important;
-  white-space: nowrap !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  transform: none !important;
-}
-.geo-camera-toolbar--fullscreen-clone button:hover,
-.geo-camera-toolbar--fullscreen-clone button:focus-visible,
-.geo-camera-toolbar--fullscreen-clone .geo-building-link:hover,
-.geo-camera-toolbar--fullscreen-clone .geo-building-link:focus-visible {
-  border-color: rgba(105, 236, 194, .78) !important;
-  background: rgba(21, 83, 66, .94) !important;
-  color: #ffffff !important;
-  outline: none;
-}
-.geo-camera-toolbar--fullscreen-clone button.is-active {
-  border-color: rgba(81, 235, 190, .98) !important;
-  background: rgba(15, 112, 80, .96) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 5px 15px rgba(2, 53, 39, .28) !important;
-  color: #ffffff !important;
-}
-.geo-camera-toolbar--fullscreen-clone .geo-building-link > span {
-  color: #7cf0be !important;
-  font-size: 12px !important;
-}
-
-@media (max-width: 640px) {
-  .geo-camera-toolbar--fullscreen-clone {
-    top: 68px !important;
-    left: 8px !important;
-    right: 8px !important;
-    display: flex !important;
-    flex-flow: row nowrap !important;
-    justify-content: stretch !important;
-    gap: 3px !important;
-    width: calc(100% - 16px) !important;
-    max-width: none !important;
-    padding: 4px !important;
-    transform: none !important;
-    overflow-x: hidden !important;
-    border: 1px solid rgba(117, 157, 178, .34) !important;
-    border-radius: 13px !important;
-    background: rgba(5, 18, 27, .82) !important;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, .24) !important;
-    backdrop-filter: blur(10px) saturate(120%) !important;
-    -webkit-backdrop-filter: blur(10px) saturate(120%) !important;
-  }
-  .geo-camera-toolbar--fullscreen-clone button,
-  .geo-camera-toolbar--fullscreen-clone .geo-building-link {
-    flex: 1 1 0 !important;
-    width: 0 !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    min-height: 35px !important;
-    padding: 6px 2px !important;
-    border-radius: 8px !important;
-    font-size: clamp(8px, 2.4vw, 10px) !important;
-    letter-spacing: -.035em !important;
-    overflow: hidden !important;
-    text-overflow: clip !important;
-  }
-  .geo-camera-toolbar--fullscreen-clone .geo-building-link > span {
-    font-size: 10px !important;
-  }
-}
-
-/* The scene's own fullscreen keeps the 3D-detail layer and map quick-actions alive.
-   The mirrored camera row belongs at the viewport bottom, never over the map. */
-.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone {
   top: auto !important;
   bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
   left: 50% !important;
   right: auto !important;
-  width: max-content !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  align-items: stretch !important;
+  gap: clamp(5px, 1vw, 11px) !important;
+  box-sizing: border-box !important;
+  width: min(720px, calc(100% - 24px)) !important;
   max-width: calc(100% - 24px) !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  overflow: visible !important;
   transform: translateX(-50%) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
+
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button {
+  position: relative !important;
+  inset: auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 42px !important;
+  margin: 0 !important;
+  padding: 7px 3px !important;
+  border: 1px solid rgba(124, 166, 180, .43) !important;
+  border-radius: 10px !important;
+  background: rgba(9, 29, 41, .90) !important;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .17) !important;
+  color: #e3eff3 !important;
+  font-size: clamp(9px, .85vw, 12px) !important;
+  letter-spacing: -.025em !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  transform: none !important;
+  touch-action: manipulation;
+}
+
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button:hover,
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button:focus-visible {
+  border-color: rgba(104, 235, 183, .77) !important;
+  border-radius: 10px !important;
+  background: rgba(19, 76, 64, .92) !important;
+  color: #f0fff8 !important;
+}
+
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button.is-active {
+  border: 1px solid rgba(83, 235, 177, .95) !important;
+  border-radius: 10px !important;
+  background: rgba(19, 106, 78, .96) !important;
+  color: #f1fff8 !important;
+  box-shadow: 0 5px 15px rgba(0, 52, 34, .22) !important;
+}
+
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(104, 235, 183, .86) !important;
+}
+
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button.is-active::after {
+  content: none !important;
+  display: none !important;
+}
+
 @media (max-width: 640px) {
   .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone {
-    top: auto !important;
     bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
-    left: 8px !important;
-    right: 8px !important;
     width: calc(100% - 16px) !important;
-    max-width: none !important;
-    transform: none !important;
+    max-width: calc(100% - 16px) !important;
+    gap: 5px !important;
+  }
+  .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button {
+    min-height: 42px !important;
+    padding: 7px 2px !important;
+    border-radius: 10px !important;
+    font-size: clamp(9px, 2.45vw, 11px) !important;
   }
 }
