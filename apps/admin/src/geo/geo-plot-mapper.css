@@ -364,3 +364,15 @@
 .geo-plot-page .geo-plot-preliminary-button:disabled{
   opacity:.58;cursor:not-allowed;
 }
+
+/* Compact compass for each selected road-facing side; separate from shape editing. */
+.geo-plot-facing-compass{display:grid;gap:9px;padding:12px;margin:12px 0;
+  background:#0c2734;border:1px solid #387567;border-radius:11px}
+.geo-plot-facing-compass>strong{font-size:12px;color:#85f5ca}
+.geo-plot-facing-compass>small{font-size:11px;line-height:1.5;color:#b3d2da}
+.geo-plot-facing-roles,.geo-plot-facing-directions{display:flex;gap:6px;flex-wrap:wrap}
+.geo-plot-page .geo-plot-facing-roles button{font-size:11px;padding:6px 8px;min-height:32px}
+.geo-plot-page .geo-plot-facing-directions button{font-size:11px;padding:7px 8px;min-height:34px}
+.geo-plot-page .geo-plot-facing-directions button b{font-size:15px;margin-right:3px}
+.geo-plot-page .geo-plot-facing-compass button.active{background:#176a53;border-color:#66f2bc;color:#fff}
+@media(max-width:640px){.geo-plot-page .geo-plot-facing-directions button{flex:1 1 25%;min-width:77px}}
