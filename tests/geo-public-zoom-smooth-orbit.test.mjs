@@ -52,11 +52,11 @@ test("irregular touch delivery moves camera immediately with no post-release ani
   const r=simulatedOrbit(90);
   r.orbit.onTouchStart(r.e("start",120));
   r.orbit.onTouchMove(r.e("move",150));
-  assert.ok(Math.abs(r.heading-(90-30*.46))<1e-9,
+  assert.ok(Math.abs(r.heading-(90+30*.46))<1e-9,
     "first movement renders before finger release");
   r.orbit.onTouchMove(r.e("move",180));
   assert.equal(r.writes.length,2,"each changed move updates camera immediately");
-  const target=90-60*.46;
+  const target=90+60*.46;
   assert.ok(Math.abs(r.heading-target)<1e-9);
   assert.equal(r.orbit.suppressClick(),true);
   r.orbit.onTouchEnd(r.e("end",0));
@@ -71,10 +71,10 @@ test("horizontal drag reverses direction instantly and normalizes across 360 deg
   const r=simulatedOrbit(355);
   r.orbit.onTouchStart(r.e("start",200));
   r.orbit.onTouchMove(r.e("move",170));
-  assert.ok(r.heading>0&&r.heading<10,"left drag crosses 360°");
-  assert.ok(Math.abs(r.heading-8.8)<1e-9);
+  assert.ok(r.heading>340&&r.heading<350,"left drag decreases the camera heading");
+  assert.ok(Math.abs(r.heading-341.2)<1e-9);
   r.orbit.onTouchMove(r.e("move",210));
-  assert.ok(Math.abs(r.heading-350.4)<1e-9,
+  assert.ok(Math.abs(r.heading-359.6)<1e-9,
     "rightward drag reverses immediately instead of waiting for release");
 });
 
