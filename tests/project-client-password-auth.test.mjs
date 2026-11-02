@@ -83,7 +83,7 @@ test("First sign-in forces password change, then new password grants scoped dash
   assert.equal(denied.status,401);
   const reply=await api(f.env,req("/3Dprojects/api/client-portal/login","POST",{
    projectSlug:"demo-a",loginId:"9876543210",password:creds.password}));
-  assert.equal(reply.status,200,await reply.text());
+  assert.equal(reply.status,200,await reply.clone().text());
   assert.equal((await reply.json()).mustChangePassword,true);
   const cookie=reply.headers.get("set-cookie");
   assert.match(cookie,/HttpOnly; Secure; SameSite=Strict/);
