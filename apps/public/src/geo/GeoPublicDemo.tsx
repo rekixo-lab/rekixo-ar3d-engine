@@ -12,7 +12,6 @@ import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shar
 import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
 import {closerGeoCameraZoom} from "../../../../shared/geo-camera-zoom.js";
-import {GeoCloseupScene,type GeoCloseupHandle} from "./GeoCloseupScene";
 import "./geo-public-demo.css";
 
 type GeoCoordinate = {
@@ -344,10 +343,6 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const cameraActionRef = useRef<((view: GeoCameraView) => void) | null>(null);
   const zoomActionRef = useRef<((step: number) => void) | null>(null);
-  const closeupControlRef=useRef<GeoCloseupHandle|null>(null);
-  const [closeupMode,setCloseupMode]=useState(false);
-  const [zoomInfoOpen,setZoomInfoOpen]=useState(false);
-  const [zoomDiagnostics,setZoomDiagnostics]=useState<{requested:number;actual:number}|null>(null);
   // Published plot boundaries are always interactive. Public chrome can be
   // minimal without removing the canonical GLB plot picker or detail panel.
   const [selectedPlot, setSelectedPlot] = useState<GeoMappedPlot|null>(null);
@@ -368,7 +363,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
   },[statusEnabled,statusFilter]);
 
   useEffect(() => {
-    if (closeupMode || !hostRef.current || !data.maps.apiKey || !data.maps.mapId) return;
+    if (!hostRef.current || !data.maps.apiKey || !data.maps.mapId) return;
     let cancelled = false;
     let overlay: GoogleWebGLOverlay | undefined;
     let mapIdle: MapsListener | undefined;
@@ -702,9 +697,6 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           // Start presets 50% closer using fractional zoom. Google's native
           // location-dependent zoom bound still applies, without rescaling GLB.
           map.moveCamera?.({ center, ...preset });
-          const actual=map.getZoom?.();
-          if(Number.isFinite(actual))
-            setZoomDiagnostics({requested:preset.zoom,actual:actual!});
           overlay?.requestRedraw();
         };
         cameraActionRef.current = applyCamera;
@@ -716,15 +708,10 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
           setZoomNotice("");
           map.setZoom(requested);
-          const currentActual=map.getZoom?.();
-          if(Number.isFinite(currentActual))
-            setZoomDiagnostics({requested,actual:currentActual!});
           if (step > 0) {
             zoomCheckTimer = window.setTimeout(() => {
               if (cancelled) return;
               const actual = map.getZoom?.();
-              if(Number.isFinite(actual))
-                setZoomDiagnostics({requested,actual:actual!});
               if (actual !== undefined && actual < requested - 0.1) {
                 setZoomNotice("Google Maps has reached its native zoom limit here. Satellite imagery cannot zoom closer at this location.");
               }
@@ -751,9 +738,6 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         };
 
         mapZoomChanged = map.addListener("zoom_changed", () => {
-          const actual=map.getZoom?.();
-          if(Number.isFinite(actual))
-            setZoomDiagnostics(previous=>previous?{...previous,actual:actual!}:null);
           overlay?.requestRedraw();
         });
         mapIdle = map.addListener("idle", () => {
@@ -813,51 +797,14 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
       if (loadedModel) disposeObject(loadedModel);
       if (hostRef.current) hostRef.current.replaceChildren();
     };
-  }, [data,closeupMode]);
+  }, [data]);
 
-  const toggleViewMode=()=>{
-    setSelectedPlot(null);
-    setZoomNotice("");
-    setZoomInfoOpen(false);
-    setFailure("");
-    setCloseupMode(current=>!current);
-  };
   return (
     <div ref={sceneRef} className="geo-integrated-scene">
-      <div ref={hostRef} className="geo-integrated-map" hidden={closeupMode}
-        aria-label={`${data.project.name} integrated 3D geographic scene`} />
-      {closeupMode&&<GeoCloseupScene
-        model={data.model}
-        plots={data.plotMapping?.geoReleaseId===data.geoRelease.id?data.plotMapping.plots:[]}
-        statusEnabled={statusEnabled}
-        statusFilter={statusFilter}
-        statuses={statusSummary.statusById}
-        onPlotSelect={setSelectedPlot}
-        controllerRef={closeupControlRef}
-        initialView={cameraView==="entry"?"front":cameraView}
-      />}
-      <nav className="geo-view-mode-actions" aria-label="Geo viewer modes">
-        <button type="button" onClick={toggleViewMode}
-          aria-label={closeupMode?"Return to satellite Geo Map":"Open independent 3D Close-up"}
-          aria-pressed={closeupMode}>
-          {closeupMode?"Geo Map":"3D Close-up"}
-        </button>
-        {!closeupMode&&<button type="button"
-          aria-label="Show Google zoom diagnostic" aria-expanded={zoomInfoOpen}
-          onClick={()=>setZoomInfoOpen(open=>!open)}>Zoom info</button>}
-      </nav>
-      {!closeupMode&&zoomInfoOpen&&<section className="geo-zoom-diagnostic"
-        aria-label="Google Map zoom diagnostic" role="status">
-        <strong>Google Map Zoom</strong>
-        <span>Last requested: {zoomDiagnostics?.requested.toFixed(2)??"—"}</span>
-        <span>Actual camera: {zoomDiagnostics?.actual.toFixed(2)??"—"}</span>
-        <span>Satellite detail limit: {satelliteMaxZoom?.toFixed(2)??"Unknown"}</span>
-        <small>Satellite detail and actual camera zoom can have different limits.</small>
-        <button type="button" onClick={toggleViewMode}>Open 3D Close-up</button>
-      </section>}
+      <div ref={hostRef} className="geo-integrated-map" aria-label={`${data.project.name} integrated 3D geographic scene`} />
       <nav className="geo-map-quick-actions" aria-label="Geo zoom and fullscreen controls">
-        <button type="button" aria-label="Zoom out 2×" title="Zoom out 2×" onClick={() => closeupMode?closeupControlRef.current?.zoom(-1):zoomActionRef.current?.(-1)}>−</button>
-        <button type="button" aria-label="Zoom in 2×" title="Zoom in 2× (one full map zoom level)" onClick={() => closeupMode?closeupControlRef.current?.zoom(1):zoomActionRef.current?.(1)}>+</button>
+        <button type="button" aria-label="Zoom out 2×" title="Zoom out 2×" onClick={() => zoomActionRef.current?.(-1)}>−</button>
+        <button type="button" aria-label="Zoom in 2×" title="Zoom in 2× (one full map zoom level)" onClick={() => zoomActionRef.current?.(1)}>+</button>
         <button type="button" aria-label="Toggle Geo fullscreen" title="Fullscreen" onClick={() => {
           const scene = sceneRef.current;
           if (!scene) return;
@@ -865,6 +812,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           else void scene.requestFullscreen?.().catch(() => undefined);
         }}>⛶</button>
       </nav>
+
       {statusSummary.total>0&&<section className={`geo-plot-status${statusEnabled?" is-open":""}`}
         aria-label="Plot availability status">
         <div id="geo-plot-status-options" className="geo-plot-status-options"
@@ -905,10 +853,6 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         publicPhone={data.publicContacts?.phone}
         publicWhatsappHref={geoWhatsAppHref(data.publicContacts?.whatsapp||"")}
         onClose={()=>setSelectedPlot(null)}
-        onFocusPlot={closeupMode&&selectedPlot?()=>{
-          closeupControlRef.current?.focus(selectedPlot);
-          setSelectedPlot(null);
-        }:undefined}
       />
       {zoomNotice ? <div className="geo-zoom-notice" role="status">{zoomNotice}</div> : null}
       {toolbarContainer ? createPortal(<nav className="geo-camera-toolbar geo-camera-toolbar--normal-row" aria-label="Geo map navigation">
@@ -923,11 +867,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
                   ? `Closest available satellite detail at this site is zoom ${satelliteMaxZoom}`
                   : `${view.label} camera view`
               }
-              onClick={()=>{
-                setCameraView(view.id);
-                if(closeupMode)closeupControlRef.current?.preset(view.id==="entry"?"front":view.id);
-                else cameraActionRef.current?.(view.id);
-              }}
+              onClick={() => cameraActionRef.current?.(view.id)}
             >
               {view.label}
             </button>
