@@ -68,6 +68,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const [draft,setDraft]=useState<MasterplanDraft|null>(null);
   const [assets,setAssets]=useState<CloudAssetSummary[]>([]);
   const [tool,setTool]=useState<Tool>("pan");
+  const [panel,setPanel]=useState<"source"|"plots">(mode==="source"?"source":"plots");
   const [working,setWorking]=useState<Plot|null>(null);
   const [originalId,setOriginalId]=useState<string|null>(null);
   const [controlIndex,setControlIndex]=useState<number|null>(null);
@@ -246,7 +247,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const source=assets.find(a=>a.id===draft?.imageAssetId);
   return <main className="masterplan-workspace">
     <header><p className="eyebrow">REKIXO ENGINE · INDEPENDENT IMAGE GEO PROJECT</p>
-      <h1>{mode==="source"?"Geo Masterplan Source":mode==="plots"?"Masterplan Plot Mapper":"Mapping Controls"}</h1>
+      <h1>Masterplan Plot Mapper</h1>
       <p>Project: <strong>{state?.project.name||slug}</strong> · Building model/release not required. Approved image and GPS controls remain separate from 3D Buildings.</p></header>
     {error&&<p role="alert" className="masterplan-error">{error}</p>}
     {status&&<p role="status" className="masterplan-ok">{status}</p>}
@@ -255,16 +256,22 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       <span>GPS Points <b>{draft?.controlPoints.length||0}</b></span>
       <span>Verified <b>{approved?"Yes":"No"}</b></span>
       <span>Live <b>{state.activeRelease?"v"+state.activeRelease.version:"Not published"}</b></span></div>}
+    <nav className="masterplan-editor-tabs" aria-label="Masterplan editor tools">
+      <button type="button" aria-pressed={panel==="source"} className={panel==="source"?"active":""}
+        onClick={()=>{setPanel("source");setTool("pan");}}>01 · Source & GPS</button>
+      <button type="button" aria-pressed={panel==="plots"} className={panel==="plots"?"active":""}
+        onClick={()=>{setPanel("plots");setTool("pan");}}>02 · Plot Mapper & Measurements</button>
+    </nav>
     <div className="masterplan-tools">
       <button onClick={()=>setTool("pan")} className={tool==="pan"?"active":""}>Pan</button>
       <button onClick={()=>zoom(.8)}>Zoom +</button>
       <button onClick={()=>zoom(1.25)}>Zoom −</button>
       <button onClick={()=>draft&&setFrame(fitImageFrame({width:draft.width,height:draft.height}))}>Fit</button>
-      {mode!=="source"&&<button onClick={newBoundary} disabled={!imageUrl}>+ New Polygon</button>}
+      {panel==="plots"&&<button onClick={newBoundary} disabled={!imageUrl}>+ New Polygon</button>}
       <button disabled={!dirty||busy||!draft?.imageAssetId} onClick={()=>void operation("save")}>Save Draft</button>
       <button disabled={dirty||busy||!state?.draft.revision||Boolean(working)} onClick={()=>void operation("verify")}>Verify</button>
       <button disabled={dirty||busy||!approved||alreadyLive||Boolean(working)}
-        onClick={()=>void operation("publish")}>{alreadyLive?"Published · Current Draft":"Publish Masterplan"}</button>
+        onClick={()=>void operation("publish")}>{alreadyLive?"Published · Current Draft":state?.activeRelease?"Publish Update":"Publish Masterplan"}</button>
       {state?.activeRelease&&<a href={publishedUrl} target="_blank" rel="noreferrer">Open Live Geo Map</a>}
     </div>
     <div className="masterplan-grid">
@@ -306,7 +313,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
           "Tap a location on the image for selected GPS control point."}</p>
       </section>
       <aside className="masterplan-dock">
-        {mode==="source"?<>
+        {panel==="source"?<>
           <h2>Original Masterplan</h2>
           {draft?.imageAssetId&&<button type="button" disabled={!draft}
             onClick={()=>draft&&exportMasterplanDraftReview(slug,draft)}>
