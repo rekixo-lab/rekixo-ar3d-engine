@@ -1,5 +1,5 @@
 import {test,expect} from "@playwright/test";
-const BASE="http://127.0.0.1:5174";
+const BASE="http://127.0.0.1:5184";
 test("AR3D-branded personal Client Admin supports ID login, mandatory change and scoped dashboard",async({page})=>{
  await page.setViewportSize({width:360,height:780});
  let signedIn=false,mustChangePassword=true,oldPassword="FirstPass1234",lastPassword="";
