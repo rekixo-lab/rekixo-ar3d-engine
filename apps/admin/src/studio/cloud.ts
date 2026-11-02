@@ -668,6 +668,29 @@ export async function publishProjectShare(
   );
 }
 
+export async function publishBuildingSiteBranding(
+  slug: string,
+  details: {
+    title: string;
+    description: string;
+    expectedLogoDraftVersion: string;
+    expectedBuildingCardVersion: string;
+  },
+) {
+  return api<{
+    ok: true;
+    experience: "building";
+    version: string;
+    logoVersion: string;
+    shareUrl: string;
+    publishedAt: string;
+  }>(brandingPath(slug), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "publish-building-site", ...details }),
+  });
+}
+
 export async function publishGeoSiteBranding(
   slug: string,
   details: {
