@@ -4,18 +4,21 @@
   position:absolute;
   z-index:15;
   box-sizing:border-box;
-  top:10px;
-  bottom:42px; /* Leave mandatory Google attribution on the map visible. */
-  left:8px;
-  width:min(430px,calc(100% - 64px)); /* 56+ CSS px unobstructed on right. */
-  max-height:calc(100% - 52px);
+  top:0;
+  bottom:0;
+  left:0;
+  width:min(430px,calc(100% - 56px)); /* Same right-side map strip, zero left inset. */
+  max-height:none;
   display:flex;
   flex-direction:column;
   min-width:0;
   padding:0;
   overflow:hidden;
   border:1px solid rgba(96,213,177,.5);
-  border-radius:17px;
+  border-left:0;
+  border-top:0;
+  border-bottom:0;
+  border-radius:0 17px 0 0;
   background:linear-gradient(155deg,rgba(5,26,35,.98),rgba(7,21,32,.99));
   color:#eaf8f8;
   box-shadow:12px 16px 36px rgba(0,7,13,.4),inset 0 1px 0 rgba(236,255,251,.06);
@@ -24,6 +27,10 @@
   pointer-events:none;
   transition:transform .26s cubic-bezier(.22,.8,.26,1),visibility 0s linear .26s;
   will-change:transform;
+  /* Required Google map logo/copyright remain visible through a small
+     attribution-only transparent window, without shrinking the drawer. */
+  -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 30px),transparent calc(100% - 30px));
+  mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 30px),transparent calc(100% - 30px));
 }
 .geo-plot-drawer.is-open {
   transform:translate3d(0,0,0);
@@ -68,7 +75,7 @@
   flex:1 1 auto;
   min-height:0;
   box-sizing:border-box;
-  padding:13px 14px max(14px,env(safe-area-inset-bottom,0px));
+  padding:13px 14px max(44px,env(safe-area-inset-bottom,0px));
   overflow-y:auto;
   overflow-x:hidden;
   overscroll-behavior:contain;
@@ -104,24 +111,28 @@
 .geo-plot-drawer__call{background:#1d4258;border:1px solid #597c98}
 .geo-plot-drawer__contact a:focus-visible{outline:2px solid #9cffd6;outline-offset:2px}
 @media(max-width:640px) {
-  /* Top-right fullscreen/zoom buttons stay exposed above the drawer. */
-  .geo-plot-drawer{top:57px;bottom:38px;left:7px;width:calc(100% - 62px);max-height:calc(100% - 95px);border-radius:15px}
-  .geo-plot-drawer__head{padding:12px 12px 10px}
-  .geo-plot-drawer__scroll{padding:10px 11px max(12px,env(safe-area-inset-bottom,0px))}
+  /* Fill the scene itself; reserve the same 55px right-hand map strip. */
+  .geo-plot-drawer{top:0;bottom:0;left:0;width:calc(100% - 55px);max-height:none;border-radius:0 15px 0 0}
+  /* Keep the top-right map zoom/fullscreen buttons above the heading.
+     The pane starts at y=0, only its interactive content moves down. */
+  .geo-plot-drawer__head{padding:60px 12px 10px}
+  .geo-plot-drawer__scroll{padding:10px 11px max(44px,env(safe-area-inset-bottom,0px))}
   .geo-plot-drawer__diagram-card{padding:8px}
 }
-/* The fullscreen camera clone lives INSIDE the map, unlike the normal toolbar.
-   Keep at least 20px between the 42px buttons and the drawer's bottom edge. */
+/* Native fullscreen's camera buttons float above this full-height panel.
+   Keep content scrollable with internal room for the four independent controls. */
 .geo-integrated-scene:fullscreen > .geo-plot-drawer {
-  bottom:calc(74px + env(safe-area-inset-bottom,0px));
-  max-height:calc(100% - 84px - env(safe-area-inset-bottom,0px));
+  top:0;
+  bottom:0;
+  left:0;
+  max-height:none;
 }
-@media(max-width:640px) {
-  .geo-integrated-scene:fullscreen > .geo-plot-drawer {
-    top:57px;
-    bottom:calc(74px + env(safe-area-inset-bottom,0px));
-    max-height:calc(100% - 131px - env(safe-area-inset-bottom,0px));
-  }
+.geo-integrated-scene:fullscreen > .geo-plot-drawer .geo-plot-drawer__scroll {
+  padding-bottom:calc(94px + env(safe-area-inset-bottom,0px));
+}
+/* Map zoom/fullscreen actions remain reachable above the flush drawer. */
+.geo-integrated-scene:has(> .geo-plot-drawer.is-open) > .geo-map-quick-actions {
+  z-index:20;
 }
 @media(prefers-reduced-motion:reduce){
   .geo-plot-drawer{transition-duration:.01ms;transition-delay:0s;will-change:auto}
