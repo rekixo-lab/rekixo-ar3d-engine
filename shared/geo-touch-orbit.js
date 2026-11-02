@@ -84,10 +84,10 @@ export function createGeoOneFingerOrbit({
       if(!Number.isFinite(current))return;
       heading=normalizeGeoOrbitHeading(current);
     }
-    // Right drag -> clockwise map-content turn (decreasing camera heading).
-    // Direct camera writes make the 3D masterplan track the finger in real
-    // time, without a frame-easing backlog or any rotation after release.
-    heading=normalizeGeoOrbitHeading(heading-deltaX*DEGREES_PER_PIXEL);
+    // Finger-right increases the camera bearing, finger-left decreases it.
+    // This makes the customer's one-finger orbit direction match their swipe
+    // rather than reversing left/right. Keep writes immediate and camera-only.
+    heading=normalizeGeoOrbitHeading(heading+deltaX*DEGREES_PER_PIXEL);
     setHeading(heading);
     onRotate();
     lastRotationAt=now();
