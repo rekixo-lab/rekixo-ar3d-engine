@@ -69,12 +69,12 @@ test("Owner issues a one-use project invite; enrollment creates secure cookie, n
   const id="11111111-1111-4111-8111-111111111111";
   const grant=await provisionProjectClient(f.env,f.actor,f.project,{id,role:"viewer"},
    request("/3Dprojects/clients"));
-  assert.match(grant.inviteUrl,/^https:\/\/admin\.rekixo\.com\/3Dprojects\/client-portal#invite=[a-f0-9]{64}$/);
+  assert.match(grant.inviteUrl,/^https:\/\/admin\.rekixo\.com\/3Dprojects\/demo-a\/client-admin#invite=[a-f0-9]{64}$/);
   const token=grant.inviteUrl.split("invite=")[1];
   const row=f.sqlite.prepare("SELECT token_hash FROM project_client_invitations_3d").get();
   assert.notEqual(row.token_hash,token,"secrets are stored hashed only");
   const good=request("/3Dprojects/api/client-portal/enroll","POST",{
-   token,email:"demo-a@example.test"});
+   token,email:"demo-a@example.test",projectSlug:"demo-a"});
   const response=await portal(f.env,good);
   assert.equal(response.status,200,await response.text());
   const cookie=response.headers.get("set-cookie");
@@ -85,6 +85,8 @@ test("Owner issues a one-use project invite; enrollment creates secure cookie, n
   const data=await authenticated.json();
   assert.equal(data.user.projectSlug,"demo-a");
   assert.equal(data.user.role,"viewer");
+  const wrongProject=await portal(f.env,request("/3Dprojects/api/client-portal/session?project=demo-b","GET",undefined,{"Cookie":cookie}));
+  assert.equal((await wrongProject.json()).authenticated,false,"another project's client-admin URL cannot reuse this session");
   const replay=await portal(f.env,request("/3Dprojects/api/client-portal/enroll","POST",{
    token,email:"demo-a@example.test"}));
   assert.equal(replay.status,401,"one-time grants are not reusable");
@@ -131,6 +133,26 @@ test("Role and project identity are checked before invitation and every session 
    body:JSON.stringify({token:info.inviteUrl.split("invite=")[1],
     email:"demo-a@example.test"})}));
   assert.equal(invalidOrigin.status,403);
+ }finally{f.close();}
+});
+test("Client Admin project scope rejects foreign invite before consuming the token",async()=>{
+ const f=fixture();
+ try{
+  const id="11111111-1111-4111-8111-111111111111";
+  const info=await provisionProjectClient(f.env,f.actor,f.project,{id,role:"viewer"},
+    request("/3Dprojects/clients"));
+  const token=info.inviteUrl.split("invite=")[1];
+  const wrong=await portal(f.env,request("/3Dprojects/api/client-portal/enroll","POST",{
+    token,email:"demo-a@example.test",projectSlug:"demo-b"}));
+  assert.equal(wrong.status,401);
+  const good=await portal(f.env,request("/3Dprojects/api/client-portal/enroll","POST",{
+    token,email:"demo-a@example.test",projectSlug:"demo-a"}));
+  assert.equal(good.status,200,"wrong project must not consume invite");
+  const cookie=good.headers.get("set-cookie");
+  f.sqlite.prepare("UPDATE projects_3d SET status='archived' WHERE id='demo-a'").run();
+  const inactive=await portal(f.env,request("/3Dprojects/api/client-portal/session?project=demo-a",
+    "GET",undefined,{"Cookie":cookie}));
+  assert.equal((await inactive.json()).authenticated,false,"archived projects revoke client access");
  }finally{f.close();}
 });
 test("Owner UI can issue and revoke links but client portal has no owner routing",()=>{
