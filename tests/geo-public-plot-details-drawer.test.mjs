@@ -105,17 +105,30 @@ test("drawer only changes presentation, preserving click hit testing and camera 
   assert.match(drawer,/event\.key==="Escape"/);
 });
 
-test("left drawer keeps title, top controls, right-side map and four bottom buttons unobscured",()=>{
-  assert.match(css,/position:absolute;/);
-  assert.match(css,/width:min\(430px,calc\(100% - 64px\)\)/);
-  assert.match(css,/width:calc\(100% - 62px\)/);
-  assert.match(css,/top:57px;bottom:38px/);
-  assert.match(css,/\.geo-integrated-scene:fullscreen > \.geo-plot-drawer/);
-  assert.match(css,/bottom:calc\(74px \+ env\(safe-area-inset-bottom,0px\)\)/);
+test("plot drawer fills map from left/top/bottom while retaining the right strip and required attribution",()=>{
+  assert.match(css,/\.geo-plot-drawer \{[\s\S]*position:absolute;/);
+  assert.match(css,/top:0;\s*bottom:0;\s*left:0;/);
+  assert.match(css,/width:min\(430px,calc\(100% - 56px\)\)/);
+  assert.match(css,/@media\(max-width:640px\)[\s\S]*\.geo-plot-drawer\{top:0;bottom:0;left:0;width:calc\(100% - 55px\);max-height:none/);
+  assert.match(css,/border-left:0;[\s\S]*border-top:0;[\s\S]*border-bottom:0;/);
+  assert.match(css,/border-radius:0 17px 0 0/);
+  assert.match(css,/-webkit-mask-image:linear-gradient\(to bottom,#000 0,#000 calc\(100% - 30px\),transparent/);
+  assert.match(css,/mask-image:linear-gradient\(to bottom,#000 0,#000 calc\(100% - 30px\),transparent/);
+  assert.match(css,/\.geo-integrated-scene:fullscreen > \.geo-plot-drawer \{[\s\S]*top:0;[\s\S]*bottom:0;[\s\S]*left:0;/);
+  assert.match(css,/\.geo-integrated-scene:fullscreen > \.geo-plot-drawer \.geo-plot-drawer__scroll \{[\s\S]*padding-bottom:calc\(94px \+ env\(safe-area-inset-bottom,0px\)\)/);
+  assert.match(css,/\.geo-integrated-scene:has\(> \.geo-plot-drawer\.is-open\) > \.geo-map-quick-actions \{[\s\S]*z-index:20;/);
+  assert.match(css,/\.geo-plot-drawer__head\{padding:60px 12px 10px\}/);
   assert.match(css,/transform:translate3d\(calc\(-100% - 16px\),0,0\)/);
   assert.match(css,/transition:transform \.26s/);
-  assert.match(css,/geo-plot-drawer\.is-open/);
   assert.match(css,/:has\(> \.geo-plot-drawer\.is-open\) > \.geo-plot-status/);
   assert.match(css,/prefers-reduced-motion:reduce/);
   assert.doesNotMatch(css,/\.gm-style-cc\s*\{|\.gm-style a\s*\{/);
+});
+
+
+test("unapproved customer facts are explained without suggesting the entire site is unpublished",()=>{
+  assert.match(drawer,/Awaiting source approval/);
+  assert.match(drawer,/Preliminary boundary: only individually reviewed measurements/);
+  assert.match(drawer,/Availability and price appear only after verified mapping and owner approval/);
+  assert.doesNotMatch(drawer,/<b>Not published<\/b>/);
 });
