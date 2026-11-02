@@ -237,57 +237,6 @@ button.engine-client-admin-plot-row:hover{border-color:#71d6ad}
   background-size: 49px 49px;
   mask-image: radial-gradient(ellipse at center, #0007, transparent 70%);
 }
-.engine-client-admin-auth .engine-client-admin-head {
-  width: min(100%, 380px);
-  max-width: 380px;
-  min-width: 0;
-  margin: 0;
-  padding: 0 7px;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  animation: client-auth-enter .55s both cubic-bezier(.18,.78,.2,1);
-}
-.engine-client-admin-auth .engine-client-admin-brand {
-  width: 100%;
-  gap: 12px;
-}
-.engine-client-admin-auth .engine-client-admin-brand small {
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1.25;
-  color: #5ce8bb;
-  letter-spacing: .135em;
-}
-.engine-client-admin-auth .engine-client-admin-brand h1 {
-  margin: 2px 0 0;
-  color: #f0fff9;
-  font-size: clamp(19px, 3.3vw, 24px);
-  font-weight: 800;
-  line-height: 1.22;
-  letter-spacing: -.02em;
-}
-.engine-client-admin-auth .engine-client-admin-mark {
-  width: 43px;
-  height: 43px;
-  min-width: 43px;
-  border: 1px solid #347b74;
-  border-radius: 13px;
-  background: linear-gradient(145deg, #10392f, #0b1e28);
-  box-shadow: inset 0 1px 0 #b3fff015, 0 6px 26px #0003;
-}
-.engine-client-admin-auth .engine-client-admin-mark i {
-  border-color: #7ce8c8;
-  animation: client-auth-mark 3.8s ease-in-out infinite;
-}
-.engine-client-admin-auth .engine-client-admin-mark i:nth-child(2) {animation-delay: .23s}
-.engine-client-admin-auth .engine-client-admin-mark i:nth-child(3) {animation-delay: .46s}
-.engine-client-admin-auth .engine-client-admin-mark i:nth-child(4) {animation-delay: .69s}
 .engine-client-admin-auth .engine-client-admin-signin {
   position: relative;
   width: min(100%, 380px);
@@ -311,27 +260,49 @@ button.engine-client-admin-plot-row:hover{border-color:#71d6ad}
   background: linear-gradient(90deg, transparent, #6ef1bf75, transparent);
   pointer-events: none;
 }
-.engine-client-admin-auth-title {
+.engine-client-admin-auth .engine-client-builder-brand {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  margin: 0 0 18px;
+  gap: 4px;
+  margin: -1px 0 21px;
+  text-align: center;
 }
-.engine-client-admin-auth-title h2 {
+.engine-client-admin-auth .engine-client-builder-symbol {
+  display: block;
+  min-height: 46px;
+  font-size: 40px;
+  line-height: 1.12;
+  filter: drop-shadow(0 6px 13px #f4aa3335);
+  animation: client-builder-float 5s ease-in-out infinite;
+}
+.engine-client-admin-auth .engine-client-builder-brand h1 {
+  margin: 1px 0 0;
+  color: #f4fffa;
+  font-size: 24px;
+  font-weight: 820;
+  line-height: 1.24;
+  letter-spacing: -.045em;
+}
+.engine-client-admin-auth .engine-client-builder-brand p {
+  max-width: 100%;
   margin: 0;
-  color: #f4fffb;
-  font-size: 20px;
-  font-weight: 760;
-  line-height: 1.35;
-  letter-spacing: -.035em;
+  color: #96aeba;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
-.engine-client-admin-auth-accent {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
-  border-radius: 50%;
-  background: #63e6b4;
-  box-shadow: 0 0 0 4px #31d6a61b, 0 0 15px #4bd8a582;
+.engine-client-admin-auth .engine-client-builder-brand strong {
+  color: #7be2bb;
+  font-weight: 750;
+}
+.engine-client-admin-auth .engine-client-admin-change-title {
+  margin: 0 0 18px;
+  color: #f4fffa;
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 750;
+  text-align: center;
 }
 .engine-client-admin-auth .engine-client-admin-signin form,
 .engine-client-admin-auth .engine-client-admin-login-form {
@@ -489,12 +460,34 @@ button.engine-client-admin-plot-row:hover{border-color:#71d6ad}
   cursor: not-allowed;
   box-shadow: none;
 }
-.engine-client-admin-auth .engine-client-admin-login-hint {
+.engine-client-admin-auth .engine-client-admin-back-project {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 35px;
   margin: 0;
-  color: #86a9b4;
-  text-align: center;
-  font-size: 11px;
+  padding: 5px 9px;
+  color: #9ebac7;
+  font-size: 12px;
+  font-weight: 650;
   line-height: 1.45;
+  text-decoration: none;
+  transition: color .2s ease, transform .2s ease;
+}
+.engine-client-admin-auth .engine-client-admin-back-project:hover {
+  color: #80f0c4;
+  transform: translateX(-3px);
+}
+.engine-client-admin-auth .engine-client-admin-back-project:focus-visible {
+  outline: 2px solid #65efba;
+  outline-offset: 2px;
+  border-radius: 7px;
+}
+.engine-client-admin-auth .engine-client-admin-signin > .engine-client-admin-back-project {
+  display: flex;
+  margin: 11px auto 0;
 }
 .engine-client-admin-auth .engine-client-admin-auth-help {
   margin: -9px 0 17px;
@@ -529,9 +522,9 @@ button.engine-client-admin-plot-row:hover{border-color:#71d6ad}
   from {transform: translate(-52%, -58%) scale(.96);opacity: .7}
   to {transform: translate(-48%, -52%) scale(1.08);opacity: 1}
 }
-@keyframes client-auth-mark {
-  0%, 72%, 100% {opacity: .58; box-shadow: none}
-  82% {opacity: 1; box-shadow: 0 0 6px #64efc07a}
+@keyframes client-builder-float {
+  0%, 100% {transform: translateY(0)}
+  50% {transform: translateY(-3px)}
 }
 @media (max-width: 520px) {
   .engine-client-admin.engine-client-admin-auth {gap: 14px;padding: 20px 13px}
@@ -539,13 +532,12 @@ button.engine-client-admin-plot-row:hover{border-color:#71d6ad}
     padding: 21px 19px;
     border-radius: 16px;
   }
-  .engine-client-admin-auth .engine-client-admin-head {padding: 0 4px}
-  .engine-client-admin-auth .engine-client-admin-auth-title {margin-bottom: 16px}
+  .engine-client-admin-auth .engine-client-builder-brand {margin-bottom: 18px}
 }
 @media (max-width: 360px) {
   .engine-client-admin.engine-client-admin-auth {padding-inline: 12px}
   .engine-client-admin-auth .engine-client-admin-signin {padding: 18px 16px}
-  .engine-client-admin-auth .engine-client-admin-brand h1 {font-size: 20px}
+  .engine-client-admin-auth .engine-client-builder-brand h1 {font-size: 22px}
   .engine-client-admin-auth .engine-client-admin-login-form {gap: 11px}
 }
 @media (max-height: 560px) {
@@ -553,15 +545,15 @@ button.engine-client-admin-plot-row:hover{border-color:#71d6ad}
 }
 @media (prefers-reduced-motion: reduce) {
   .engine-client-admin-auth::before,
-  .engine-client-admin-auth .engine-client-admin-head,
   .engine-client-admin-auth .engine-client-admin-signin,
-  .engine-client-admin-auth .engine-client-admin-mark i,
+  .engine-client-admin-auth .engine-client-builder-symbol,
   .engine-client-admin-auth .engine-manage-error,
   .engine-client-admin-auth .engine-manage-ok {
     animation: none !important;
   }
   .engine-client-admin-auth .engine-client-admin-field,
   .engine-client-admin-auth .engine-client-admin-reveal,
+  .engine-client-admin-auth .engine-client-admin-back-project,
   .engine-client-admin-auth .engine-client-admin-submit,
   .engine-client-admin-auth .engine-client-admin-submit::before,
   .engine-client-admin-auth .engine-client-admin-submit > svg {
