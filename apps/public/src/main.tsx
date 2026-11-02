@@ -794,7 +794,8 @@ const clientAdminMatch = window.location.pathname.match(/^\/3Dprojects\/([a-z0-9
 createRoot(root).render(
   <React.StrictMode>
     <Suspense fallback={<LoadingPage />}>
-      {masterplanRoute ? <MasterplanPublic /> : geoRoute ? <GeoPublicDemo /> : <App />}
+      {clientAdminMatch ? <ProjectClientAdmin projectSlug={clientAdminMatch[1]} /> :
+       masterplanRoute ? <MasterplanPublic /> : geoRoute ? <GeoPublicDemo /> : <App />}
     </Suspense>
   </React.StrictMode>,
 );
