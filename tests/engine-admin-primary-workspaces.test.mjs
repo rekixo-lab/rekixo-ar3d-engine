@@ -7,8 +7,8 @@ const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "
 
 test("Engine owner sidebar uses only the concise, type-gated workspaces", () => {
   const shell = read("apps/admin/src/layout/EngineAdminShell.tsx");
-  assert.match(shell, /const primaryNavSections = new Set<ShellSection>/);
-  assert.match(shell, /primaryNavSections\.has\(item\.id\) && projectModuleVisible\(projectKind,item\.id\)/);
+  assert.match(shell, /const navItems: NavItem\[\] = \[/);
+  assert.match(shell, /navItems\.filter\(item=>projectModuleVisible\(projectKind,item\.id\)\)/);
   for (const id of ["overview", "clients", "profile", "masterplan-plots", "building", "geo", "geo-plots", "branding"]) {
     assert.ok(shell.includes(`"${id}"`), `Missing primary workspace: ${id}`);
   }
