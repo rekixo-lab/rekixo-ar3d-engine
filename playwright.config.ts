@@ -33,7 +33,7 @@ export default defineConfig({
     },
     {
       command: "npm run dev:public",
-      url: "http://127.0.0.1:5174/3Dprojects",
+      url: "http://127.0.0.1:5174/3Dprojects/demo-a/client-admin",
       reuseExistingServer: false,
       timeout: 120_000,
     },
