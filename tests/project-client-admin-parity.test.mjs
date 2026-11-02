@@ -24,7 +24,7 @@ test("Owner creates invites, customer Geo and masterplan link to Client Admin ra
  const owner=read("apps/admin/src/management/ProjectManagement.tsx");
  const geo=read("apps/public/src/geo/GeoPublicDemo.tsx");
  const image=read("apps/public/src/masterplan/MasterplanPublic.tsx");
- assert.match(access,/projectClientAdminPath\(project.slug\)/);
+ assert.match(access,/projectClientAdminUrl\(project.slug\)/);
  assert.match(owner,/grant-client-access/);
  assert.match(owner,/revoke-client-access/);
  assert.match(owner,/projectClientAdminUrl\(slug\)/);
