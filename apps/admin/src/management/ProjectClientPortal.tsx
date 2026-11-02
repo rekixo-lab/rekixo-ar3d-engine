@@ -230,8 +230,9 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
   const filteredCommercial=(commercial?.rows||[]).filter(row=>
     row.plotId.toLowerCase().includes(plotSearch.trim().toLowerCase()));
   const projectLabel=identity?.projectName||projectTitle||"Project Client Admin";
+  const authGate=!identity||Boolean(identity.mustChangePassword);
 
-  return <main className="engine-client-admin">
+  return <main className={"engine-client-admin"+(authGate?" engine-client-admin-auth":"")}>
     <header className="engine-client-admin-head">
       <div className="engine-client-admin-brand">
         <span className="engine-client-admin-mark" aria-hidden="true">
@@ -240,8 +241,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
         <div>
           <small>AR3D STUDIO · CLIENT ADMIN</small>
           <h1>{projectLabel}</h1>
-          <p>{identity?"Private project workspace · "+nameOfRole(identity.role):
-            "Project-specific secure sign-in"}</p>
+          {!authGate&&<p>Private workspace · {nameOfRole(identity!.role)}</p>}
         </div>
       </div>
       {identity&&<div className="engine-client-admin-head-actions">
@@ -251,73 +251,127 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     </header>
     {error&&<p className="engine-manage-error" role="alert">{error}</p>}
     {message&&<p className="engine-manage-ok" role="status">{message}</p>}
-    {!identity?<section className="engine-client-admin-signin">
-      <h2>Project Client Admin</h2>
-      <p>Sign in with the Client ID and temporary password provided by your AR3D
-        project administrator. Your account can only access this project.</p>
-      {!invite&&!scopedSlug?<p role="status">
-        Open your project's AR3D Client Admin link to sign in with ID and Password,
-        or use an existing owner-approved invitation.
+    {!identity?<section className="engine-client-admin-signin" aria-labelledby="client-login-heading">
+      <div className="engine-client-admin-auth-title">
+        <span className="engine-client-admin-auth-accent" aria-hidden="true"/>
+        <h2 id="client-login-heading">Sign in</h2>
+      </div>
+      {!invite&&!scopedSlug?<p role="status" className="engine-client-admin-auth-help">
+        Open your project's Client Admin link, or use an invitation.
       </p>:!invite?<form className="engine-client-admin-login-form" onSubmit={e=>{
         e.preventDefault();void passwordLogin();
       }}>
-        <label>Mobile Number or Email ID
-          <input autoFocus autoComplete="username" value={loginId} maxLength={254} required
-            placeholder="Client mobile number or email"
-            onChange={e=>setLoginId(e.target.value)}/>
-        </label>
-        <label>Password
-          <span className="engine-client-admin-password-field">
-            <input aria-label="Password" type={showPassword?"text":"password"} autoComplete="current-password"
-              value={password} maxLength={128} required placeholder="Enter password"
-              onChange={e=>setPassword(e.target.value)}/>
-            <button type="button" aria-label={showPassword?"Hide password":"Show password"}
-              onClick={()=>setShowPassword(v=>!v)}>{showPassword?"Hide":"Show"}</button>
+        <label>Mobile / Email
+          <span className="engine-client-admin-field">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="5" y="2.7" width="14" height="18.6" rx="3"/>
+              <path d="M10 17.5h4"/>
+            </svg>
+            <input aria-label="Mobile Number or Email ID" autoFocus autoComplete="username"
+              value={loginId} maxLength={254} required placeholder="Mobile number or email"
+              onChange={e=>setLoginId(e.target.value)}/>
           </span>
         </label>
-        <button type="submit" disabled={busy||!loginId.trim()||!password}>
-          {busy?"Signing in…":"Sign In to Client Admin"}</button>
-        <p className="engine-client-admin-login-hint">
-          Forgot your password? Contact your project Super Admin to reset it.
-        </p>
+        <label>Password
+          <span className="engine-client-admin-field engine-client-admin-password-field">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4.5" y="10.5" width="15" height="10.5" rx="2.6"/>
+              <path d="M8.2 10.5V7a3.8 3.8 0 0 1 7.6 0v3.5"/>
+            </svg>
+            <input aria-label="Password" type={showPassword?"text":"password"}
+              autoComplete="current-password" value={password} maxLength={128} required
+              placeholder="Enter password" onChange={e=>setPassword(e.target.value)}/>
+            <button type="button" className="engine-client-admin-reveal"
+              aria-label={showPassword?"Hide password":"Show password"}
+              aria-pressed={showPassword} title={showPassword?"Hide password":"Show password"}
+              onClick={()=>setShowPassword(v=>!v)}>
+              {showPassword?
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8"/>
+                  <path d="M9.9 5.3A10.7 10.7 0 0 1 12 5c5.1 0 8.8 4.5 10 7-0.4 0.8-1.3 2.1-2.7 3.3M6.5 6.5C4.3 7.9 2.8 10.2 2 12c1.3 2.5 5 7 10 7 1.2 0 2.3-0.2 3.4-0.6"/>
+                </svg>:
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>}
+            </button>
+          </span>
+        </label>
+        <button className="engine-client-admin-submit" type="submit"
+          disabled={busy||!loginId.trim()||!password}>
+          <span>{busy?"Signing in…":"Sign in"}</span>
+          {!busy&&<svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14m-6-6 6 6-6 6"/>
+          </svg>}
+        </button>
+        <p className="engine-client-admin-login-hint">Forgot password? Contact admin.</p>
       </form>:
-        <form onSubmit={e=>{e.preventDefault();void login();}}>
-          <p>Owner-approved one-time invitation · Valid for 24 hours.</p>
-          <label>Invited email address
-            <input type="email" autoComplete="email" value={email}
-              maxLength={254} required onChange={e=>setEmail(e.target.value)}/>
+        <form className="engine-client-admin-login-form" onSubmit={e=>{
+          e.preventDefault();void login();
+        }}>
+          <label>Invited email
+            <span className="engine-client-admin-field">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="5" width="18" height="14" rx="2.5"/>
+                <path d="m4.2 7 7.8 5.6L19.8 7"/>
+              </svg>
+              <input type="email" autoComplete="email" value={email}
+                aria-label="Invited email address" maxLength={254} required
+                placeholder="Email address" onChange={e=>setEmail(e.target.value)}/>
+            </span>
           </label>
-          <button type="submit" disabled={busy||!email.trim()}>
-            {busy?"Verifying…":"Activate project access"}</button>
-          <button type="button" onClick={()=>setInvite("")}>Sign in with ID and Password</button>
-        </form>}
-    </section>:identity.mustChangePassword?<section className="engine-client-admin-signin">
-      <h2>Change Temporary Password</h2>
-      <p>For account security, create your own password before opening the dashboard.
-        Use at least 8 characters with a letter and a number.</p>
+          <button className="engine-client-admin-submit" type="submit"
+            disabled={busy||!email.trim()}>
+            {busy?"Verifying…":"Activate project access"}
+          </button>
+          <button className="engine-client-admin-text-action" type="button"
+            onClick={()=>setInvite("")}>Use ID and password instead</button>
+        </form>}    </section>:identity.mustChangePassword?<section className="engine-client-admin-signin"
+      aria-labelledby="client-change-heading">
+      <div className="engine-client-admin-auth-title">
+        <span className="engine-client-admin-auth-accent" aria-hidden="true"/>
+        <h2 id="client-change-heading">Change Temporary Password</h2>
+      </div>
+      <p className="engine-client-admin-auth-help">8+ characters · letters and numbers</p>
       <form className="engine-client-admin-login-form" onSubmit={e=>{
         e.preventDefault();void changePassword();
       }}>
-        <label>Current Temporary Password
-          <input type="password" autoComplete="current-password" value={oldPassword}
-            required minLength={8} maxLength={128} onChange={e=>setOldPassword(e.target.value)}/>
+        <label>Current password
+          <span className="engine-client-admin-field">
+            <input aria-label="Current Temporary Password" type="password"
+              autoComplete="current-password" value={oldPassword} required minLength={8}
+              maxLength={128} onChange={e=>setOldPassword(e.target.value)}/>
+          </span>
         </label>
-        <label>New Password
-          <input type="password" autoComplete="new-password" value={newPassword}
-            required minLength={8} maxLength={128} onChange={e=>setNewPassword(e.target.value)}/>
+        <label>New password
+          <span className="engine-client-admin-field">
+            <input aria-label="New Password" type="password" autoComplete="new-password"
+              value={newPassword} required minLength={8} maxLength={128}
+              onChange={e=>setNewPassword(e.target.value)}/>
+          </span>
         </label>
-        <label>Confirm New Password
-          <input type="password" autoComplete="new-password" value={confirmPassword}
-            required minLength={8} maxLength={128} onChange={e=>setConfirmPassword(e.target.value)}/>
+        <label>Confirm password
+          <span className="engine-client-admin-field">
+            <input aria-label="Confirm New Password" type="password" autoComplete="new-password"
+              value={confirmPassword} required minLength={8} maxLength={128}
+              onChange={e=>setConfirmPassword(e.target.value)}/>
+          </span>
         </label>
         {confirmPassword&&newPassword!==confirmPassword&&
-          <p role="alert">New passwords do not match.</p>}
-        <button type="submit" disabled={busy||newPassword.length<8||
-          !/[A-Za-z]/.test(newPassword)||!/[0-9]/.test(newPassword)||
-          !oldPassword||newPassword!==confirmPassword}>
-          {busy?"Updating…":"Change Password"}</button>
-      </form>
-    </section>:<>
+          <p role="alert">Passwords don't match.</p>}
+        <button className="engine-client-admin-submit" type="submit"
+          disabled={busy||newPassword.length<8||
+            !/[A-Za-z]/.test(newPassword)||!/[0-9]/.test(newPassword)||
+            !oldPassword||newPassword!==confirmPassword}>
+          {busy?"Updating…":"Change password"}
+        </button>
+      </form>    </section>:<>
       <nav className="engine-client-admin-tabs" aria-label="Client admin sections">
         {availablePanels.map(item=><button key={item} type="button"
           aria-current={panel===item?"page":undefined} className={panel===item?"is-active":""}
