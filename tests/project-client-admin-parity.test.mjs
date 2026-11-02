@@ -54,7 +54,8 @@ test("Session cannot be shared across projects and retains least privilege",()=>
  assert.match(ui,/Back to Project/);
  assert.match(ui,/BuilderAdminBrand/);
  assert.match(ui,/Change Temporary Password/);
- assert.doesNotMatch(ui,/AR3D STUDIO · CLIENT ADMIN/);
+ assert.match(ui,/!authGate&&<header className="engine-client-admin-head">/);
+ assert.match(ui,/BuilderAdminBrand projectName=\{projectLabel\}/);
  assert.match(ui,/engine-client-admin-auth/);
  assert.match(ui,/engine-client-admin-reveal/);
  assert.doesNotMatch(ui,/REKIXO · PERSONAL CLIENT ADMIN/i);
