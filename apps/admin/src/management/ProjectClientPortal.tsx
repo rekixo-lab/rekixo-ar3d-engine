@@ -255,7 +255,10 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       <h2>Project Client Admin</h2>
       <p>Sign in with the Client ID and temporary password provided by your AR3D
         project administrator. Your account can only access this project.</p>
-      {!invite?<form className="engine-client-admin-login-form" onSubmit={e=>{
+      {!invite&&!scopedSlug?<p role="status">
+        Open your project's AR3D Client Admin link to sign in with ID and Password,
+        or use an existing owner-approved invitation.
+      </p>:!invite?<form className="engine-client-admin-login-form" onSubmit={e=>{
         e.preventDefault();void passwordLogin();
       }}>
         <label>Mobile Number or Email ID
