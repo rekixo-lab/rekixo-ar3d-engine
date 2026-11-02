@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -38,7 +38,7 @@ const geoWhatsAppHref=(value:string)=>{
   return number.length>=11&&number.length<=15?"https://wa.me/"+number:"";
 };
 
-type GeoHeaderIconKind = "call" | "whatsapp" | "admin";
+type GeoHeaderIconKind = "call" | "admin";
 function GeoHeaderIcon({kind}:{kind:GeoHeaderIconKind}){
   if(kind==="admin")return (
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -49,18 +49,47 @@ function GeoHeaderIcon({kind}:{kind:GeoHeaderIconKind}){
       <rect x="14" y="14" width="7" height="7" rx="1.4" />
     </svg>
   );
-  if(kind==="whatsapp")return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 11.8a8 8 0 0 1-11.7 7.1L4 20l1.1-4.3a8 8 0 1 1 14.9-3.9Z" />
-      <path d="m8.4 8.1 1.4-.5 1.2 2.6-1 1.1a8.5 8.5 0 0 0 2.8 2.8l1.1-1 2.6 1.2-.5 1.4c-.2.5-.8.8-1.4.7-3.7-.7-6.6-3.6-7.3-7.3-.1-.6.2-1.2.7-1.4Z" />
-    </svg>
-  );
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 16.4v3a2 2 0 0 1-2.2 2 18 18 0 0 1-8-2.8 18 18 0 0 1-5.4-5.4 18 18 0 0 1-2.8-8A2 2 0 0 1 4.6 3h3a2 2 0 0 1 2 1.7c.1.9.3 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.5 11a14 14 0 0 0 4.5 4.5l1.4-1.3a2 2 0 0 1 2.1-.5c.9.4 1.9.6 2.8.7a2 2 0 0 1 1.7 2Z" />
     </svg>
+  );
+}
+
+/** Reveal the entire published location smoothly when narrow screens clip it. */
+function GeoHeaderSubtitle({text}:{text:string}){
+  const viewportRef=useRef<HTMLParagraphElement>(null);
+  const textRef=useRef<HTMLSpanElement>(null);
+  const [overflow,setOverflow]=useState(0);
+  useEffect(()=>{
+    const viewport=viewportRef.current;
+    const content=textRef.current;
+    if(!viewport||!content)return;
+    const measure=()=>{
+      // The content is max-content width, unaffected by its visual transform.
+      const distance=Math.max(0,Math.ceil(content.scrollWidth-viewport.clientWidth));
+      setOverflow(value=>value===distance?value:distance);
+    };
+    const observer=typeof ResizeObserver==="undefined"?null:new ResizeObserver(measure);
+    observer?.observe(viewport);
+    observer?.observe(content);
+    window.addEventListener("resize",measure);
+    measure();
+    return ()=>{
+      observer?.disconnect();
+      window.removeEventListener("resize",measure);
+    };
+  },[text]);
+  const motionStyle={
+    "--geo-subtitle-shift":`-${overflow}px`,
+    "--geo-subtitle-duration":`${Math.max(12,Math.min(36,8+overflow/22))}s`,
+  } as CSSProperties;
+  return (
+    <p ref={viewportRef} className={`geo-header-subtitle${overflow>1?" is-overflowing":""}`}
+      style={motionStyle} title={text}>
+      <span ref={textRef} className="geo-header-subtitle-text">{text}</span>
+    </p>
   );
 }
 
@@ -991,9 +1020,6 @@ export default function GeoPublicDemo() {
   // Header links use ONLY the owner's explicitly published Geo contacts.
   const publicPhone=data.publicContacts?.phone?.replace(/[^+0-9]/g,"")||"";
   const callHref=safeContactDigits(publicPhone).length>=7?"tel:"+publicPhone:"";
-  const whatsappHref=geoWhatsAppHref(
-    data.publicContacts?.whatsapp||data.publicContacts?.phone||""
-  );
   const adminHref="/3Dprojects?project="+encodeURIComponent(slug);
 
   const mapFallbackReason = !data.maps.apiKey
@@ -1009,7 +1035,7 @@ export default function GeoPublicDemo() {
           {branding?.logoUrl ? <img className="jio-public-project-logo" src={branding.logoUrl} alt="" /> : null}
           <div>
             <h1>{data.project.name}</h1>
-            <p>{data.project.location || "Rekixo AR3D Engine"}</p>
+            <GeoHeaderSubtitle text={data.project.location || "Rekixo AR3D Engine"} />
           </div>
         </div>
         <nav className="jio-public-header-actions" aria-label="Project quick actions">
@@ -1022,18 +1048,6 @@ export default function GeoPublicDemo() {
             <span className="jio-public-header-action is-unavailable"
               role="img" aria-label="Call unavailable">
               <GeoHeaderIcon kind="call" />
-            </span>
-          )}
-          {whatsappHref ? (
-            <a className="jio-public-header-action jio-public-header-action--whatsapp"
-              href={whatsappHref} target="_blank" rel="noopener noreferrer"
-              aria-label="Contact project team on WhatsApp">
-              <GeoHeaderIcon kind="whatsapp" />
-            </a>
-          ) : (
-            <span className="jio-public-header-action is-unavailable"
-              role="img" aria-label="WhatsApp unavailable">
-              <GeoHeaderIcon kind="whatsapp" />
             </span>
           )}
           <a className="jio-public-header-action jio-public-header-action--admin"

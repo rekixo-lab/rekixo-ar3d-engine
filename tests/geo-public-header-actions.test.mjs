@@ -8,54 +8,61 @@ const begin=source.indexOf('<header className="jio-public-header">');
 const end=source.indexOf("</header>",begin);
 const header=source.slice(begin,end);
 
-test("Geo title and location remain on left, with exactly three icon-only actions at right",()=>{
+test("Geo header has only compact Call then Admin icons, alongside the project title",()=>{
   assert.ok(begin>=0&&end>begin);
   assert.match(header,/className="jio-public-branding"/);
   assert.match(header,/<h1>\{data\.project\.name\}<\/h1>/);
-  assert.match(header,/<p>\{data\.project\.location/);
-  assert.match(header,/className="jio-public-header-actions"/);
+  assert.match(header,/<GeoHeaderSubtitle text=\{data\.project\.location/);
   const call=header.indexOf('href={callHref}');
-  const whatsapp=header.indexOf('href={whatsappHref}');
   const admin=header.indexOf('href={adminHref}');
-  assert.ok(call>0&&whatsapp>call&&admin>whatsapp,
-    "Required visual order is Call, WhatsApp, Admin");
-  assert.equal((header.match(/<a className="jio-public-header-action/g)||[]).length,3);
-  assert.doesNotMatch(header,/>\s*(?:Call|WhatsApp|Admin Panel)\s*<\/a>/);
+  assert.ok(call>0&&admin>call,"Call should precede Admin");
+  assert.equal((header.match(/<a className="jio-public-header-action/g)||[]).length,2);
+  assert.doesNotMatch(header,/WhatsApp|whatsapp|kind="whatsapp"|href=\{whatsappHref\}/);
+  assert.doesNotMatch(header,/>\s*(?:Call|Admin Panel)\s*<\/a>/);
   assert.match(header,/aria-label="Call project contact"/);
-  assert.match(header,/aria-label="Contact project team on WhatsApp"/);
   assert.match(header,/aria-label="Open project admin panel"/);
 });
 
-test("Admin is a four-square dashboard icon, not a settings gear",()=>{
+test("Admin remains a four-square dashboard icon, never a gear",()=>{
   const start=source.indexOf('if(kind==="admin")');
-  const end=source.indexOf('if(kind==="whatsapp")',start);
-  const adminIcon=source.slice(start,end);
-  assert.equal((adminIcon.match(/<rect /g)||[]).length,4);
-  assert.doesNotMatch(adminIcon,/gear|settings|<path /i);
+  const end=source.indexOf('return (',start+150);
+  const icon=source.slice(start,end);
+  assert.equal((icon.match(/<rect /g)||[]).length,4);
+  assert.doesNotMatch(icon,/gear|settings|<path /i);
   assert.match(header,/<GeoHeaderIcon kind="admin" \/>/);
 });
 
-test("Header links use published contact data and project-specific protected Admin path",()=>{
+test("Call uses only published Geo phone, Admin uses authenticated project route",()=>{
   assert.match(source,/const publicPhone=data\.publicContacts\?\.phone/);
-  assert.match(source,/const whatsappHref=geoWhatsAppHref\(/);
-  assert.match(source,/data\.publicContacts\?\.whatsapp\|\|data\.publicContacts\?\.phone/);
   assert.match(source,/const adminHref="\/3Dprojects\?project="\+encodeURIComponent\(slug\)/);
   assert.match(header,/role="img" aria-label="Call unavailable"/);
-  assert.match(header,/role="img" aria-label="WhatsApp unavailable"/);
-  assert.match(header,/target="_blank" rel="noopener noreferrer"/);
+  assert.doesNotMatch(header,/href=\{whatsappHref\}/);
   const contactStrip=source.slice(source.indexOf('className="jio-public-customer-contact"'),
     source.indexOf("</section>}",source.indexOf('className="jio-public-customer-contact"')));
   assert.doesNotMatch(contactStrip,/aria-label="Call project contact">Call<\/a>/);
-  assert.doesNotMatch(contactStrip,/aria-label="Contact project team on WhatsApp">WhatsApp<\/a>/);
-  // Other published address, Maps, website and email actions remain available.
   assert.match(contactStrip,/geoPublicMapHref/);
   assert.match(contactStrip,/phoneSecondary/);
 });
 
-test("Header icons fit every viewport without squeezing map or project title",()=>{
+test("Compact visual face retains touch target and padded header at all widths",()=>{
   assert.match(css,/\.jio-public-header-actions\s*\{[\s\S]*?margin-left:\s*auto/);
-  assert.match(css,/\.jio-public-header-action\s*\{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;/);
-  assert.match(css,/\.jio-public-branding h1,\s*\.jio-public-branding h1 \+ p\s*\{[\s\S]*?text-overflow:\s*ellipsis/);
+  assert.match(css,/\.jio-public-header-action\s*\{[\s\S]*?width:\s*40px;[\s\S]*?height:\s*40px;/);
+  assert.match(css,/\.jio-public-header-action::before\s*\{[\s\S]*?inset:\s*3px/);
+  assert.match(css,/\.jio-public-header-action svg\s*\{[\s\S]*?width:\s*18px/);
   assert.match(css,/\.jio-public-header-action:focus-visible/);
   assert.match(css,/\.jio-public-header-action\.is-unavailable/);
+  assert.match(css,/padding:\s*6px 9px/);
+  assert.match(css,/padding:\s*4px 6px/);
+});
+
+test("Clipped mobile subtitle pans through its measured hidden text with reduced-motion fallback",()=>{
+  assert.match(source,/function GeoHeaderSubtitle/);
+  assert.match(source,/content\.scrollWidth-viewport\.clientWidth/);
+  assert.match(source,/new ResizeObserver\(measure\)/);
+  assert.match(source,/observer\?\.disconnect\(\)/);
+  assert.match(source,/className="geo-header-subtitle-text"/);
+  assert.match(css,/@keyframes geo-header-subtitle-pan/);
+  assert.match(css,/translateX\(var\(--geo-subtitle-shift/);
+  assert.match(css,/\.geo-header-subtitle\.is-overflowing \.geo-header-subtitle-text/);
+  assert.match(css,/prefers-reduced-motion:\s*reduce/);
 });

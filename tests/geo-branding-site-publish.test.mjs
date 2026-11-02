@@ -54,7 +54,7 @@ test("Geo customer page displays published logo at the left of title and subtitl
   const header = geo.slice(headerStart, headerEnd);
   assert.match(header, /branding\?\.logoUrl/);
   assert.ok(header.indexOf("jio-public-project-logo") < header.indexOf("<h1>"));
-  assert.match(header, /<p>\{data\.project\.location/);
+  assert.match(header, /<GeoHeaderSubtitle text=\{data\.project\.location/);
   assert.match(css, /jio-public-project-logo\s*\{[\s\S]*width:\s*42px/);
   assert.match(css, /jio-public-project-logo \{ width: 34px; height: 34px; \}/);
 });
