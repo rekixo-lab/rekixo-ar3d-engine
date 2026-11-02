@@ -12,7 +12,6 @@ import {
   session,
   verifyGeoPreview,
   type CloudGeoReleaseState,
-  type CloudProjectSummary,
   type CloudReleaseSummary,
 } from "../studio/cloud";
 import GeoGuidedRigidAlignment, {
