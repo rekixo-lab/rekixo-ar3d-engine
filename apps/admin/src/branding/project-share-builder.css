@@ -423,3 +423,38 @@
   opacity: .52;
   cursor: not-allowed;
 }
+
+/* One primary Geo publish action, with compact WhatsApp sharing. */
+.engine-branding-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: 440px;
+}
+.engine-branding-hero__actions .engine-control-button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+.engine-branding-whatsapp-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+.engine-branding-update-hint {
+  margin: -5px 2px 0;
+  color: #91a5bc;
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (max-width: 680px) {
+  .engine-branding-hero > .engine-branding-hero__actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+    max-width: none;
+  }
+  .engine-branding-hero__actions > .engine-control-button { flex: 1 1 auto; }
+  .engine-branding-whatsapp-link { width: 100%; justify-content: center; }
+}

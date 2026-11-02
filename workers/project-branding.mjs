@@ -246,6 +246,7 @@ async function adminBrandingState(env, project, slug) {
   const origin = "https://ar3dstudio.in";
   const logoDraftVersion = branding?.draftLogoVersion || "";
   const logoPublishedVersion = branding?.publishedLogoVersion || "";
+  const logoAssetExperience = geoLive ? "geo" : "building";
   const logoPreviewVersion = logoDraftVersion || logoPublishedVersion;
   const shareRows = new Map((shares.results || []).map((row) => [row.experienceType, row]));
   const experiences = {};
@@ -298,10 +299,10 @@ async function adminBrandingState(env, project, slug) {
         ? `${CLOUD_PATH}/projects/${encodeURIComponent(slug)}/branding/assets/favicon?v=${encodeURIComponent(logoPreviewVersion)}`
         : "",
       publishedLogoUrl: logoPublishedVersion
-        ? `${origin}${BASE_PATH}/api/projects/${encodeURIComponent(slug)}/branding/logo?v=${encodeURIComponent(logoPublishedVersion)}`
+        ? `${origin}${BASE_PATH}/api/projects/${encodeURIComponent(slug)}/branding/logo?v=${encodeURIComponent(logoPublishedVersion)}&experience=${logoAssetExperience}`
         : "",
       publishedFaviconUrl: logoPublishedVersion
-        ? `${origin}${BASE_PATH}/api/projects/${encodeURIComponent(slug)}/branding/favicon?v=${encodeURIComponent(logoPublishedVersion)}`
+        ? `${origin}${BASE_PATH}/api/projects/${encodeURIComponent(slug)}/branding/favicon?v=${encodeURIComponent(logoPublishedVersion)}&experience=${logoAssetExperience}`
         : "",
       publishedAt: branding?.publishedAt || "",
     },
@@ -581,6 +582,106 @@ async function publishShare(request, env, actor, project, slug) {
   return json({ ok: true, experience, version, publishedAt: now });
 }
 
+// One atomic publish for the customer's Geo logo and immutable WhatsApp card.
+// Preserve Building, previous Geo share versions, drafts and all existing R2 assets.
+async function publishGeoSite(request, env, actor, project, slug) {
+  const body = await request.json().catch(() => ({}));
+  const title = String(body.title || "").trim();
+  const description = String(body.description || "").trim();
+  const controlChars = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/;
+  if (title.length < 3 || title.length > 120 || controlChars.test(title) ||
+      description.length < 10 || description.length > 280 || controlChars.test(description))
+    return json({ error: "Geo title must be 3–120 characters and description 10–280 characters." }, { status: 400 });
+  if (!(await experienceReadiness(env, project, slug, "geo")))
+    return json({ error: "Publish the Geo experience before updating the customer site." }, { status: 409 });
+
+  const [branding, geo, building] = await Promise.all([
+    env.DB.prepare("SELECT draft_logo_version AS draftVersion,published_logo_version AS publishedVersion FROM project_branding_3d WHERE project_id=?").bind(project.id).first(),
+    env.DB.prepare("SELECT draft_card_version AS draftVersion,draft_card_key AS draftCardKey,draft_source_key AS draftSourceKey,published_version AS publishedVersion FROM project_branding_shares_3d WHERE project_id=? AND experience_type='geo'").bind(project.id).first(),
+    env.DB.prepare("SELECT draft_card_version AS draftVersion,draft_card_key AS draftCardKey,draft_source_key AS draftSourceKey,published_version AS publishedVersion FROM project_branding_shares_3d WHERE project_id=? AND experience_type='building'").bind(project.id).first(),
+  ]);
+  // Prevent a stale Admin tab from inadvertently publishing somebody else's uploads.
+  for (const [key, current] of [
+    ["expectedLogoDraftVersion", branding?.draftVersion || ""],
+    ["expectedGeoCardVersion", geo?.draftVersion || ""],
+    ["expectedBuildingCardVersion", building?.draftVersion || ""],
+  ]) {
+    if (typeof body[key] !== "string" || body[key] !== current)
+      return json({ error: "Branding drafts changed. Refresh before updating the Geo site." }, { status: 409 });
+  }
+
+  const logoVersion = branding?.draftVersion || branding?.publishedVersion || "";
+  const logo = logoVersion ? await readLogoVersion(env, project.id, logoVersion) : null;
+  if (!logo?.logoKey || !logo?.faviconKey)
+    return json({ error: "Upload Logo & Favicon before updating the Geo site." }, { status: 409 });
+
+  const [geoPublished, buildingPublished] = await Promise.all([
+    geo?.publishedVersion ? readShareVersion(env, project.id, "geo", geo.publishedVersion) : null,
+    building?.publishedVersion ? readShareVersion(env, project.id, "building", building.publishedVersion) : null,
+  ]);
+  const fromDraft = (row, kind) => row?.draftCardKey && row?.draftSourceKey
+    ? { cardKey: row.draftCardKey, sourceKey: row.draftSourceKey,
+        mimeType: row.draftCardKey.endsWith(".jpg") ? "image/jpeg" : "image/webp", kind } : null;
+  const fromPublished = (row, kind) => row?.cardKey && row?.sourceKey && row?.mimeType
+    ? { cardKey: row.cardKey, sourceKey: row.sourceKey, mimeType: row.mimeType, kind } : null;
+  const buildingPoster = fromDraft(building, "building-draft") ||
+    fromPublished(buildingPublished, "building-published");
+  const useBuildingPoster = body.useBuildingPoster === true;
+  const poster = useBuildingPoster ? buildingPoster :
+    fromDraft(geo, "geo-draft") || fromPublished(geoPublished, "geo-published") || buildingPoster;
+  if (!poster)
+    return json({ error: "Upload a Geo or Building WhatsApp poster before updating the Geo site." }, { status: 409 });
+
+  // Do not activate stale or missing assets: no change to public state on validation failure.
+  const prefix = "projects/" + slug + "/branding/";
+  const keys = [logo.logoKey, logo.faviconKey, poster.cardKey, poster.sourceKey];
+  if (keys.some(key => !key.startsWith(prefix) || key.includes("..") || key.includes("\\")))
+    return json({ error: "An asset is outside this project's branding storage." }, { status: 409 });
+  const objects = await Promise.all(keys.map(key => env.MODEL_ASSETS.head(key)));
+  if (objects.some(value => !value))
+    return json({ error: "An uploaded logo or poster is missing from storage. Re-upload it before publishing." }, { status: 409 });
+
+  const version = versionToken();
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE project_branding_logo_versions_3d SET published_at=COALESCE(published_at,?) WHERE project_id=? AND version=?")
+      .bind(now, project.id, logoVersion),
+    env.DB.prepare(`INSERT INTO project_branding_3d
+      (project_id,draft_logo_version,published_logo_version,updated_by,updated_at,published_at)
+      VALUES (?,NULL,?,?,?,?)
+      ON CONFLICT(project_id) DO UPDATE SET
+        draft_logo_version=NULL,published_logo_version=excluded.published_logo_version,
+        updated_by=excluded.updated_by,updated_at=excluded.updated_at,
+        published_at=excluded.published_at`)
+      .bind(project.id, logoVersion, actor.email, now, now),
+    env.DB.prepare(`INSERT INTO project_branding_share_versions_3d
+      (project_id,experience_type,version,share_title,share_description,card_key,source_key,mime_type,created_by,created_at)
+      VALUES (?,'geo',?,?,?,?,?,?,?,?)`)
+      .bind(project.id, version, title, description, poster.cardKey, poster.sourceKey, poster.mimeType, actor.email, now),
+    env.DB.prepare(`INSERT INTO project_branding_shares_3d
+      (project_id,experience_type,draft_title,draft_description,draft_use_building_card,published_version,updated_by,updated_at)
+      VALUES (?,'geo',?,?,?,?,?,?)
+      ON CONFLICT(project_id,experience_type) DO UPDATE SET
+        draft_title=excluded.draft_title,draft_description=excluded.draft_description,
+        draft_use_building_card=excluded.draft_use_building_card,
+        published_version=excluded.published_version,
+        updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
+      .bind(project.id, title, description,
+        useBuildingPoster && poster.kind === "building-published" ? 1 : 0, version, actor.email, now),
+    env.DB.prepare(`INSERT INTO engine_admin_audit
+      (id,actor_email,action,project_id,target_id,details_json,created_at)
+      VALUES (?,?,?,?,?,?,?)`)
+      .bind(crypto.randomUUID(), actor.email, "branding.geo_site_updated", project.id, project.id,
+        JSON.stringify({ version, logoVersion, posterSource: poster.kind }), now),
+  ]);
+  return json({
+    ok: true, experience: "geo", version, logoVersion, posterSource: poster.kind,
+    shareUrl: "https://ar3dstudio.in" + BASE_PATH + "/" + encodeURIComponent(slug) +
+      "/geo?share=" + encodeURIComponent(version),
+    publishedAt: now,
+  });
+}
+
 async function adminBrandingAsset(request, env, project, slug, parts) {
   if (request.method !== "GET" && request.method !== "HEAD")
     return json({ error: "Method not allowed." }, { status: 405 });
@@ -662,6 +763,7 @@ export async function handleProjectBrandingAdmin(request, env, actor, project, s
   const action = String(body.action || "");
   if (action === "save-share") return saveShareDetails(new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, actor, project);
   if (action === "publish-logo") return publishLogo(new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, actor, project);
+  if (action === "publish-geo-site") return publishGeoSite(new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, actor, project, slug);
   if (action === "publish-share") return publishShare(new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, actor, project, slug);
   return json({ error: "Unsupported branding action." }, { status: 400 });
 }
@@ -777,6 +879,8 @@ export async function injectPublicBrandingMetadata(request, env, response, url =
     `<meta property="og:title" content="${title}">`,
     `<meta property="og:description" content="${description}">`,
     imageUrl ? `<meta property="og:image" content="${imageUrl}">` : "",
+    imageUrl ? `<meta property="og:image:secure_url" content="${imageUrl}">` : "",
+    imageUrl && snapshot.hasShareCard ? `<meta property="og:image:type" content="${htmlEscape(snapshot.cardMimeType)}">` : "",
     imageUrl ? `<meta property="og:image:alt" content="${title}">` : "",
     `<meta name="twitter:card" content="${snapshot.hasShareCard ? "summary_large_image" : "summary"}">`,
     `<meta name="twitter:title" content="${title}">`,

@@ -668,6 +668,32 @@ export async function publishProjectShare(
   );
 }
 
+export async function publishGeoSiteBranding(
+  slug: string,
+  details: {
+    title: string;
+    description: string;
+    useBuildingPoster: boolean;
+    expectedLogoDraftVersion: string;
+    expectedGeoCardVersion: string;
+    expectedBuildingCardVersion: string;
+  },
+) {
+  return api<{
+    ok: true;
+    experience: "geo";
+    version: string;
+    logoVersion: string;
+    posterSource: string;
+    shareUrl: string;
+    publishedAt: string;
+  }>(brandingPath(slug), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "publish-geo-site", ...details }),
+  });
+}
+
 export async function releases(slug: string) {
   return api<{ releases: CloudReleaseSummary[] }>(
     `${CLOUD_BASE}/projects/${encodeURIComponent(slug)}/releases`,

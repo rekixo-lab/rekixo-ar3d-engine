@@ -30,7 +30,7 @@ test("mobile camera buttons fit four columns with transparent controls and no ou
   assert.match(publicCss, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(publicCss, /border:\s*0 !important;[\s\S]*background:\s*transparent !important;[\s\S]*box-shadow:\s*none !important;/);
   assert.match(publicCss, /button\.is-active::after/);
-  assert.match(publicCss, /\.jio-public-project-logo\s*\{\s*width:\s*25px;\s*height:\s*25px;/);
+  assert.match(publicCss, /\.jio-public-project-logo\s*\{\s*width:\s*34px;\s*height:\s*34px;/);
 });
 
 test("fullscreen camera controls have no outer panel and four separate rounded buttons", () => {

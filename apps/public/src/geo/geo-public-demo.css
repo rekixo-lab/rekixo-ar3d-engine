@@ -15,8 +15,8 @@
   gap: 10px;
 }
 .jio-public-project-logo {
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   flex: 0 0 auto;
   display: block;
   object-fit: contain;
@@ -415,7 +415,7 @@
 }
 .geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link { color: #8df2c7; }
 .geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link > span { font-size: 11px; }
-.jio-public-project-logo { width: 28px; height: 28px; }
+.jio-public-project-logo { width: 38px; height: 38px; }
 .jio-public-header { margin-bottom: 8px; }
 .jio-public-header h1 { font-size: clamp(19px, 2vw, 26px); }
 @media (max-width: 640px) {
@@ -429,7 +429,7 @@
     font-size: clamp(8px, 2.45vw, 10px); letter-spacing: -.035em;
   }
   .geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link > span { font-size: 10px; }
-  .jio-public-project-logo { width: 25px; height: 25px; }
+  .jio-public-project-logo { width: 34px; height: 34px; }
   .jio-public-header h1 { font-size: clamp(18px, 5vw, 22px); }
 }
 

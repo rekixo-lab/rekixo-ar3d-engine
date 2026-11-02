@@ -12,6 +12,7 @@ function BrandingIcon({ name, size = 17, className }: { name: BrandingIconName; 
 import {
   getProjectBranding,
   publishProjectLogo,
+  publishGeoSiteBranding,
   publishProjectShare,
   saveProjectShareDetails,
   uploadProjectLogo,
@@ -28,7 +29,7 @@ const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 type PreparedLogo = { sourceFile: File; logoFile: File; faviconFile: File };
 type PreparedCard = { sourceFile: File; cardFile: File };
 type ShareDraft = { title: string; description: string };
-type BusyAction = "load" | "logo" | "share" | "details" | "publish-logo" | "publish-share" | "";
+type BusyAction = "load" | "logo" | "share" | "details" | "publish-logo" | "publish-share" | "update-geo" | "";
 
 function fileFromBlob(blob: Blob, name: string, type: string) {
   return new File([blob], name, { type, lastModified: Date.now() });
@@ -290,6 +291,34 @@ export default function ProjectShareBuilder() {
     }
   }
 
+  async function updateGeoSite() {
+    if (!slug || !state || busy || brandBusy) return;
+    if (logoFiles || shareFiles.geo || shareFiles.building) {
+      setError("Pehle selected Logo / Share poster ka draft upload karein, phir Update Geo Site dabayein.");
+      return;
+    }
+    setBusy("update-geo");
+    setError("");
+    setMessage("");
+    try {
+      const result = await publishGeoSiteBranding(slug, {
+        title: drafts.geo.title,
+        description: drafts.geo.description,
+        useBuildingPoster: reuseBuildingPoster,
+        expectedLogoDraftVersion: state.logo.draftVersion || "",
+        expectedGeoCardVersion: state.experiences.geo.draftCardVersion || "",
+        expectedBuildingCardVersion: state.experiences.building.draftCardVersion || "",
+      });
+      setMessage("Geo site updated successfully. Logo aur WhatsApp preview publish ho gaye. Naya versioned Geo share link neeche hai.");
+      await loadState();
+      if (!result.shareUrl) setError("Geo share URL reload karke verify karein.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Geo site update nahi hui. Published changes pehle jaise hain.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function copyLink() {
     const shareUrl = state?.experiences[activeExperience].shareUrl || "";
     if (!shareUrl) return;
@@ -303,13 +332,22 @@ export default function ProjectShareBuilder() {
 
   const currentShare = state?.experiences[activeExperience];
   const currentDraft = drafts[activeExperience];
+  const buildingPosterPreview = state?.experiences.building.draftCardPreviewUrl ||
+    state?.experiences.building.publishedCardUrl || "";
   const cardUrl =
-    activeExperience === "geo" && reuseBuildingPoster
-      ? state?.experiences.building.publishedCardUrl || ""
+    activeExperience === "geo"
+      ? (reuseBuildingPoster
+          ? buildingPosterPreview
+          : cardPreviewUrl || currentShare?.draftCardPreviewUrl || buildingPosterPreview)
       : cardPreviewUrl || currentShare?.draftCardPreviewUrl || "";
   const busyNow = Boolean(busy || brandBusy);
   const titleValid = currentDraft.title.trim().length >= 3 && currentDraft.title.trim().length <= 120;
   const descriptionValid = currentDraft.description.trim().length >= 10 && currentDraft.description.trim().length <= 280;
+  const geoShareUrl = state?.experiences.geo.shareUrl || "";
+  const geoWhatsAppUrl = geoShareUrl
+    ? `https://wa.me/?text=${encodeURIComponent(`${state?.project.name || "Project"} — 3D Geo\n${geoShareUrl}`)}`
+    : "";
+  const stagedFiles = Boolean(logoFiles || shareFiles.geo || shareFiles.building);
 
   if (!slug) {
     return (
@@ -331,11 +369,32 @@ export default function ProjectShareBuilder() {
           <h2>{state?.project.name || slug}</h2>
           <p>One logo and favicon for Building + Geo, with independent share previews for each live experience.</p>
         </div>
-        <button type="button" className="engine-control-button" onClick={() => void loadState()} disabled={busyNow}>
-          {busy === "load" ? <BrandingIcon name="loader" size={17} className="engine-branding-spin" /> : "Refresh"}
-        </button>
+        <div className="engine-branding-hero__actions">
+          <button type="button" className="engine-control-button engine-control-button--primary"
+            onClick={() => void updateGeoSite()} disabled={busyNow || !state?.experiences.geo.live}
+            title={state?.experiences.geo.live ? "Publish uploaded logo and Geo WhatsApp poster together" : "Publish Geo experience first"}>
+            <BrandingIcon name={busy === "update-geo" ? "loader" : "map"} size={16} />
+            {busy === "update-geo" ? "Updating Geo Site…" : "Update Geo Site"}
+          </button>
+          <button type="button" className="engine-control-button" onClick={() => void loadState()} disabled={busyNow}>
+            {busy === "load" ? <BrandingIcon name="loader" size={17} className="engine-branding-spin" /> : "Refresh"}
+          </button>
+          {geoShareUrl ? (
+            <a className="engine-control-link engine-branding-whatsapp-link" href={geoWhatsAppUrl}
+              target="_blank" rel="noopener noreferrer">
+              <BrandingIcon name="share" size={15} />Share Geo on WhatsApp
+            </a>
+          ) : null}
+        </div>
       </section>
 
+      <p className="engine-branding-update-hint">
+        {state?.experiences.geo.live
+          ? (stagedFiles
+              ? "Upload selected image drafts first. Update Geo Site publishes the saved logo and share poster."
+              : "Update Geo Site publishes Logo & Favicon + a new Geo WhatsApp preview together. A Geo poster takes priority; otherwise the existing Building poster is reused.")
+          : "Geo experience publish hone par Update Geo Site available hoga."}
+      </p>
       {error ? <div className="engine-branding-alert engine-branding-alert--error" role="alert">{error}</div> : null}
       {message ? <div className="engine-branding-alert engine-branding-alert--ok" role="status"><BrandingIcon name="check" size={17} />{message}</div> : null}
 
@@ -439,12 +498,12 @@ export default function ProjectShareBuilder() {
                 <input
                   type="checkbox"
                   checked={reuseBuildingPoster}
-                  disabled={busyNow || !state?.experiences.building.publishedCardUrl}
+                  disabled={busyNow || !(state?.experiences.building.publishedCardUrl || state?.experiences.building.draftCardVersion)}
                   onChange={(event) => setReuseBuildingPoster(event.currentTarget.checked)}
                 />
                 <span>
-                  <b>Use the published Building poster for Geo</b>
-                  <small>Geo keeps its own title, description, URL and metadata; only the share image is reused.</small>
+                  <b>Use the Building poster for Geo</b>
+                  <small>Uses the published Building image or its uploaded draft; Geo keeps its own versioned URL and metadata.</small>
                 </span>
               </label>
             ) : null}
