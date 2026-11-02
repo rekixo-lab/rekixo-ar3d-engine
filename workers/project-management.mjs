@@ -1,6 +1,6 @@
 // Engine-owned project profile and client directory. No Platform integration.
 import {provisionProjectClient,revokeProjectClient} from "./project-client-access.mjs";
-import {ownerProvisionClientPassword} from "./project-client-passwords.mjs";
+import {ownerProvisionClientPassword,ownerCreateClientPassword} from "./project-client-passwords.mjs";
 // Directory roles are proposals only: never permissions, sessions or credentials.
 const json = (payload, status = 200) => Response.json(payload,{
   status, headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"},
@@ -135,17 +135,21 @@ export async function handleProjectManagementAdmin(request,env,actor,project,par
         .bind(project.id).first();
       if(Number(count?.total||0)>=200)return fail("Client directory project limit reached.",409);
       const id=crypto.randomUUID(),now=new Date().toISOString();
+      if(role==="client_admin"){
+        // One transaction: client directory, grant, credentials and audit.
+        // On a duplicate login ID nothing is left half-created.
+        const credential=await ownerCreateClientPassword(env,actor,project,{
+          id,displayName:name,email:mail,phone:mobile,notes,loginType:body.loginType
+        });
+        return json({...(await getState(env,project)),credential},201);
+      }
       await env.DB.prepare(`INSERT INTO project_client_directory_3d
        (id,project_id,display_name,email,phone,proposed_role,access_state,notes,
         created_by,created_at,updated_by,updated_at)
        VALUES(?,?,?,?,?,?,'not_provisioned',?,?,?,?,?)`)
         .bind(id,project.id,name,mail,mobile,role,notes,actor.email,now,actor.email,now).run();
       await audit(env,actor,"project.client_record_added",project.id,id,{proposedRole:role});
-      // Match Platform onboarding: adding a Client Admin creates a project-bound
-      // ID and one-time temporary password (never stored or shown on later GETs).
-      const credential=role==="client_admin"?
-        await ownerProvisionClientPassword(env,actor,project,id,body.loginType):null;
-      return json({...(await getState(env,project)),...(credential?{credential}: {})},201);
+      return json(await getState(env,project),201);
     }
     if(request.method==="POST"&&["provision-client-password","reset-client-password"].includes(body.action)){
       const credential=await ownerProvisionClientPassword(env,actor,project,body.id,body.loginType);
