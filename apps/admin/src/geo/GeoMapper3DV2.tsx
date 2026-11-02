@@ -886,10 +886,13 @@ export default function GeoMapper3DV2() {
                     }}>{geoReleaseState?.activeRelease ? "Publish Update" : "Publish Geo"}</button>
                 </div>
               </footer>}
+              <details className="geo-v2-help-details">
+                <summary>Alignment tips & verification rules</summary>
               <p className="geo3d-help">Normal map click/drag moves the WGS84 anchor. While a P1–P4 Map capture is active, the WGS84 anchor is locked and the next map click records only that real-site control point.</p>
               <p className="geo3d-help">P1–P4 picks are browser-tab scratch data (restored on refresh for this release), not saved to Cloud or the immutable Geo release. Apply the solution and Save Geo V2 Draft to store the approved transform.</p>
               <p className="geo3d-help">Guided alignment solves a rigid least-squares Building fit only. P1/P2 provide heading + East/North; P3/P4 expose residual error without homography, shear, or Building deformation.</p>
               <p className="geo3d-help">Verify is fail-closed: the current values must be saved, the selected source must be ACTIVE, the exact model anchor must be selected, and the same-map Building frame must render successfully.</p>
+              </details>
             </article>
           </section>
 
@@ -938,7 +941,7 @@ export default function GeoMapper3DV2() {
         <p className="geo3d-help">Google Maps browser key. Usually only configured once.</p>
         <div className="geo3d-key-row"><input type="password" value={mapsApiKey} onChange={(event) => setMapsApiKey(event.target.value)} placeholder="Google Maps browser API key" /><button disabled={busy} onClick={() => void run(saveKey)}>Save Key</button></div>
         <p className="geo3d-help">The authoring map uses only the last saved key, so editing this field cannot tear down a live placement session.</p>
-        <a className="geo3d-help" href="/3Dprojects/advanced">Advanced provider configuration</a>
+        <a className="geo3d-help" href={`/3Dprojects/advanced?project=${encodeURIComponent(selectedSlug)}`}>Advanced provider configuration</a>
       </details>
     </main>
   );
