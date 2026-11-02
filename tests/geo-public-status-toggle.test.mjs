@@ -86,7 +86,7 @@ test("commercial facts remain approval-gated at the server, no fabricated status
   assert.match(server,/commercial=publicationMode==="verified"/);
   assert.match(server,/publicGeoCommercialForRelease/);
   assert.match(commercialServer,/public_approved=1/);
-  assert.match(viewer,/selectedPlot\.area&&/);
+  assert.match(viewer,/<GeoPlotDetailsDrawer/);
   assert.doesNotMatch(viewer,/geo-plot-public-controls/);
   assert.doesNotMatch(css,/\.gm-style-cc\s*\{/);
 });

@@ -4,6 +4,7 @@ import {readFileSync} from "node:fs";
 
 const file=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
 const viewer=file("apps/public/src/geo/GeoPublicDemo.tsx");
+const drawer=file("apps/public/src/geo/GeoPlotDetailsDrawer.tsx");
 const css=file("apps/public/src/geo/geo-public-demo.css");
 const mapOptions=viewer.slice(viewer.indexOf("new google.maps.Map(hostRef.current, {"),
   viewer.indexOf("});",viewer.indexOf("new google.maps.Map(hostRef.current, {")));
@@ -28,9 +29,9 @@ test("Visible published plots remain clickable and source-reviewed details remai
   assert.doesNotMatch(viewer,/geo-plot-public-controls|Select a mapped plot|Plots \{showPlotBoundaries/);
   assert.match(viewer,/pickModelGeoPlot\(/);
   assert.match(viewer,/setSelectedPlot\(plotIds\.get\(id\)\|\|null\)/);
-  assert.match(viewer,/selectedPlot && <aside className=\{`geo-plot-public-details/);
-  assert.match(viewer,/publicationMode==="preliminary"/);
-  assert.match(viewer,/selectedPlot\.area&&/);
+  assert.match(viewer,/<GeoPlotDetailsDrawer/);
+  assert.match(drawer,/publicationMode==="preliminary"/);
+  assert.match(drawer,/publicGeoAreaUnits\(shown\.area\)/);
   assert.doesNotMatch(css,/\.geo-plot-public-controls/);
 });
 

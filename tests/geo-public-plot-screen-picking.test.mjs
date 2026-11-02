@@ -30,6 +30,6 @@ test("customer selection retains real map taps and approved detail after status 
   assert.match(viewer,/mapClick=map\.addListener\("click"/);
   assert.match(viewer,/pickModelGeoPlot\(/);
   assert.match(viewer,/setSelectedPlot\(plotIds\.get\(id\)\|\|null\)/);
-  assert.match(viewer,/geo-plot-public-details/);
+  assert.match(viewer,/<GeoPlotDetailsDrawer/);
   assert.doesNotMatch(viewer,/geo-plot-public-controls|showPlotBoundaries/);
 });

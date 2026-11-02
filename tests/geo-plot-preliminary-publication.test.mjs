@@ -49,6 +49,7 @@ test("preliminary public plot may show individually verified fields but not unap
   assert.deepEqual(pub.area,{value:100,unit:"sqm"});
   assert.equal(pub.facing,"north");
   assert.deepEqual(Object.keys(pub.sides),["depthA"]);
+  assert.deepEqual(pub.sides.depthA.edges,[1],"only approved side edge indices are public");
   assert.equal(pub.road,null);
   const approved=publicGeoPlotFacts({...staged,road:"23 feet road",
     sides:{...staged.sides,front:{...staged.sides.front,verified:true,
@@ -79,8 +80,8 @@ test("release mode is immutable D1 metadata, owner-only CAS, old verified schema
   assert.match(published,/row\.publication_mode/);
   assert.match(published,/publicGeoPlotFacts\(plot,publicationMode\)/);
   assert.match(published,/publicationMode==="verified"/);
-  assert.match(publicUI,/publicationMode==="preliminary"/);
-  assert.match(publicUI,/selectedPlot\.area&&/);
+  assert.match(read("apps/public/src/geo/GeoPlotDetailsDrawer.tsx"),/publicationMode==="preliminary"/);
+  assert.match(publicUI,/<GeoPlotDetailsDrawer/);
   assert.match(admin,/Publish Preliminary Mapping · Editable Later/);
   assert.match(admin,/Publish Verified Mapping to Customer Site/);
   assert.match(admin,/action==="publish-preliminary"/);

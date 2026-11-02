@@ -18,8 +18,10 @@ export function publicGeoPlotFacts(plot,mode){
   const sides={};
   for(const [role,side] of Object.entries(plot.sides||{})){
     if(side?.verified===true&&Boolean(side.source)){
-      sides[role]={length:side.length,unit:side.unit,
-        roadFacing:side.roadFacing===true};
+      // Expose only the approved side's own edge indices so the read-only
+      // customer diagram can label the real polygon without guessing roles.
+      sides[role]={edges:Array.isArray(side.edges)?[...side.edges]:[],
+        length:side.length,unit:side.unit,roadFacing:side.roadFacing===true};
     }
   }
   const road=plot.road&&plot.sides?.front?.verified===true&&
