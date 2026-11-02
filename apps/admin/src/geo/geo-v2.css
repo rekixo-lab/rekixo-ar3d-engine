@@ -918,3 +918,23 @@
 .geo-v2-integrated-card--focus .geo-v2-editor-guide--corners .geo-v2-top-reference--expanded .geo-v2-top-reference-canvas canvas {
   min-height:0; height:100%;
 }
+
+/* Technical map configuration stays available without crowding normal editing. */
+.geo3d-provider-details {
+  margin-top: 10px;
+  padding: 12px 16px;
+}
+.geo3d-provider-details summary {
+  cursor: pointer;
+  color: #afc3d9;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 0;
+}
+.geo3d-provider-details summary:focus-visible {
+  outline: 2px solid #28ce82;
+  outline-offset: 3px;
+}
+.geo3d-provider-details[open] > *:not(summary) {
+  margin-top: 12px;
+}
