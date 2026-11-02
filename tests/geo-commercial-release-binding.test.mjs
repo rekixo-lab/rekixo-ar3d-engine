@@ -70,7 +70,7 @@ test("Commercial owner routes require same-origin auth and published map source 
  assert.match(owner,/source.plots.find/);
  assert.doesNotMatch(owner,/buyer_phone|buyer_name|receipt|payment_paise/);
  assert.match(publicMap,/publicGeoCommercialForRelease/);
- assert.match(publicUI,/not independently approved for this mapping release/);
+ assert.match(read("apps/public/src/geo/GeoPlotDetailsDrawer.tsx"),/not independently approved for public display/);
  assert.match(management,/clientLoginEnabled:true/,
    "Client portal is enabled, but a directory contact still needs an explicit owner grant.");
  assert.match(management,/project_client_grants_3d/,
