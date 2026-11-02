@@ -7,12 +7,10 @@ const read = (path) => fs.readFileSync(path, "utf8");
 test("Engine overview preserves the Building workflow and keeps Geo optional for legacy projects", () => {
   const dashboard = read("apps/admin/src/dashboard/EngineDashboard.tsx");
 
-  assert.match(dashboard, /ENGINE WORKFLOW/);
-  assert.match(dashboard, /One clear path from source to live experience/);
-  assert.match(dashboard, /projectHref\("source-pack", selectedProject\.slug\)/);
+  assert.doesNotMatch(dashboard, /engine-overview-flow engine-control-card/);
+  assert.match(dashboard, /Source, GPS & Plot Mapping/);
   assert.match(dashboard, /projectHref\("building", selectedProject\.slug\)/);
   assert.match(dashboard, /projectHref\("geo-mapper", selectedProject\.slug\)/);
-  assert.match(dashboard, /projectHref\("releases", selectedProject\.slug\)/);
   assert.match(dashboard, /3D Building/);
   assert.match(dashboard, /3D Geo Experience/);
   assert.match(dashboard, /OPTIONAL/);
@@ -27,7 +25,6 @@ test("Engine project context crosses the shared control-center routes and compat
 
   assert.match(dashboard, /function projectHref\(path: "source-pack" \| "building" \| "geo-mapper" \| "releases" \| "masterplan"/);
   assert.match(dashboard, /\/3Dprojects\/\$\{path\}\?project=\$\{encodeURIComponent\(slug\)\}/);
-  assert.match(dashboard, /projectHref\("source-pack", selectedProject\.slug\)/);
   assert.match(dashboard, /projectHref\("geo-mapper", selectedProject\.slug\)/);
   assert.match(main, /function LegacyStudioRedirect\(\)/);
   assert.match(main, /window\.location\.replace\(`\/3Dprojects\/source-pack\$\{window\.location\.search\}`\)/);
