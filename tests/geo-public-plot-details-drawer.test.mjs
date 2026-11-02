@@ -100,7 +100,8 @@ test("drawer only changes presentation, preserving click hit testing and camera 
   assert.doesNotMatch(parent,/geo-plot-public-details--status-open/);
   assert.match(drawer,/publicGeoPlotDiagram\(shown\)/);
   assert.match(drawer,/publicGeoAreaUnits\(shown\.area\)/);
-  assert.match(drawer,/commercial\?<span/);
+  assert.match(drawer,/data-plot-status=\{displayStatus\}/);
+  assert.match(drawer,/geo-plot-drawer__status--"\+displayStatus/);
   assert.doesNotMatch(drawer,/publicationMode==="preliminary"/);
   assert.match(drawer,/publicPhone/);
   assert.match(drawer,/publicWhatsappHref/);
@@ -133,7 +134,7 @@ test("customer shows entered fields only, without nil or approval banners",()=>{
   assert.doesNotMatch(drawer,/Awaiting source approval|Not published|Preliminary boundary/);
   assert.doesNotMatch(drawer,/not independently approved|approval is needed|commercial status and price are/);
   assert.doesNotMatch(drawer,/Mapped plot"\}/);
-  assert.match(drawer,/Shape and dimensions are taken from the published plot mapping/);
+  assert.doesNotMatch(drawer,/Shape and dimensions are taken from the published plot mapping/);
   assert.match(drawer,/areas.length \? areas.map/);
   assert.match(drawer,/\) : null\}/);
   assert.match(css,/\.geo-plot-drawer__head\{padding:12px 12px 10px\}/);
@@ -142,3 +143,62 @@ test("customer shows entered fields only, without nil or approval banners",()=>{
   assert.match(css,/z-index:101 !important/);
 });
 
+test("compact shape card uses one status color and prints side sizes beside polygon edges",()=>{
+  // Available is a view-only fallback; a published Booked/Sold status wins.
+  assert.match(drawer,/commercial\?\.status==="booked"\|\|commercial\?\.status==="sold"/);
+  assert.match(drawer,/data-plot-status=\{displayStatus\}/);
+  assert.match(css,/--geo-plot-shape-stroke:#1cd680/);
+  assert.match(css,/\.geo-plot-drawer\[data-plot-status="booked"\]\s*\{[\s\S]*--geo-plot-shape-stroke:#f2bf25/);
+  assert.match(css,/\.geo-plot-drawer\[data-plot-status="sold"\]\s*\{[\s\S]*--geo-plot-shape-stroke:#f04b58/);
+  assert.match(css,/\.geo-plot-drawer__poly\{fill:var\(--geo-plot-shape-fill\);stroke:var\(--geo-plot-shape-stroke\)/);
+  assert.match(css,/\.geo-plot-drawer__side-edge\{stroke:var\(--geo-plot-shape-stroke\)/);
+  assert.match(css,/\.geo-plot-drawer__side-label\{fill:var\(--geo-plot-shape-stroke\)/);
+  assert.match(drawer,/className="geo-plot-drawer__side-edge"/);
+  assert.match(drawer,/className="geo-plot-drawer__side-label-value"/);
+  assert.match(drawer,/\{side\.label\}/);
+  assert.match(drawer,/\{formatMeasurement\(side\.length,side\.unit\)\}/);
+  assert.doesNotMatch(drawer,/stroke=\{side\.color\}|fill=\{side\.color\}/);
+  assert.doesNotMatch(drawer,/diagram\.vertexCount\+" corners"/);
+  assert.doesNotMatch(drawer,/geo-plot-drawer__side-legend|geo-plot-drawer__shape-note/);
+  assert.doesNotMatch(css,/geo-plot-drawer__side-legend|geo-plot-drawer__shape-note/);
+  assert.doesNotMatch(drawer,/Shape and dimensions are taken from the published plot mapping/);
+  assert.match(drawer,/Mapped Plot Shape/);
+});
+
+test("Plot Measurements section still includes all area units and Front Back Depth A/B",()=>{
+  const facts=drawer.slice(drawer.indexOf('<section className="geo-plot-drawer__facts"'));
+  assert.match(facts,/Plot Measurements/);
+  assert.match(facts,/areas\.length \? areas\.map/);
+  assert.match(facts,/formatMeasurement\(area\.value,area\.unit\)/);
+  assert.match(facts,/allRoles\.map\(role=>\{/);
+  assert.match(facts,/formatMeasurement\(side\.length,side\.unit\)/);
+  for(const [key,label] of Object.entries({front:"Front",back:"Back",depthA:"Depth A",depthB:"Depth B"}))
+    assert.match(drawer,new RegExp(key+': "'+label+'"'));
+  const source=read("shared/geo-plot-detail-diagram.js");
+  assert.doesNotMatch(source,/ROLE_COLORS/);
+  assert.match(css,/max-height:200px;aspect-ratio:320\/210/);
+  const rows=publicGeoAreaUnits({value:1325.25,unit:"sqft"});
+  assert.deepEqual(rows.map(row=>row.label),["Sq. Feet","Sq. Meters","Sq. Yards"]);
+});
+
+test("real side lengths are placed by the published side-edge mapping",()=>{
+  const plot={...mapped,sides:{
+    front:{...mapped.sides.front,length:24.92},
+    back:{...mapped.sides.back,length:24.92},
+    depthA:{...mapped.sides.depthA,length:53.17},
+    depthB:{...mapped.sides.depthB,length:53.17},
+  }};
+  const result=publicGeoPlotDiagram(plot);
+  assert.deepEqual(result.sides.map(s=>[s.label,s.length,s.unit]),[
+    ["Front",24.92,"ft"],["Back",24.92,"ft"],
+    ["Depth A",53.17,"ft"],["Depth B",53.17,"ft"]
+  ]);
+  assert.ok(result.sides.every(s=>s.labelX!==null&&s.labelY!==null));
+  assert.ok(result.sides.every(s=>s.labelX>=38&&s.labelX<=282&&s.labelY>=23&&s.labelY<=184));
+  assert.ok(result.sides.every(s=>s.segments.length===1));
+  assert.equal(result.sides.find(s=>s.role==="front").segments[0].y1,
+    result.sides.find(s=>s.role==="front").segments[0].y2);
+  assert.equal(result.sides.find(s=>s.role==="depthA").segments[0].x1,
+    result.sides.find(s=>s.role==="depthA").segments[0].x2);
+  assert.deepEqual(plot.sides.depthB.edges,[3],"diagram never remaps source edges");
+});

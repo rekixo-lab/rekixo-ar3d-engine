@@ -1,7 +1,6 @@
-// Read-only Geo customer plot diagram math. Geometry is illustrative model-local
-// topology; authoritative measurements ALWAYS come from published source reviews.
+// Read-only Geo customer diagram geometry. Polygon topology and edge labels
+// come from the published mapping; never calculate guessed side dimensions.
 const ROLE_NAMES=Object.freeze({front:"Front",back:"Back",depthA:"Depth A",depthB:"Depth B"});
-const ROLE_COLORS=Object.freeze({front:"#58efb5",back:"#e1d39b",depthA:"#8dc0fa",depthB:"#c49bfa"});
 const AREA_FACTORS=Object.freeze({sqm:1,sqft:0.09290304,sqyd:0.83612736});
 export function publicGeoAreaUnits(area){
   if(!area||typeof area!=="object"||!Object.hasOwn(AREA_FACTORS,area.unit)||
@@ -22,9 +21,10 @@ export function publicGeoPlotDiagram(plot){
   const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
   const width=maxX-minX,height=maxY-minY;
   if(!(width>0&&height>0))return null;
-  const scale=Math.min(190/width,110/height);
+  // Allow room around the mapped polygon for two-line side name and feet labels.
+  const scale=Math.min(170/width,100/height);
   const cx=(minX+maxX)/2,cy=(minY+maxY)/2;
-  const points=raw.map(p=>({x:160+(p[0]-cx)*scale,y:107+(p[1]-cy)*scale}));
+  const points=raw.map(p=>({x:160+(p[0]-cx)*scale,y:105+(p[1]-cy)*scale}));
   const area2=points.reduce((sum,p,i)=>{const q=points[(i+1)%points.length];return sum+p.x*q.y-q.x*p.y},0);
   if(Math.abs(area2)<0.01)return null;
   const pointText=points.map(p=>p.x.toFixed(2)+","+p.y.toFixed(2)).join(" ");
@@ -49,16 +49,16 @@ export function publicGeoPlotDiagram(plot){
           const x=s.x1+(s.x2-s.x1)*t,y=s.y1+(s.y2-s.y1)*t;
           const dx=s.x2-s.x1,dy=s.y2-s.y1,len=s.length;
           let nx=-dy/len,ny=dx/len;
-          if((x-160)*nx+(y-107)*ny<0){nx=-nx;ny=-ny;}
-          labelX=Math.max(18,Math.min(302,x+nx*18));
-          labelY=Math.max(13,Math.min(200,y+ny*18));
+          if((x-160)*nx+(y-105)*ny<0){nx=-nx;ny=-ny;}
+          labelX=Math.max(38,Math.min(282,x+nx*28));
+          labelY=Math.max(23,Math.min(184,y+ny*28));
           break;
         }
         consumed+=s.length;
       }
     }
     return[{role,label:role==="depthA"&&points.length===3?"Depth":ROLE_NAMES[role],
-      color:ROLE_COLORS[role],length:side.length,unit:side.unit,
+      length:side.length,unit:side.unit,
       roadFacing:side.roadFacing===true,segments,labelX,labelY}];
   });
   return{pointText,vertexCount:points.length,sides};

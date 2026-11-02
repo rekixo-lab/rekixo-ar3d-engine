@@ -3,6 +3,8 @@
 .geo-plot-drawer {
   position:absolute;
   z-index:15;
+  --geo-plot-shape-stroke:#1cd680;
+  --geo-plot-shape-fill:rgba(28,214,128,.19);
   box-sizing:border-box;
   top:0;
   bottom:0;
@@ -31,6 +33,14 @@
      attribution-only transparent window, without shrinking the drawer. */
   -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 30px),transparent calc(100% - 30px));
   mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 30px),transparent calc(100% - 30px));
+}
+.geo-plot-drawer[data-plot-status="booked"]{
+  --geo-plot-shape-stroke:#f2bf25;
+  --geo-plot-shape-fill:rgba(242,191,37,.20);
+}
+.geo-plot-drawer[data-plot-status="sold"]{
+  --geo-plot-shape-stroke:#f04b58;
+  --geo-plot-shape-fill:rgba(240,75,88,.21);
 }
 .geo-plot-drawer.is-open {
   transform:translate3d(0,0,0);
@@ -86,17 +96,12 @@
 .geo-plot-drawer__diagram-card{min-width:0;padding:10px;border:1px solid rgba(104,156,163,.32);border-radius:13px;background:#102a36}
 .geo-plot-drawer__section-top{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#e8f8fc}
 .geo-plot-drawer__section-top b{font-size:12px}
-.geo-plot-drawer__section-top small{font-size:10px;color:#9ab6c1}
-.geo-plot-drawer__svg{display:block;width:100%;height:auto;max-height:220px;aspect-ratio:320/220;margin:3px auto 1px;overflow:visible}
-.geo-plot-drawer__poly{fill:rgba(78,236,170,.14);stroke:#5bebbb;stroke-width:2.5;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.geo-plot-drawer__svg{display:block;width:100%;height:auto;max-height:200px;aspect-ratio:320/210;margin:3px auto 1px;overflow:visible}
+.geo-plot-drawer__poly{fill:var(--geo-plot-shape-fill);stroke:var(--geo-plot-shape-stroke);stroke-width:2.7;stroke-linejoin:round;vector-effect:non-scaling-stroke}
 .geo-plot-drawer__plot-label{font-size:18px;font-weight:900;fill:#dafde8;paint-order:stroke;stroke:#102a36;stroke-width:3px;stroke-linejoin:round}
-.geo-plot-drawer__side-label{font-size:10.5px;font-weight:800;paint-order:stroke;stroke:#102a36;stroke-width:4px;stroke-linejoin:round}
-.geo-plot-drawer__side-legend{display:grid;gap:7px;padding:9px 1px 4px;border-top:1px solid rgba(121,161,166,.23)}
-.geo-plot-drawer__side{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px}
-.geo-plot-drawer__side-name{display:inline-flex;align-items:center;gap:7px;color:#bcd2dc}
-.geo-plot-drawer__side-name i{width:9px;height:9px;flex:0 0 auto;border-radius:3px}
-.geo-plot-drawer__side b{color:#f1fcfe;font-size:11px;font-variant-numeric:tabular-nums}
-.geo-plot-drawer__shape-note{display:block;margin-top:9px;color:#94b2be;font-size:10px;line-height:1.5}
+.geo-plot-drawer__side-edge{stroke:var(--geo-plot-shape-stroke);stroke-width:3;stroke-linecap:round}
+.geo-plot-drawer__side-label{fill:var(--geo-plot-shape-stroke);font-size:10.5px;font-weight:800;paint-order:stroke;stroke:#102a36;stroke-width:3px;stroke-linejoin:round}
+.geo-plot-drawer__side-label-value{font-size:11px;font-weight:900;font-variant-numeric:tabular-nums}
 .geo-plot-drawer__facts{display:grid;gap:0;margin-top:16px}
 .geo-plot-drawer__facts h3{font-size:13px;font-weight:850;color:#f1fafc;margin:0 0 4px}
 .geo-plot-drawer__fact{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;padding:10px 0;border-bottom:1px solid rgba(135,171,179,.17)}
