@@ -938,3 +938,19 @@
 .geo3d-provider-details[open] > *:not(summary) {
   margin-top: 12px;
 }
+
+.geo-v2-help-details {
+  margin-top: 8px;
+  padding: 8px 11px;
+  border: 1px solid #243751;
+  border-radius: 10px;
+  background: rgba(12, 24, 43, .65);
+}
+.geo-v2-help-details summary {
+  cursor: pointer;
+  color: #9aacbf;
+  font-size: 11px;
+  font-weight: 700;
+}
+.geo-v2-help-details summary:focus-visible { outline: 2px solid #28ce82; }
+.geo-v2-help-details[open] > p { margin: 8px 0; }
