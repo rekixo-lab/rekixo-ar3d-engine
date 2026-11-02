@@ -126,7 +126,7 @@ test("First sign-in forces password change, then new password grants scoped dash
   assert.equal((await foreignSession.json()).authenticated,false);
   const updated=await api(f.env,req("/3Dprojects/api/client-portal/change-password","POST",{
    oldPassword:creds.password,newPassword:"ClientStrong9876"},cookie));
-  assert.equal(updated.status,200,await updated.text());
+  assert.equal(updated.status,200,await updated.clone().text());
   assert.match(updated.headers.get("set-cookie")||"",/Max-Age=0/);
   const expired=await api(f.env,req("/3Dprojects/api/client-portal/session?project=demo-a","GET",null,cookie));
   assert.equal((await expired.json()).authenticated,false);
@@ -135,7 +135,7 @@ test("First sign-in forces password change, then new password grants scoped dash
   assert.equal(old.status,401);
   const again=await api(f.env,req("/3Dprojects/api/client-portal/login","POST",{
    projectSlug:"demo-a",loginId:creds.loginId,password:"ClientStrong9876"}));
-  assert.equal(again.status,200,await again.text());
+  assert.equal(again.status,200,await again.clone().text());
   assert.equal((await again.json()).mustChangePassword,false);
  }finally{f.close();}
 });
