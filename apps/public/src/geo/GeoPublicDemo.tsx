@@ -112,6 +112,7 @@ type GoogleMap = {
   moveCamera?(options: Record<string, unknown>): void;
   getHeading?():number|undefined;
   setHeading?(heading:number):void;
+  setOptions?(options:Record<string,unknown>):void;
   getRenderingType?(): string;
   getMapCapabilities?(): MapCapabilities;
   getMapTypeId?(): string;
@@ -435,9 +436,11 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           fullscreenControl: false,
           zoomControl: false, // The customer's own minus/plus remain visible.
           draggable: true,
-          // Mobile: one touch rotates via the app; two touches retain native
-          // Google pan/pinch/zoom. Mouse on desktop stays directly draggable.
-          gestureHandling: touchCapable ? "cooperative" : "greedy",
+          // Cooperative mode shows Google's "use two fingers" hint and can
+          // compete with app-driven heading changes. Greedy supports native
+          // pinch/pan; our touch controller temporarily turns it off while
+          // a single finger directly rotates the camera.
+          gestureHandling: "greedy",
           clickableIcons: false,
         });
 
@@ -514,15 +517,20 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           if(drift>8||performance.now()-start.time>850)return;
           selectAtScreenPoint(event.clientX,event.clientY);
         };
-        // Capture one-finger swipes before Maps' internal touch handlers:
-        // change only the camera heading, never GLB placement or plot coordinates.
-        // Cooperative Maps gestures handle two-finger pan and pinch natively.
+        // A single finger owns only heading; release instantly restores
+        // Google's native two-finger pan/pinch. No delayed camera animation.
         touchHost=hostRef.current;
         touchOrbit=createGeoOneFingerOrbit({
           getHeading:()=>map.getHeading?.()??initialCamera.heading,
           setHeading:heading=>{
-            if(map.setHeading)map.setHeading(heading);
-            else map.moveCamera?.({heading});
+            // moveCamera applies immediately, unlike a queued/eased gesture.
+            if(map.moveCamera)map.moveCamera({heading});
+            else map.setHeading?.(heading);
+          },
+          onCaptureChange:capturing=>{
+            if(touchCapable)map.setOptions?.({
+              gestureHandling:capturing?"none":"greedy",
+            });
           },
           shouldIgnoreTarget:mapControlTarget,
           onRotate:()=>overlay?.requestRedraw(),
