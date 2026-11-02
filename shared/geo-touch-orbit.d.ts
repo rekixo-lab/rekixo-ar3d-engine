@@ -16,6 +16,7 @@ export interface GeoOrbitController {
   onTouchEnd(event:GeoOrbitTouchEvent):void;
   onTouchCancel(event:GeoOrbitTouchEvent):void;
   suppressClick():boolean;
+  destroy():void;
 }
 export function normalizeGeoOrbitHeading(value:number):number;
 export function createGeoOneFingerOrbit(options:{
@@ -24,4 +25,6 @@ export function createGeoOneFingerOrbit(options:{
   onRotate?:()=>void;
   shouldIgnoreTarget?:(target:EventTarget|null)=>boolean;
   now?:()=>number;
+  requestFrame?:((callback:(timestamp:number)=>void)=>number)|null;
+  cancelFrame?:(handle:number)=>void;
 }):GeoOrbitController;

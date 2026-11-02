@@ -11,6 +11,7 @@ import { GeoPlotDetailsDrawer, type GeoPlotDrawerPlot } from "./GeoPlotDetailsDr
 import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shared/geo-plot-viewport.js";
 import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
+import {closerGeoCameraZoom} from "../../../../shared/geo-camera-zoom.js";
 import "./geo-public-demo.css";
 
 type GeoCoordinate = {
@@ -305,15 +306,15 @@ function cameraPreset(view: GeoCameraView, buildingHeading: number) {
   const heading = normalizeHeading(buildingHeading);
   switch (view) {
     case "front":
-      return { zoom: 20.1, tilt: 67.5, heading };
+      return { zoom: closerGeoCameraZoom(20.1), tilt: 67.5, heading };
     case "corner":
-      return { zoom: 19.85, tilt: 67.5, heading: normalizeHeading(heading + 35) };
+      return { zoom: closerGeoCameraZoom(19.85), tilt: 67.5, heading: normalizeHeading(heading + 35) };
     case "entry":
-      return { zoom: 21.25, tilt: 67.5, heading };
+      return { zoom: closerGeoCameraZoom(21.25), tilt: 67.5, heading };
     case "aerial":
-      return { zoom: 18.65, tilt: 20, heading };
+      return { zoom: closerGeoCameraZoom(18.65), tilt: 20, heading };
     default:
-      return { zoom: 19, tilt: 67.5, heading };
+      return { zoom: closerGeoCameraZoom(19), tilt: 67.5, heading };
   }
 }
 
@@ -693,8 +694,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           activeCameraView = view;
           setCameraView(view);
           setZoomNotice("");
-          // The maximum satellite *imagery detail* is not an application camera cap.
-          // Let Google Maps apply its own native, location-specific zoom bounds.
+          // Start presets 50% closer using fractional zoom. Google's native
+          // location-dependent zoom bound still applies, without rescaling GLB.
           map.moveCamera?.({ center, ...preset });
           overlay?.requestRedraw();
         };
@@ -785,6 +786,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         touchHost.removeEventListener("touchend",touchOrbit.onTouchEnd,true);
         touchHost.removeEventListener("touchcancel",touchOrbit.onTouchCancel,true);
       }
+      touchOrbit?.destroy();
       touchHost=null;touchOrbit=null;
       plotLayer?.dispose();
       plotLayer=null;latestProjection=null;preparedPaths=[];
