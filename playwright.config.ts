@@ -24,10 +24,18 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: "npm run dev:admin",
-    url: "http://127.0.0.1:5173/3Dprojects/studio",
-    reuseExistingServer: false,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: "npm run dev:admin",
+      url: "http://127.0.0.1:5173/3Dprojects/studio",
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      command: "npm run dev:public",
+      url: "http://127.0.0.1:5174/3Dprojects",
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+  ],
 });
