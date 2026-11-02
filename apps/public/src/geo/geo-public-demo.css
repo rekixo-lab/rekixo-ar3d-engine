@@ -687,8 +687,6 @@
 /* Geo-only bottom-left availability; only the switch has a background. */
 .geo-plot-status{--geo-available:#37e19a;--geo-booked:#ffd35b;--geo-sold:#ff6976;position:absolute;left:12px;bottom:58px;z-index:11;width:166px;max-width:calc(100% - 24px);font-size:12px;pointer-events:auto}
 .geo-plot-status-toggle{box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:42px;padding:8px 10px;border:1px solid #7ec1c288;border-radius:12px;background:#061d27ef;color:#f1fffe;box-shadow:0 9px 24px #0005;font:inherit;font-size:11px;font-weight:800;letter-spacing:.09em;cursor:pointer;touch-action:manipulation}
-.geo-plot-status-toggle-state{margin-left:auto;color:#acbfbd;font-size:10px;letter-spacing:0}
-.geo-plot-status.is-open .geo-plot-status-toggle-state{color:#58ebb7}
 .geo-plot-status-switch{display:inline-flex;align-items:center;flex-shrink:0;box-sizing:border-box;width:32px;height:19px;padding:2px;border:1px solid #718991;border-radius:999px;background:#314753;transition:background .22s,border-color .22s}
 .geo-plot-status-switch i{width:13px;height:13px;border-radius:50%;background:#e5f0f2;transition:transform .28s cubic-bezier(.22,1,.36,1)}
 .geo-plot-status.is-open .geo-plot-status-switch{background:#176e50;border-color:#53e5b1}
@@ -710,7 +708,60 @@
 .geo-plot-status-option--sold,.geo-plot-status-option--sold b{color:var(--geo-sold)}
 .geo-plot-status-option b,.geo-plot-status-total b{min-width:19px;text-align:right;font-size:13px;font-variant-numeric:tabular-nums}
 .geo-plot-status-total{display:flex;align-items:center;justify-content:space-between;gap:7px;min-height:31px;padding:6px 2px 2px;border-top:1px solid #c4d8d759;background:transparent;color:#f3fcfc;font-size:12px;font-weight:700}
-.geo-plot-status-pending{display:block;margin-top:2px;padding:0 2px 4px;color:#c1d0d0;font-size:10px;line-height:1.3;text-shadow:0 1px 4px #061923}
 .geo-plot-public-details--status-open{top:10px;bottom:auto;max-height:min(45%,calc(100% - 250px))}
 @media(max-width:640px){.geo-plot-status{left:8px;bottom:52px;width:152px}.geo-plot-status-option{min-height:36px}.geo-plot-public-details--status-open{top:8px;bottom:auto;left:8px;max-height:min(43%,calc(100% - 250px))}}
 @media(prefers-reduced-motion:reduce){.geo-plot-status-switch,.geo-plot-status-switch i,.geo-plot-status-options,.geo-plot-status-option{transition-duration:.01ms!important;transition-delay:0ms!important}}
+
+
+/* Customer Geo: independent rounded camera controls rather than a dock panel.
+   The flex toolbar slot is retained to preserve mobile viewport dimensions. */
+.geo-public-toolbar-slot{
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  backdrop-filter:none !important;
+}
+.geo-public-toolbar-slot > .geo-camera-toolbar--normal-row{
+  gap:clamp(5px,1vw,11px) !important;
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  backdrop-filter:none !important;
+}
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row button{
+  border:1px solid rgba(124,166,180,.43) !important;
+  border-radius:10px !important;
+  background:rgba(9,29,41,.90) !important;
+  color:#e3eff3 !important;
+  box-shadow:0 3px 12px rgba(0,0,0,.17) !important;
+  transition:background .17s ease,color .17s ease,border-color .17s ease,box-shadow .17s ease !important;
+}
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row button:hover,
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row button:focus-visible{
+  border-color:rgba(104,235,183,.77) !important;
+  border-radius:10px !important;
+  background:rgba(19,76,64,.92) !important;
+  color:#f0fff8 !important;
+}
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row button.is-active{
+  border:1px solid rgba(83,235,177,.95) !important;
+  border-radius:10px !important;
+  background:rgba(19,106,78,.96) !important;
+  color:#f1fff8 !important;
+  box-shadow:0 5px 15px rgba(0,52,34,.22) !important;
+}
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row button.is-active::after{
+  display:none;
+}
+/* Only normal view is lowered. Fullscreen status placement remains unchanged.
+   Keep clear of Google's required imagery credits and logo. */
+.geo-integrated-scene:not(:fullscreen) > .geo-plot-status{
+  bottom:34px;
+  width:146px;
+}
+@media (max-width:640px){
+  .geo-integrated-scene:not(:fullscreen) > .geo-plot-status{
+    bottom:29px;
+    width:140px;
+  }
+}
