@@ -20,7 +20,7 @@ test("mobile Geo map reaches camera dock on short and tall phones",async({page})
       <div class="geo-public-map-layout">
         <div class="geo-integrated-scene"><div class="geo-integrated-map"></div></div>
         <div class="geo-public-toolbar-slot"><nav class="geo-camera-toolbar geo-camera-toolbar--normal-row">
-          <button>Overview</button><button>Front</button><button>Corner</button>
+          <button class="is-active">Overview</button><button>Front</button><button>Corner</button>
           <button>Aerial</button>
         </nav></div>
       </div></main></body></html>`);
@@ -50,11 +50,27 @@ test("mobile Geo map reaches camera dock on short and tall phones",async({page})
         documentHeight:document.documentElement.scrollHeight,
         shellHeight:rect(".jio-public-shell").height,
         dockPosition:getComputedStyle(document.querySelector(".geo-public-toolbar-slot")!).position,
-        cameraButtons:[...document.querySelectorAll(".geo-camera-toolbar--normal-row button")].map(node=>node.textContent?.trim())
+        cameraButtons:[...document.querySelectorAll(".geo-camera-toolbar--normal-row button")].map(node=>node.textContent?.trim()),
+        dockBackground:getComputedStyle(document.querySelector(".geo-public-toolbar-slot")!).backgroundColor,
+        dockBorder:getComputedStyle(document.querySelector(".geo-public-toolbar-slot")!).borderTopWidth,
+        buttons:[...document.querySelectorAll(".geo-camera-toolbar--normal-row button")].map(node=>({
+          radius:getComputedStyle(node).borderRadius,
+          background:getComputedStyle(node).backgroundColor,
+          border:getComputedStyle(node).borderTopWidth,
+          width:node.getBoundingClientRect().width
+        }))
       };
     });
     const label=`${viewport.width}x${viewport.height}`;
     expect(measured.cameraButtons,label+" only four camera buttons").toEqual(["Overview","Front","Corner","Aerial"]);
+    expect(measured.dockBackground,label+" dock panel is transparent").toBe("rgba(0, 0, 0, 0)");
+    expect(measured.dockBorder,label+" dock panel border removed").toBe("0px");
+    expect(measured.buttons.every(button=>button.radius==="10px"),label+" stable rounded corners").toBeTruthy();
+    expect(measured.buttons.every(button=>button.border==="1px"),label+" independent button borders").toBeTruthy();
+    expect(measured.buttons[0].background,label+" active button has own green fill")
+      .not.toBe(measured.buttons[1].background);
+    expect(Math.max(...measured.buttons.map(button=>button.width))-
+      Math.min(...measured.buttons.map(button=>button.width)),label+" four equal widths").toBeLessThan(2);
     expect(measured.titleText,label+" title restored").toBe("satharai");
     expect(measured.subtitleText,label+" subtitle restored").toContain("Thiruvallur");
     expect(measured.headerDisplay,label+" mobile title row is not legacy fullscreen grid").toBe("flex");
