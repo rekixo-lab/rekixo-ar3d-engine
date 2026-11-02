@@ -12,10 +12,10 @@ test("Plot 18 side labels stay in four balanced positions on narrow mobile layou
     id:"18",layout:"four" as const,
     corners:[[0,0],[18,0],[20,3],[20,50],[0,50]] as [number,number][],
     sides:{
-      front:{edges:[3],length:21.67,unit:"ft"},
-      back:{edges:[1],length:26.58,unit:"ft"},
-      depthA:{edges:[2],length:48.25,unit:"ft"},
-      depthB:{edges:[4,0],length:53.17,unit:"ft"},
+      front:{edges:[3],length:21.67,unit:"ft",roadFacing:true},
+      back:{edges:[1],length:26.58,unit:"ft",roadFacing:false},
+      depthA:{edges:[2],length:48.25,unit:"ft",roadFacing:false},
+      depthB:{edges:[4,0],length:53.17,unit:"ft",roadFacing:false},
     },
   };
   const diagram=publicGeoPlotDiagram(plot);
