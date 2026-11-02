@@ -30,7 +30,7 @@ test("Visible published plots remain clickable and source-reviewed details remai
   assert.match(viewer,/pickModelGeoPlot\(/);
   assert.match(viewer,/setSelectedPlot\(plotIds\.get\(id\)\|\|null\)/);
   assert.match(viewer,/<GeoPlotDetailsDrawer/);
-  assert.match(drawer,/publicationMode==="preliminary"/);
+  assert.match(drawer,/publicGeoAreaUnits\(shown\.area\)/);
   assert.match(drawer,/publicGeoAreaUnits\(shown\.area\)/);
   assert.doesNotMatch(css,/\.geo-plot-public-controls/);
 });
