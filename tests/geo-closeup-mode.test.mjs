@@ -81,7 +81,7 @@ test("customer Geo/3D mode switch keeps one map renderer, camera dock and plot s
   assert.match(parent,/hidden=\{closeupMode\}/);
   assert.match(parent,/setCloseupMode\(current=>!current\)/);
   assert.match(parent,/closeupMode\?closeupControlRef\.current\?\.zoom\(1\)/);
-  assert.match(parent,/closeupMode\)closeupControlRef\.current\?\.preset\(view\.id\)/);
+  assert.match(parent,/closeupMode\)closeupControlRef\.current\?\.preset\(view\.id==="entry"\?"front":view\.id\)/);
   assert.match(parent,/onFocusPlot=\{closeupMode&&selectedPlot/);
   assert.match(parent,/statusEnabled=\{statusEnabled\}/);
   assert.match(parent,/statuses=\{statusSummary\.statusById\}/);
