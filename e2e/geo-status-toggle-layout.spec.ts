@@ -32,7 +32,9 @@ test("Geo status opens upward without background cards at mobile and desktop siz
       return {left:b.left-s.left,bottom:s.bottom-b.bottom,attributionGap:a.top-b.bottom,
         opacity:legend.opacity,visibility:legend.visibility};
     });
-    expect(before.left).toBe(viewport.width<=640?8:12);
+    // The scene has a 1px border at some device widths, which is part of
+    // the positioned containing block, not extra Status spacing.
+    expect(Math.abs(before.left-(viewport.width<=640?8:12))).toBeLessThanOrEqual(1);
     expect(Math.abs(before.bottom-(viewport.width<=640?29:34))).toBeLessThan(1);
     expect(before.attributionGap).toBeGreaterThanOrEqual(4);
     expect(await page.locator(".geo-plot-status-pending").count()).toBe(0);
