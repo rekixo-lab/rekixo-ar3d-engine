@@ -22,6 +22,8 @@ import {nextCsvPlotForDrawing,assignVisiblePlotEdge,
   draftStorageKey,packLocalPlotDraft,unpackLocalPlotDraft,visibleMappingProgress
 } from "../../../../shared/geo-plot-mapper-ux.js";
 import type {SimilarityTransform} from "../../../../shared/geo-plot-image-alignment.js";
+import {GEO_COMPASS_DIRECTIONS,suggestGeoSideFacing,
+  type GeoDirection} from "../../../../shared/geo-plot-facing.js";
 import {newPlotEditHistory,replacePlotEditHistory,updatePlotEditHistory,
   closeGroupedPlotEdit,undoPlotEdit,redoPlotEdit,geometryWithRevokedApprovals,nudgePlotCorner
 } from "../../../../shared/geo-plot-precision-history.js";
@@ -29,7 +31,7 @@ import "./geo-plot-mapper.css";
 
 type Point = [number, number]; // Immutable Building-local X/Z metres.
 type Role = "front" | "back" | "depthA" | "depthB";
-type Side = { edges: number[]; length: number; unit: "ft" | "m"; roadFacing: boolean; source: string; verified: boolean };
+type Side = { edges: number[]; length: number; unit: "ft" | "m"; roadFacing: boolean; facingDirection?: GeoDirection; source: string; verified: boolean };
 type Plot = { id: string; corners: Point[]; layout: "three" | "four";
   sides: Partial<Record<Role, Side>>; area: { value: number; unit: "sqft" | "sqm" | "sqyd"; source: string; verified: boolean };
   facing: string; facingSource:string; facingVerified:boolean; planeY?:number;planeSource?:string;planeVerified?:boolean;road: string; notes: string };
@@ -47,7 +49,7 @@ type PointerPreview = {clientX:number;clientY:number;rawScreen:Point;screen:Poin
   point:Point;kind:"none"|"vertex"|"edge";pointerType:string};
 type PointerStart = {id:number;x:number;y:number;cancelled?:boolean};
 const ROLES: Role[] = ["front", "back", "depthA", "depthB"];
-const directions=["north","north-east","east","south-east","south","south-west","west","north-west"];
+const directions=GEO_COMPASS_DIRECTIONS.map(item=>item.id);
 const emptySide = (edges:number[]=[]):Side => ({edges,length:0,unit:"ft",roadFacing:false,source:"",verified:false});
 const blank = (id:string):Plot => ({id,corners:[],layout:"four",sides:{},
   area:{value:0,unit:"sqft",source:"",verified:false},facing:"north",facingSource:"",facingVerified:false,road:"",notes:""});
@@ -101,19 +103,7 @@ function geometrySideLengthMetres(points:Point[],edges:number[],geoScale:number)
   },0);
 }
 function facingFromGeo(points:Point[],edges:number[],heading:number) {
-  if (points.length<3 || !edges.length) return "north";
-  const cx=points.reduce((v,p)=>v+p[0],0)/points.length;
-  const cz=points.reduce((v,p)=>v+p[1],0)/points.length;
-  let east=0,north=0;
-  for(const i of edges){
-    const a=points[i],b=points[(i+1)%points.length],mx=(a[0]+b[0])/2,mz=(a[1]+b[1])/2;
-    let ex=b[1]-a[1],nz=b[0]-a[0];
-    if((mx-cx)*ex+(mz-cz)*(-nz)<0){ex=-ex;nz=-nz;}
-    east+=ex;north+=nz;
-  }
-  const h=heading*Math.PI/180;
-  const worldE=east*Math.cos(h)+north*Math.sin(h),worldN=-east*Math.sin(h)+north*Math.cos(h);
-  return directions[Math.round(((Math.atan2(worldE,worldN)*180/Math.PI)+360)%360/45)%8];
+  return suggestGeoSideFacing(points,edges,heading)||"north";
 }
 async function callApi<T>(url:string,init?:RequestInit):Promise<T> {
   const r=await fetch(url,{cache:"no-store",...init,headers:{"Accept":"application/json",...init?.headers}});
@@ -201,6 +191,7 @@ export default function GeoPlotMapper(){
   // Like the Platform mapper, snapping is opt-in: don't silently move approved corners.
   const [snap,setSnap]=useState(false);
   const [selectedRole,setSelectedRole]=useState<Role>("front");
+  const [selectedFacingRole,setSelectedFacingRole]=useState<Role>("front");
   const [extendSide,setExtendSide]=useState(false);
   const [inspectorTab,setInspectorTab]=useState<"sources"|"plot"|"quality"|"publish">("sources");
   const [recoveredLocalDraft,setRecoveredLocalDraft]=useState<{
@@ -762,9 +753,12 @@ export default function GeoPlotMapper(){
   };
   const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>{
     if(!p)return p;
-    const changesReference=["edges","length","unit","source","roadFacing"].some(k=>Object.hasOwn(patch,k));
-    return {...p,...((Object.hasOwn(patch,"roadFacing") || (role==="front"&&Object.hasOwn(patch,"edges")))?{facingVerified:false}:{}),
-      sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...(Object.hasOwn(patch,"edges")?{roadFacing:false}:{}),...patch,
+    const changesReference=["edges","length","unit","source","roadFacing","facingDirection"].some(k=>Object.hasOwn(patch,k));
+    return {...p,...((Object.hasOwn(patch,"roadFacing")||Object.hasOwn(patch,"facingDirection") ||
+       Object.hasOwn(patch,"edges"))?{facingVerified:false}:{}),
+      sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),
+        ...(Object.hasOwn(patch,"edges")?{roadFacing:false,facingDirection:undefined}:{}),
+        ...(patch.roadFacing===false?{facingDirection:undefined}:{}),...patch,
         ...(changesReference?{verified:false}:{})}}};
   });
   const selectRoadFront=(edge:number)=>{
