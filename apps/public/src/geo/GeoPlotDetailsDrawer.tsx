@@ -121,13 +121,23 @@ export function GeoPlotDetailsDrawer({
                 {facings.map(face=>{
                   const side=diagram.sides.find(item=>item.role===face.role);
                   if(!side?.segments.length)return null;
-                  const seg=side.segments[Math.floor(side.segments.length/2)];
+                  const seg=side.segments.reduce((largest,current)=>
+                    current.length>largest.length?current:largest);
                   const mx=(seg.x1+seg.x2)/2,my=(seg.y1+seg.y2)/2;
-                  const dx=mx-160,dy=my-105;
-                  if(Math.hypot(dx,dy)<6)return null;
+                  const coords=diagram.pointText.split(" ").map(pair=>pair.split(",").map(Number));
+                  const signed=coords.reduce((total,pt,i)=>{
+                    const next=coords[(i+1)%coords.length];
+                    return total+pt[0]*next[1]-next[0]*pt[1];
+                  },0);
+                  if(Math.abs(signed)<1e-8||seg.length<1)return null;
+                  const winding=Math.sign(signed),dx=(seg.x2-seg.x1)/seg.length,
+                    dy=(seg.y2-seg.y1)/seg.length;
+                  // Point the arrow outward on its own physical road edge.
+                  // Its base and tip stay just inside that edge, even on concave plots.
+                  const normalX=winding*dy,normalY=-winding*dx;
                   return <line key={"facing-arrow-"+face.role}
-                    x1={160+dx*.64} y1={105+dy*.64}
-                    x2={160+dx*.89} y2={105+dy*.89}
+                    x1={mx-normalX*17} y1={my-normalY*17}
+                    x2={mx-normalX*3} y2={my-normalY*3}
                     className="geo-plot-drawer__facing-arrow"
                     markerEnd="url(#geo-facing-arrow-tip)"
                     aria-hidden="true"/>;
