@@ -114,8 +114,10 @@ test("Mobile clipped subtitle scrolls all the way left then back; reduced motion
   await page.emulateMedia({reducedMotion:"reduce"});
   const reduced=await page.evaluate(()=>{
     const viewport=document.querySelector<HTMLElement>(".geo-header-subtitle")!;
-    return {overflowX:getComputedStyle(viewport).overflowX,
-      animations:viewport.querySelector(".geo-header-subtitle-text")!.getAnimations().length};
+    const text=viewport.querySelector<HTMLElement>(".geo-header-subtitle-text")!;
+    return {matches:matchMedia("(prefers-reduced-motion: reduce)").matches,
+      overflowX:getComputedStyle(viewport).overflowX,
+      animation:getComputedStyle(text).animationName};
   });
-  expect(reduced).toEqual({overflowX:"auto",animations:0});
+  expect(reduced).toEqual({matches:true,overflowX:"auto",animation:"none"});
 });
