@@ -205,11 +205,11 @@ export default function ProjectManagement({section}:{section:Tab}){
                       "reset-client-password":"provision-client-password",id:client.id,
                       loginType:client.credentialLoginType||(client.phone?"mobile":"email")});
                 }}>{client.credentialLoginId?"Reset Client Password":"Create Client Login"}</button>}
-              <button disabled={busy||!client.email} onClick={()=>{
+              {client.proposedRole!=="client_admin"&&<button disabled={busy||!client.email} onClick={()=>{
                 if(confirm("Grant "+client.proposedRole+" access ONLY to this project for "+client.displayName+
                   "? A 24h one-time invite will be generated. Confirm identity before sharing."))
                   void perform("POST",{action:"grant-client-access",id:client.id,role:client.proposedRole});
-              }}>{client.grantActive?"Rotate invite / revoke previous sessions":"Issue scoped invitation"}</button>
+              }}>{client.grantActive?"Rotate invite / revoke previous sessions":"Issue scoped invitation"}</button>}
               <button disabled={busy} onClick={()=>{
                 if(confirm("Permanently revoke ALL sessions and invitations for "+client.displayName+
                    " in this project?"))
