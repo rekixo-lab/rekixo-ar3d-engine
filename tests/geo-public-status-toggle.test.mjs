@@ -10,7 +10,7 @@ const css=read("apps/public/src/geo/geo-public-demo.css");
 const server=read("workers/geo-plot-public.mjs");
 const commercialServer=read("workers/geo-plot-commercial.mjs");
 
-test("verified Geo mapping counts only source-approved facts by canonical mapped Plot ID",()=>{
+test("every published mapped plot gets exactly one public status and explicit Booked/Sold wins",()=>{
   const plots=[{id:"1"},{id:"2"},{id:"3"},{id:"4"},{id:"5"},{id:"6"}];
   const mapping={publicationMode:"verified",plots,commercial:{
     "1":{status:"available"},"2":{status:"booked"},"3":{status:"sold"},
@@ -18,26 +18,44 @@ test("verified Geo mapping counts only source-approved facts by canonical mapped
   }};
   const result=summarizeApprovedGeoPlotStatuses(mapping);
   assert.deepEqual([result.total,result.available,result.booked,result.sold,
-    result.approved,result.pending],[6,2,1,1,4,2]);
+    result.approved,result.pending],[6,4,1,1,4,2]);
+  assert.equal(result.available+result.booked+result.sold,result.total);
   assert.equal(Object.getPrototypeOf(result.statusById),null);
-  assert.deepEqual(Object.keys(result.statusById),["1","2","3","4"]);
+  assert.deepEqual(Object.keys(result.statusById),["1","2","3","4","5","6"]);
+  assert.equal(result.statusById["5"],"available");
+  assert.equal(result.statusById["6"],"available");
+  assert.equal(result.statusById["2"],"booked");
+  assert.equal(result.statusById["3"],"sold");
   assert.equal(result.statusById["orphan"],undefined);
 });
 
-test("preliminary, missing and unapproved records are never represented as Available",()=>{
+test("Satharai-style preliminary 36 published polygons all display Available by default",()=>{
+  const plots=Array.from({length:36},(_,i)=>({id:String(i+1)}));
+  const result=summarizeApprovedGeoPlotStatuses({publicationMode:"preliminary",plots});
+  assert.deepEqual([result.total,result.available,result.booked,result.sold],[36,36,0,0]);
+  assert.equal(result.approved,0,"public default does not invent owner-approved sales");
+  assert.equal(result.pending,36);
+  assert.ok(plots.every(p=>result.statusById[p.id]==="available"));
+  assert.equal(result.available+result.booked+result.sold,result.total);
+});
+
+test("missing records default Available; preliminary never trusts commercial not released by server",()=>{
   const plots=[{id:"17"},{id:"18"},{id:"19"}];
-  for(const mapping of [
-    {publicationMode:"preliminary",plots,commercial:{"17":{status:"available"}}},
-    {publicationMode:"verified",plots},
-    {plots,commercial:{"17":{status:"sold"}}}
-  ]){
+  const preliminary=summarizeApprovedGeoPlotStatuses({
+    publicationMode:"preliminary",plots,
+    commercial:{"17":{status:"sold"}}
+  });
+  assert.deepEqual([preliminary.available,preliminary.booked,preliminary.sold],[3,0,0]);
+  assert.equal(preliminary.statusById["17"],"available");
+  for(const mapping of [{publicationMode:"verified",plots},{plots,commercial:{"17":{status:"sold"}}}]){
     const result=summarizeApprovedGeoPlotStatuses(mapping);
-    assert.equal(result.total,3);
+    assert.deepEqual([result.total,result.available,result.booked,result.sold],[3,3,0,0]);
     assert.equal(result.approved,0);
-    assert.equal(result.pending,3);
-    assert.deepEqual([result.available,result.booked,result.sold],[0,0,0]);
-    assert.deepEqual(Object.keys(result.statusById),[]);
+    assert.deepEqual(Object.values(result.statusById),["available","available","available"]);
   }
+  const repeated=summarizeApprovedGeoPlotStatuses({publicationMode:"verified",
+    plots:[{id:"18"},{id:"18"},{id:"18"},{id:"19"}]});
+  assert.equal(repeated.total,2,"duplicated case-insensitive Plot IDs must never inflate counts");
   assert.equal(summarizeApprovedGeoPlotStatuses(null).total,0);
 });
 
@@ -48,11 +66,11 @@ test("Status toggle is bottom-left, OFF by default, animated without option back
   assert.match(viewer,/onClick=\{\(\)=>setStatusFilter\(current=>current===item\.id\?null:item\.id\)\}/);
   assert.match(viewer,/if\(statusEnabled\)setStatusFilter\(null\)/);
   assert.match(viewer,/statusSummary\.total/);
-  assert.match(viewer,/statusSummary\.approved===0\?"—"/);
+  assert.match(viewer,/statusSummary\[item\.id\]/);
   assert.doesNotMatch(viewer,/Status pending verification|statuses pending verification/);
   assert.doesNotMatch(viewer,/geo-plot-status-toggle-state|geo-plot-status-pending/);
   assert.match(viewer,/aria-label=\{statusEnabled\?"Hide plot status":"Show plot status"\}/);
-  assert.match(viewer,/statusSummary\.approved===0\?"—"/);
+  assert.doesNotMatch(viewer,/statusSummary\.approved===0\?"—"/);
   assert.match(css,/\.geo-public-toolbar-slot\{[^}]*background:transparent !important/);
   assert.ok(css.includes(".geo-integrated-scene:not(:fullscreen) > .geo-plot-status"));
   assert.match(css,/bottom:34px;[\s\S]*?bottom:29px;/);
@@ -73,6 +91,12 @@ test("Status colors use existing GLB-local overlay and preserve map click geomet
   assert.match(overlay,/available:tinted\(0x1cd680/);
   assert.match(overlay,/booked:tinted\(0xf2bf25/);
   assert.match(overlay,/sold:tinted\(0xf04b58/);
+  assert.match(overlay,/available:tinted\\(0x1cd680,\\.44/);
+  assert.match(overlay,/booked:tinted\\(0xf2bf25,\\.52/);
+  assert.match(overlay,/sold:tinted\\(0xf04b58,\\.58/);
+  assert.match(overlay,/color:PLOT_COLOR,transparent:true,opacity:0,side:THREE.DoubleSide/);
+  assert.match(overlay,/color:PLOT_COLOR,transparent:true,opacity:0,depthTest:true/);
+  assert.match(overlay,/dim:tinted\\(0x708891,0,0/);
   assert.match(overlay,/filter&&valid!==filter\?palette\.dim/);
   assert.match(overlay,/parts\.fill\.material=style\.fill/);
   assert.match(overlay,/parts\.outline\.material=style\.stroke/);
