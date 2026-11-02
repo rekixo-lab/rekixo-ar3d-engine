@@ -29,6 +29,9 @@ test("mobile Geo map reaches camera dock on short and tall phones",async({page})
     // document head, then the Geo component's imported styles.
     await page.addStyleTag({content:fullscreenStyles});
     await page.addStyleTag({content:geoStyles});
+    // The fixture injects CSS after the buttons enter the DOM. Let their
+    // transition from native browser button colors settle before measuring.
+    await page.waitForTimeout(220);
 
     const measured=await page.evaluate(()=>{
       const rect=(selector:string)=>{
