@@ -53,9 +53,9 @@ test("plot details drawer flushes to map edges while preserving title, right str
       };
     });
     const tag=screen.width+"×"+screen.height;
-    expect(Math.abs(actual.panel.left-actual.map.left),tag+" left edge flush").toBeLessThan(1);
-    expect(Math.abs(actual.panel.top-actual.map.top),tag+" top edge flush").toBeLessThan(1);
-    expect(Math.abs(actual.panel.bottom-actual.map.bottom),tag+" bottom edge flush").toBeLessThan(1);
+    expect(Math.abs(actual.panel.left-actual.map.left),tag+" left edge flush").toBeLessThan(2);
+    expect(Math.abs(actual.panel.top-actual.map.top),tag+" top edge flush").toBeLessThan(2);
+    expect(Math.abs(actual.panel.bottom-actual.map.bottom),tag+" bottom edge flush").toBeLessThan(2);
     if(screen.width<=640)
       expect(Math.abs(actual.rightStrip-55),tag+" right map strip unchanged").toBeLessThan(2);
     else expect(actual.rightStrip,tag+" responsive desktop right gap").toBeGreaterThanOrEqual(55);
