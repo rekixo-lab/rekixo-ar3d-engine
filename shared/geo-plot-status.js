@@ -13,9 +13,9 @@ export function summarizeApprovedGeoPlotStatuses(mapping){
   const statusById=Object.create(null);
   // The server only sends release-bound, public-approved commercial facts.
   // A preliminary release may have no commercial entries at all.
-  const commercial=mapping?.commercial&&
-    typeof mapping.commercial==="object"&&!Array.isArray(mapping.commercial)
-    ?mapping.commercial:null;
+  const commercial=mapping?.publicationMode==="verified"&&
+    mapping.commercial&&typeof mapping.commercial==="object"&&
+    !Array.isArray(mapping.commercial)?mapping.commercial:null;
   const seen=new Set();
   let total=0,approved=0;
   for(const plot of plots){
