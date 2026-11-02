@@ -30,7 +30,7 @@ export async function projectClientSession(request,env){
  if(!validClientBearer(token))return null;
  const now=Date.now(),hash=await clientTokenHash(token);
  const s=await env.DB.prepare(
-  "SELECT s.project_id AS projectId,s.client_id AS clientId,g.role,c.email,c.display_name AS displayName,p.slug,p.name AS projectName,p.status AS projectStatus,p.project_kind AS projectKind,COALESCE(pwd.must_change_password,0) AS mustChangePassword,pwd.login_id AS loginId "+
+  "SELECT s.project_id AS projectId,s.client_id AS clientId,g.role,COALESCE(NULLIF(c.email,''),pwd.login_id,'') AS email,c.display_name AS displayName,p.slug,p.name AS projectName,p.status AS projectStatus,p.project_kind AS projectKind,COALESCE(pwd.must_change_password,0) AS mustChangePassword,pwd.login_id AS loginId "+
   "FROM project_client_sessions_3d s JOIN project_client_grants_3d g ON g.client_id=s.client_id AND g.project_id=s.project_id "+
   "JOIN project_client_directory_3d c ON c.id=s.client_id AND c.project_id=s.project_id "+
   "JOIN projects_3d p ON p.id=s.project_id "+
