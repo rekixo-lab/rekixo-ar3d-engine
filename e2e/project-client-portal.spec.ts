@@ -51,7 +51,7 @@ test("Viewer sees scoped dashboard and plot list without editing or owner action
  await expect(page.getByRole("heading",{name:"Demo A"})).toBeVisible();
  await expect(page.getByRole("heading",{name:"Project overview"})).toBeVisible();
  await expect(page.getByText("Demo Viewer")).toBeVisible();
- await page.getByRole("button",{name:"Plots"}).click();
+ await page.getByRole("button",{name:"Plots",exact:true}).click();
  await expect(page.getByRole("heading",{name:"Geo plot management"})).toBeVisible();
  await expect(page.getByRole("button",{name:/Plot 12/})).toBeVisible();
  await expect(page.getByRole("button",{name:"Save scoped listing"})).toHaveCount(0);
