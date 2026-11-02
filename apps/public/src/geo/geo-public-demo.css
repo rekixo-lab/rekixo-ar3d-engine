@@ -63,7 +63,8 @@
   justify-content: flex-end;
   gap: 7px;
   width: auto !important; /* Counter the retired fullscreen header's 100% width. */
-  margin: 0 0 0 auto;
+  margin-top: 0;
+  margin-left: auto;
   align-self: center;
   justify-self: auto;
   white-space: nowrap;
