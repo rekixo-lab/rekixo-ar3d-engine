@@ -171,9 +171,9 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
 
   const kind=overview?.project.kind||identity?.projectKind||"legacy";
   const masterplanGeo=kind==="masterplan_geo";
-  const availablePanels:Panel[]=masterplanGeo||kind==="building"
-    ?["overview","plots"]
-    :["overview","plots","pricing",...(overview?.permissions.dealsRead?["deals" as const]:[])];
+  const availablePanels:Panel[]=kind==="building"?["overview"]:
+    masterplanGeo?["overview","plots"]:
+    ["overview","plots","pricing",...(overview?.permissions.dealsRead?["deals" as const]:[])];
   if(identity?.role==="client_admin")availablePanels.push("contact");
   const mappingCount=masterplanGeo?masterplan?.plotCount||0:commercial?.plotCount||0;
   const countFor=(kind:"available"|"booked"|"sold")=>
@@ -189,7 +189,8 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     unreviewed:Math.max(0,mappingCount-(commercial?.rows.length||0))
   };
   const customerSite=identity?"https://ar3dstudio.in/3Dprojects/"+
-    encodeURIComponent(identity.projectSlug)+(masterplanGeo?"/masterplan":"/geo"):"";
+    encodeURIComponent(identity.projectSlug)+
+    (masterplanGeo?"/masterplan":kind==="building"?"":"/geo"):"";
   const filteredMasterplan=(masterplan?.plots||[]).filter(row=>
     row.id.toLowerCase().includes(plotSearch.trim().toLowerCase()));
   const filteredCommercial=(commercial?.rows||[]).filter(row=>
