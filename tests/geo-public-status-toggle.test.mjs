@@ -91,12 +91,12 @@ test("Status colors use existing GLB-local overlay and preserve map click geomet
   assert.match(overlay,/available:tinted\(0x1cd680/);
   assert.match(overlay,/booked:tinted\(0xf2bf25/);
   assert.match(overlay,/sold:tinted\(0xf04b58/);
-  assert.match(overlay,/available:tinted\\(0x1cd680,\\.44/);
-  assert.match(overlay,/booked:tinted\\(0xf2bf25,\\.52/);
-  assert.match(overlay,/sold:tinted\\(0xf04b58,\\.58/);
+  assert.match(overlay,/available:tinted\(0x1cd680,\.44/);
+  assert.match(overlay,/booked:tinted\(0xf2bf25,\.52/);
+  assert.match(overlay,/sold:tinted\(0xf04b58,\.58/);
   assert.match(overlay,/color:PLOT_COLOR,transparent:true,opacity:0,side:THREE.DoubleSide/);
   assert.match(overlay,/color:PLOT_COLOR,transparent:true,opacity:0,depthTest:true/);
-  assert.match(overlay,/dim:tinted\\(0x708891,0,0/);
+  assert.match(overlay,/dim:tinted\(0x708891,0,0/);
   assert.match(overlay,/filter&&valid!==filter\?palette\.dim/);
   assert.match(overlay,/parts\.fill\.material=style\.fill/);
   assert.match(overlay,/parts\.outline\.material=style\.stroke/);
