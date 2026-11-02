@@ -1,0 +1,128 @@
+/* Geo customer plot drawer: independent from the project header, Google imagery
+   credits and the separate normal/fullscreen four-camera toolbar. */
+.geo-plot-drawer {
+  position:absolute;
+  z-index:15;
+  box-sizing:border-box;
+  top:10px;
+  bottom:42px; /* Leave mandatory Google attribution on the map visible. */
+  left:8px;
+  width:min(430px,calc(100% - 64px)); /* 56+ CSS px unobstructed on right. */
+  max-height:calc(100% - 52px);
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  padding:0;
+  overflow:hidden;
+  border:1px solid rgba(96,213,177,.5);
+  border-radius:17px;
+  background:linear-gradient(155deg,rgba(5,26,35,.98),rgba(7,21,32,.99));
+  color:#eaf8f8;
+  box-shadow:12px 16px 36px rgba(0,7,13,.4),inset 0 1px 0 rgba(236,255,251,.06);
+  transform:translate3d(calc(-100% - 16px),0,0);
+  visibility:hidden;
+  pointer-events:none;
+  transition:transform .26s cubic-bezier(.22,.8,.26,1),visibility 0s linear .26s;
+  will-change:transform;
+}
+.geo-plot-drawer.is-open {
+  transform:translate3d(0,0,0);
+  visibility:visible;
+  pointer-events:auto;
+  transition-delay:0s;
+}
+.geo-plot-drawer__head {
+  flex:0 0 auto;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  padding:16px 16px 12px;
+  border-bottom:1px solid rgba(102,163,171,.22);
+  background:rgba(7,31,41,.93);
+}
+.geo-plot-drawer__heading{display:grid;align-content:start;justify-items:start;gap:7px;min-width:0}
+.geo-plot-drawer__eyebrow{font-size:10px;font-weight:900;color:#63e7b8;letter-spacing:.15em}
+.geo-plot-drawer__heading h2{margin:0;font-size:clamp(23px,3.5vw,29px);font-weight:900;line-height:1.03;color:#f3ffff;overflow-wrap:anywhere}
+.geo-plot-drawer__status{display:inline-flex;align-items:center;gap:6px;min-height:23px;padding:2px 9px;border:1px solid rgba(151,178,188,.42);border-radius:999px;font-size:10px;font-weight:850;color:#bdcbd4;background:#253743}
+.geo-plot-drawer__status:before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.geo-plot-drawer__status--available{color:#66ebb7;background:#114c3d;border-color:#339e7e}
+.geo-plot-drawer__status--booked{color:#ffe087;background:#514022;border-color:#94763e}
+.geo-plot-drawer__status--sold{color:#ff9ca4;background:#582c39;border-color:#a64e60}
+.geo-plot-drawer__close {
+  flex:0 0 auto;
+  display:grid;place-items:center;
+  width:38px;height:38px;
+  margin:0;
+  border:1px solid rgba(138,188,191,.45);
+  border-radius:11px;
+  background:#193540;
+  color:#f4ffff;
+  font-size:26px;
+  line-height:1;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.geo-plot-drawer__close:hover,.geo-plot-drawer__close:focus-visible{background:#21524f;border-color:#7af4c5;outline:2px solid #8fefd1;outline-offset:1px}
+.geo-plot-drawer__scroll {
+  flex:1 1 auto;
+  min-height:0;
+  box-sizing:border-box;
+  padding:13px 14px max(14px,env(safe-area-inset-bottom,0px));
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+  scrollbar-color:#446b70 transparent;
+}
+.geo-plot-drawer__diagram-card{min-width:0;padding:10px;border:1px solid rgba(104,156,163,.32);border-radius:13px;background:#102a36}
+.geo-plot-drawer__section-top{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#e8f8fc}
+.geo-plot-drawer__section-top b{font-size:12px}
+.geo-plot-drawer__section-top small{font-size:10px;color:#9ab6c1}
+.geo-plot-drawer__svg{display:block;width:100%;height:auto;max-height:220px;aspect-ratio:320/220;margin:3px auto 1px;overflow:visible}
+.geo-plot-drawer__poly{fill:rgba(78,236,170,.14);stroke:#5bebbb;stroke-width:2.5;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.geo-plot-drawer__plot-label{font-size:18px;font-weight:900;fill:#dafde8;paint-order:stroke;stroke:#102a36;stroke-width:3px;stroke-linejoin:round}
+.geo-plot-drawer__side-label{font-size:10.5px;font-weight:800;paint-order:stroke;stroke:#102a36;stroke-width:4px;stroke-linejoin:round}
+.geo-plot-drawer__side-legend{display:grid;gap:7px;padding:9px 1px 4px;border-top:1px solid rgba(121,161,166,.23)}
+.geo-plot-drawer__side{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px}
+.geo-plot-drawer__side-name{display:inline-flex;align-items:center;gap:7px;color:#bcd2dc}
+.geo-plot-drawer__side-name i{width:9px;height:9px;flex:0 0 auto;border-radius:3px}
+.geo-plot-drawer__side b{color:#f1fcfe;font-size:11px;font-variant-numeric:tabular-nums}
+.geo-plot-drawer__shape-note{display:block;margin-top:9px;color:#94b2be;font-size:10px;line-height:1.5}
+.geo-plot-drawer__facts{display:grid;gap:0;margin-top:16px}
+.geo-plot-drawer__facts h3{font-size:13px;font-weight:850;color:#f1fafc;margin:0 0 4px}
+.geo-plot-drawer__fact{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;padding:10px 0;border-bottom:1px solid rgba(135,171,179,.17)}
+.geo-plot-drawer__fact span{flex:1 1 auto;color:#a5bbc7;font-size:11px}
+.geo-plot-drawer__fact b{flex:0 1 auto;max-width:60%;font-size:12px;font-variant-numeric:tabular-nums;text-align:right;color:#eefafa;overflow-wrap:anywhere}
+.geo-plot-drawer__muted{margin:11px 0;font-size:11px;color:#a7b8c5;line-height:1.5}
+.geo-plot-drawer__review-note{margin:12px 0 0;padding:10px;border:1px solid #5d7583;border-radius:9px;background:#203643;color:#e5edf1;font-size:11px;line-height:1.5}
+.geo-plot-drawer__notes{margin:12px 0 0;color:#bdd2dd;font-size:11px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.geo-plot-drawer__contact{display:flex;gap:8px;margin-top:18px;padding-bottom:4px}
+.geo-plot-drawer__contact a{flex:1;display:grid;place-items:center;min-height:42px;padding:8px 10px;border-radius:10px;text-decoration:none;font-size:12px;font-weight:850;color:#f4fffc}
+.geo-plot-drawer__whatsapp{background:#14794e;border:1px solid #45ca92}
+.geo-plot-drawer__call{background:#1d4258;border:1px solid #597c98}
+.geo-plot-drawer__contact a:focus-visible{outline:2px solid #9cffd6;outline-offset:2px}
+@media(max-width:640px) {
+  /* Top-right fullscreen/zoom buttons stay exposed above the drawer. */
+  .geo-plot-drawer{top:57px;bottom:38px;left:7px;width:calc(100% - 62px);max-height:calc(100% - 95px);border-radius:15px}
+  .geo-plot-drawer__head{padding:12px 12px 10px}
+  .geo-plot-drawer__scroll{padding:10px 11px max(12px,env(safe-area-inset-bottom,0px))}
+  .geo-plot-drawer__diagram-card{padding:8px}
+}
+/* The fullscreen camera clone lives INSIDE the map, unlike the normal toolbar.
+   Keep at least 20px between the 42px buttons and the drawer's bottom edge. */
+.geo-integrated-scene:fullscreen > .geo-plot-drawer {
+  bottom:calc(74px + env(safe-area-inset-bottom,0px));
+  max-height:calc(100% - 84px - env(safe-area-inset-bottom,0px));
+}
+@media(max-width:640px) {
+  .geo-integrated-scene:fullscreen > .geo-plot-drawer {
+    top:57px;
+    bottom:calc(74px + env(safe-area-inset-bottom,0px));
+    max-height:calc(100% - 131px - env(safe-area-inset-bottom,0px));
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .geo-plot-drawer{transition-duration:.01ms;transition-delay:0s;will-change:auto}
+}
