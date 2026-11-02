@@ -94,8 +94,8 @@
   scrollbar-color:#446b70 transparent;
 }
 .geo-plot-drawer__diagram-card{min-width:0;padding:10px;border:1px solid rgba(104,156,163,.32);border-radius:13px;background:#102a36}
-.geo-plot-drawer__section-top{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#e8f8fc}
-.geo-plot-drawer__section-top b{font-size:12px}
+/* Single status badge replaces the redundant Mapped Plot Shape heading. */
+.geo-plot-drawer__section-top{display:flex;align-items:center;justify-content:flex-start;gap:8px;min-height:23px;color:#e8f8fc}
 .geo-plot-drawer__svg{display:block;width:100%;height:auto;max-height:200px;aspect-ratio:320/210;margin:3px auto 1px;overflow:visible}
 .geo-plot-drawer__poly{fill:var(--geo-plot-shape-fill);stroke:var(--geo-plot-shape-stroke);stroke-width:2.7;stroke-linejoin:round;vector-effect:non-scaling-stroke}
 .geo-plot-drawer__plot-label{font-size:18px;font-weight:900;fill:#dafde8;paint-order:stroke;stroke:#102a36;stroke-width:3px;stroke-linejoin:round}
