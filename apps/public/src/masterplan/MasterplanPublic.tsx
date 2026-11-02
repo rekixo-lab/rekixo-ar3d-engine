@@ -189,7 +189,7 @@ export default function MasterplanPublic(){
             <rect x="3" y="14" width="7" height="7" rx="1.4"/>
             <rect x="14" y="14" width="7" height="7" rx="1.4"/>
           </svg>
-        </a>
+        </a>}
         {data&&<a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
           Object.values(locationOf(data.calibration.transform,[.5,.5])).join(","))}`} target="_blank" rel="noreferrer">Open Location</a>}
       </div>
