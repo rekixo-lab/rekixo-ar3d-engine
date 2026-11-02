@@ -6,6 +6,8 @@ import {handleGeoPlotCommercial} from "./geo-plot-commercial.mjs";
 import {handleGeoPlotPricingSheet} from "./geo-plot-pricing.mjs";
 import {handleGeoPlotDeals} from "./geo-plot-deals.mjs";
 import {validProjectSlug} from "../shared/project-slug-policy.js";
+import {clientMasterplanInventory} from "./project-client-masterplan-inventory.mjs";
+import {clientProjectContact} from "./project-client-contact.mjs";
 const PREFIX="/3Dprojects/api/client-portal";
 const COOKIE="rekixo_3d_project_client";
 const SESSION_MS=8*60*60*1000;
@@ -27,12 +29,12 @@ export async function projectClientSession(request,env){
  if(!validClientBearer(token))return null;
  const now=Date.now(),hash=await clientTokenHash(token);
  const s=await env.DB.prepare(
-  "SELECT s.project_id AS projectId,s.client_id AS clientId,g.role,c.email,c.display_name AS displayName,p.slug,p.name AS projectName,p.status AS projectStatus "+
+  "SELECT s.project_id AS projectId,s.client_id AS clientId,g.role,c.email,c.display_name AS displayName,p.slug,p.name AS projectName,p.status AS projectStatus,p.project_kind AS projectKind "+
   "FROM project_client_sessions_3d s JOIN project_client_grants_3d g ON g.client_id=s.client_id AND g.project_id=s.project_id "+
   "JOIN project_client_directory_3d c ON c.id=s.client_id AND c.project_id=s.project_id "+
   "JOIN projects_3d p ON p.id=s.project_id "+
   "WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>? "+
-  "AND g.active=1 AND g.epoch=s.grant_epoch AND c.access_state='not_provisioned' LIMIT 1"
+  "AND g.active=1 AND g.epoch=s.grant_epoch AND c.access_state='not_provisioned' AND p.status<>'archived' LIMIT 1"
  ).bind(hash,now).first();
  return s||null;
 }
@@ -44,12 +46,14 @@ async function enroll(request,env){
  if(raw.length>512)return response({error:"Invitation request too large."},413);
  let data;try{data=JSON.parse(raw);}catch{return response({error:"Invalid invitation request."},400);}
  const token=data?.token,email=String(data?.email||"").trim().toLowerCase();
+ const projectSlug=String(data?.projectSlug||"").trim().toLowerCase();
+ if(projectSlug&&!validProjectSlug(projectSlug))return response({error:"Valid project slug required."},400);
  if(!validClientBearer(token)||!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email))
   return response({error:"Invalid or expired project invitation."},401);
  const hash=await clientTokenHash(token),now=Date.now(),sessionToken=newClientBearer();
  const sessionHash=await clientTokenHash(sessionToken),nonce=crypto.randomUUID();
  const invitation=await env.DB.prepare(
-  "SELECT i.client_id AS clientId,i.project_id AS projectId,i.grant_epoch AS epoch,c.email,g.role "+
+  "SELECT i.client_id AS clientId,i.project_id AS projectId,i.grant_epoch AS epoch,c.email,g.role,p.slug AS projectSlug "+
   "FROM project_client_invitations_3d i JOIN project_client_directory_3d c ON c.id=i.client_id AND c.project_id=i.project_id "+
   "JOIN project_client_grants_3d g ON g.client_id=i.client_id AND g.project_id=i.project_id "+
   "JOIN projects_3d p ON p.id=i.project_id "+
@@ -58,6 +62,9 @@ async function enroll(request,env){
   "AND p.status<>'archived' LIMIT 1"
  ).bind(hash,now).first();
  if(!invitation||invitation.email.toLowerCase()!==email)
+  return response({error:"Invalid or expired project invitation."},401);
+ // A project-branded admin login may never redeem another project\'s invite.
+ if(projectSlug&&invitation.projectSlug!==projectSlug)
   return response({error:"Invalid or expired project invitation."},401);
  const results=await env.DB.batch([
   env.DB.prepare(
@@ -89,10 +96,14 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
   if(url.pathname===PREFIX+"/enroll")return enroll(request,env);
   if(url.pathname===PREFIX+"/session"){
    if(request.method!=="GET")return response({error:"Method not allowed."},405);
-   const s=await projectClientSession(request,env);
+   const requestedSlug=String(url.searchParams.get("project")||"").trim().toLowerCase();
+   if(requestedSlug&&!validProjectSlug(requestedSlug))
+    return response({error:"Valid project scope required."},400);
+   const found=await projectClientSession(request,env);
+   const s=found&&(!requestedSlug||found.slug===requestedSlug)?found:null;
    return response({authenticated:Boolean(s),user:s?{
     displayName:s.displayName,email:s.email,role:s.role,
-    projectSlug:s.slug,projectName:s.projectName}:null});
+    projectSlug:s.slug,projectName:s.projectName,projectKind:s.projectKind}:null});
   }
   if(url.pathname===PREFIX+"/logout"){
    if(request.method!=="POST")return response({error:"Method not allowed."},405);
@@ -103,7 +114,7 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
    ).bind(Date.now(),await clientTokenHash(value)).run();
    return response({ok:true},200,{"Set-Cookie":clear()});
   }
-  const match=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/(overview|commercial|pricing|deals)$/);
+  const match=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/(overview|commercial|pricing|deals|masterplan-inventory|contact)$/);
   if(!match)return response({error:"Unknown project client route."},404);
   const s=await projectClientSession(request,env);
   if(!s)return response({error:"Client sign-in required."},401);
@@ -114,12 +125,30 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
    if(request.method!=="GET")return response({error:"Method not allowed."},405);
    if(!canProjectClient(s.role,"project.read"))
     return response({error:"Role is not authorized."},403);
-   return response({project:{slug:s.slug,name:s.projectName,status:s.projectStatus},
+   return response({project:{slug:s.slug,name:s.projectName,status:s.projectStatus,kind:s.projectKind},
      role:s.role,permissions:{dealsRead:canProjectClient(s.role,"deals.read"),
       dealsWrite:canProjectClient(s.role,"deals.write"),
       commercialRead:canProjectClient(s.role,"commercial.read"),
       commercialPrepare:canProjectClient(s.role,"commercial.prepare"),
       commercialApprove:canProjectClient(s.role,"commercial.approve")}});
+  }
+  if(section==="contact"){
+   if(!["GET","PUT"].includes(request.method))
+    return response({error:"Method not allowed."},405);
+   if(request.method==="PUT"&&!sameOrigin(request))
+    return response({error:"Same-origin request required."},403);
+   return clientProjectContact(request,env,s);
+  }
+  // Image Geo has a different immutable mapping + private sales ledger.
+  // Its first client view is strictly read-only until separate sales roles and
+  // revision-safe booking writes are reviewed, never routed through owner APIs.
+  if(section==="masterplan-inventory"){
+   if(request.method!=="GET")return response({error:"Method not allowed."},405);
+   if(!canProjectClient(s.role,"project.read"))
+    return response({error:"Project read permission required."},403);
+   if(s.projectKind!=="masterplan_geo")
+    return response({error:"Only image masterplan Geo projects use this inventory."},404);
+   return response(await clientMasterplanInventory(env,s.projectId));
   }
   if(section==="commercial"||section==="pricing"||section==="deals"){
    if(!(section==="pricing"?["GET","POST"]:["GET","PUT"]).includes(request.method))

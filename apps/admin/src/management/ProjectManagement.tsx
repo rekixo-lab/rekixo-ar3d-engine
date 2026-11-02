@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import {projectClientAdminUrl} from "../../../../shared/project-client-admin-url.js";
 import "./project-management.css";
 
 type Profile = {
@@ -102,6 +103,15 @@ export default function ProjectManagement({section}:{section:Tab}){
     </>:<>
       <section className="engine-manage-card">
         <h2>Project Client Directory</h2>
+        <div className="engine-manage-client-admin-link">
+          <span>Private Client Admin for this project</span>
+          <a href={projectClientAdminUrl(slug)} target="_blank" rel="noopener noreferrer">Open Client Admin</a>
+          <button type="button" onClick={()=>void navigator.clipboard.writeText(projectClientAdminUrl(slug))}>
+            Copy Client Admin URL
+          </button>
+        </div>
+        <p>Select <strong>Client Admin</strong> as the role, add the client contact and issue its
+          one-time invitation. The client only sees the approved project and permitted modules.</p>
         <p>Directory contacts are NOT logins. A separate owner-issued, one-use invite is required
           to activate a strictly project-scoped session. Viewer can read; Editor can prepare
           private commercial facts; Approver / Client Admin can explicitly approve public listing

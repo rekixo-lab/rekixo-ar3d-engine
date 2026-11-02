@@ -60,6 +60,14 @@ function AdminRouter() {
     );
   }
 
+  // Project-specific client admin never enters the Engine Owner shell.
+  const projectClientAdmin=path.match(/^\/3Dprojects\/([a-z0-9-]+)\/client-admin$/);
+  if(projectClientAdmin){
+    return <Suspense fallback={<RouteLoading label="Opening project client admin…" />}>
+      <ProjectClientPortal projectSlug={projectClientAdmin[1]} />
+    </Suspense>;
+  }
+
   if (path === "/3Dprojects/client-portal") {
     return <Suspense fallback={<RouteLoading label="Opening secure client portal…" />}>
       <ProjectClientPortal />

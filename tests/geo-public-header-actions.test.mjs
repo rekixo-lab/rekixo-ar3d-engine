@@ -34,7 +34,7 @@ test("Admin remains a four-square dashboard icon, never a gear",()=>{
 
 test("Call uses only published Geo phone, Admin uses authenticated project route",()=>{
   assert.match(source,/const publicPhone=data\.publicContacts\?\.phone/);
-  assert.match(source,/const adminHref="\/3Dprojects\?project="\+encodeURIComponent\(slug\)/);
+  assert.match(source,/const adminHref=projectClientAdminUrl\(slug\)/);
   assert.match(header,/role="img" aria-label="Call unavailable"/);
   assert.doesNotMatch(header,/href=\{whatsappHref\}/);
   const contactStrip=source.slice(source.indexOf('className="jio-public-customer-contact"'),

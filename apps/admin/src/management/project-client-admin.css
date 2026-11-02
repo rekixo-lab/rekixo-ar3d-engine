@@ -1,0 +1,173 @@
+/* Isolated, responsive client workspace. Never inherit the Engine Owner shell. */
+.engine-client-admin {
+  min-height: 100vh;
+  box-sizing: border-box;
+  max-width: 1450px;
+  margin: 0 auto;
+  padding: clamp(12px, 2vw, 28px);
+  color: #edf7fa;
+}
+.engine-client-admin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: clamp(16px, 2.5vw, 24px);
+  border: 1px solid #274c5a;
+  border-radius: 17px;
+  background: linear-gradient(115deg, #0b2434, #102c35 80%, #0d443d);
+}
+.engine-client-admin-brand {display:flex;align-items:center;gap:14px;min-width:0}
+.engine-client-admin-brand>div{min-width:0}
+.engine-client-admin-brand small {
+  color: #70e2be;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .12em;
+}
+.engine-client-admin-brand h1 {
+  margin: 5px 0;
+  font-size: clamp(20px, 2.5vw, 28px);
+  overflow-wrap: anywhere;
+}
+.engine-client-admin-brand p {margin: 0; color: #b4cad3; font-size: 12px}
+.engine-client-admin-mark {
+  display: grid;
+  grid-template-columns: repeat(2,8px);
+  grid-template-rows: repeat(2,8px);
+  gap: 4px;
+  flex: 0 0 auto;
+  place-content: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid #4b8992;
+  border-radius: 13px;
+  background: #08212e;
+}
+.engine-client-admin-mark i {border: 1.5px solid #77e5c5; border-radius: 2px}
+.engine-client-admin-head-actions,.engine-client-admin-actions{
+  display:flex;gap:9px;align-items:center;flex-wrap:wrap;
+}
+.engine-client-admin a,
+.engine-client-admin button {
+  font: inherit;
+}
+.engine-client-admin-head-actions a,.engine-client-admin-head-actions button,
+.engine-client-admin-actions button,.engine-client-admin-signin button,
+.engine-client-admin-editor>button {
+  display:inline-flex;align-items:center;justify-content:center;
+  box-sizing:border-box;min-height:40px;padding:9px 14px;
+  border:1px solid #427c79;border-radius:10px;
+  background:#174b47;color:#f2fffb;
+  font-size:12px;font-weight:800;text-decoration:none;cursor:pointer;
+}
+.engine-client-admin a:focus-visible,
+.engine-client-admin button:focus-visible,
+.engine-client-admin input:focus-visible,
+.engine-client-admin select:focus-visible{outline:2px solid #65efba;outline-offset:2px}
+.engine-client-admin button:disabled{opacity:.5;cursor:default}
+.engine-client-admin-tabs {
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+  margin:18px 0 10px;padding:4px;
+  border:1px solid #244758;border-radius:12px;background:#0a2130;
+}
+.engine-client-admin-tabs button {
+  min-height:40px;flex:1 1 110px;
+  border:0;border-radius:9px;
+  background:transparent;color:#c2d5df;
+  font-size:13px;font-weight:750;cursor:pointer;
+}
+.engine-client-admin-tabs button.is-active {
+  background:#146648;color:#fff;box-shadow:0 3px 14px #0003;
+}
+.engine-client-admin-meta{
+  display:flex;gap:8px 25px;flex-wrap:wrap;justify-content:space-between;
+  margin:0 0 16px;color:#a7c0ce;font-size:12px;
+}
+.engine-client-admin-stats {
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:10px;margin-bottom:15px;
+}
+.engine-client-admin-stats article {
+  display:grid;gap:9px;padding:16px;
+  border:1px solid #325364;border-radius:13px;background:#0e2738;
+}
+.engine-client-admin-stats span{color:#a6c7d6;font-size:12px}
+.engine-client-admin-stats strong{color:#f1fff9;font-size:clamp(23px,2.5vw,32px);font-variant-numeric:tabular-nums}
+.engine-client-admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.engine-client-admin-card,.engine-client-admin-signin{
+  min-width:0;padding:clamp(14px,2vw,22px);
+  border:1px solid #315364;border-radius:15px;background:#0e2636;
+}
+.engine-client-admin-card h2,.engine-client-admin-signin h2 {font-size:19px;margin:0 0 12px}
+.engine-client-admin-card h3 {font-size:16px}
+.engine-client-admin-card p,.engine-client-admin-signin p {
+  color:#c0d1db;font-size:13px;line-height:1.6;
+}
+.engine-client-admin-signin {max-width:560px;margin:24px auto}
+.engine-client-admin-card-title {display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap}
+.engine-client-admin-search {min-width:175px}
+.engine-client-admin-signin label,
+.engine-client-admin-editor label,
+.engine-client-admin-search {display:grid;gap:7px;font-size:12px;color:#c7dbe4}
+.engine-client-admin input,
+.engine-client-admin select {
+  box-sizing:border-box;min-width:0;min-height:42px;
+  padding:9px 11px;border:1px solid #42677a;border-radius:9px;
+  background:#102c40;color:#ecfcff;font:inherit;
+}
+.engine-client-admin-signin form {display:grid;gap:14px}
+.engine-client-admin-plot-list {
+  display:grid;gap:7px;max-height:470px;overflow-y:auto;
+  margin:16px 0;padding:0 2px 3px;
+}
+.engine-client-admin-plot-row {
+  box-sizing:border-box;width:100%;min-width:0;min-height:45px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px 12px;text-align:left;border:1px solid #335263;
+  border-radius:9px;background:#122f40;color:#e6f5f9;font:inherit;
+}
+button.engine-client-admin-plot-row{cursor:pointer}
+button.engine-client-admin-plot-row.is-selected,
+button.engine-client-admin-plot-row:hover{border-color:#71d6ad}
+.engine-client-admin-plot-row span{font-size:12px;color:#bad0db}
+.engine-client-admin-editor {
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;
+  border-top:1px solid #365366;padding-top:15px;
+}
+.engine-client-admin-editor h3 {grid-column:1/-1;margin:0}
+.engine-client-admin-inline-check{display:flex!important;align-items:center;gap:9px}
+.engine-client-admin-inline-check input{min-height:auto;width:17px;height:17px}
+.engine-client-admin-editor>button {align-self:end}
+@media(max-width:720px) {
+  .engine-client-admin-head {align-items:flex-start;flex-direction:column;gap:15px}
+  .engine-client-admin-head-actions{width:100%}
+  .engine-client-admin-grid{grid-template-columns:minmax(0,1fr)}
+  .engine-client-admin-editor{grid-template-columns:minmax(0,1fr)}
+  .engine-client-admin-plot-row {align-items:start;flex-direction:column;gap:5px}
+}
+@media(max-width:420px){
+  .engine-client-admin{padding:9px}
+  .engine-client-admin-head{padding:13px}
+  .engine-client-admin-tabs{gap:4px}
+  .engine-client-admin-tabs button{flex-basis:80px;font-size:12px}
+  .engine-client-admin-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .engine-client-admin-stats article{padding:12px}
+}
+
+.engine-client-admin-contact {
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:13px;
+}
+.engine-client-admin-contact label{display:grid;gap:7px;font-size:12px;color:#c7dbe4}
+.engine-client-admin-contact label:nth-child(2){grid-column:1/-1}
+.engine-client-admin-contact-notice{grid-column:1/-1}
+.engine-client-admin-contact>button {
+  grid-column:1/-1;box-sizing:border-box;min-height:42px;
+  background:#145847;color:#fff;border:1px solid #5bd4a9;
+  border-radius:10px;cursor:pointer;font-weight:800
+}
+@media(max-width:640px){
+ .engine-client-admin-contact{grid-template-columns:minmax(0,1fr)}
+ .engine-client-admin-contact label:nth-child(2){grid-column:auto}
+}
