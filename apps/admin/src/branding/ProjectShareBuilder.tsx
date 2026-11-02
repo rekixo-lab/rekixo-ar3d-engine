@@ -332,8 +332,8 @@ export default function ProjectShareBuilder() {
 
   const currentShare = state?.experiences[activeExperience];
   const currentDraft = drafts[activeExperience];
-  const buildingPosterPreview = state?.experiences.building.publishedCardUrl ||
-    state?.experiences.building.draftCardPreviewUrl || "";
+  const buildingPosterPreview = state?.experiences.building.draftCardPreviewUrl ||
+    state?.experiences.building.publishedCardUrl || "";
   const cardUrl =
     activeExperience === "geo"
       ? (reuseBuildingPoster
