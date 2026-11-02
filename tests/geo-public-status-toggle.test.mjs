@@ -90,3 +90,13 @@ test("commercial facts remain approval-gated at the server, no fabricated status
   assert.doesNotMatch(viewer,/geo-plot-public-controls/);
   assert.doesNotMatch(css,/\.gm-style-cc\s*\{/);
 });
+
+test("fullscreen status has a clear gap above the bottom camera buttons without changing normal placement", () => {
+  const fullscreenRules = css.slice(css.indexOf("/* Fullscreen-only spacing:"));
+  assert.ok(fullscreenRules.startsWith("/* Fullscreen-only spacing:"));
+  assert.match(fullscreenRules, /\.geo-integrated-scene:fullscreen > \.geo-plot-status\s*\{\s*bottom:\s*calc\(68px \+ env\(safe-area-inset-bottom, 0px\)\)/);
+  assert.match(fullscreenRules, /@media \(max-width: 640px\)[\s\S]*\.geo-integrated-scene:fullscreen > \.geo-plot-status\s*\{\s*bottom:\s*calc\(66px \+ env\(safe-area-inset-bottom, 0px\)\)/);
+  assert.ok(css.includes(".geo-integrated-scene:not(:fullscreen) > .geo-plot-status{\n  bottom:34px;"));
+  assert.ok(css.includes("bottom:29px;"));
+  assert.doesNotMatch(fullscreenRules, /\.geo-camera-toolbar|\.geo-public-toolbar-slot/);
+});
