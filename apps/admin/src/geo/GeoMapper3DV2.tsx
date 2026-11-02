@@ -280,6 +280,7 @@ export default function GeoMapper3DV2() {
   const [guidedAllowScale, setGuidedAllowScale] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [dockOpen, setDockOpen] = useState(true);
+  const [showAnchorEditor, setShowAnchorEditor] = useState(false);
   const [editorTab, setEditorTab] = useState<"corners" | "fine" | "position" | "release">("corners");
   const [previewVariant, setPreviewVariant] = useState<"canonical" | "geo">("canonical");
   const [mapsApiKey, setMapsApiKey] = useState("");
@@ -901,10 +902,14 @@ export default function GeoMapper3DV2() {
               <label><span>HEIGHT MODE</span><select value={form.heightMode} onChange={(event) => patch("heightMode", event.target.value as GeoHeightMode)}><option value="ground-clamped">ground-clamped</option><option value="ground-relative">ground-relative</option><option value="absolute">absolute</option></select></label>
               <label><span>MODEL ANCHOR</span><select data-geo-model-anchor value={form.modelAnchorId} onChange={(event) => patch("modelAnchorId", event.target.value)}><option value="">Select explicit anchor</option>{state.anchors.filter((anchor) => anchor.sourceBuildingReleaseId === sourceReleaseId).map((anchor) => <option key={anchor.id} value={anchor.id}>{anchor.name} · {anchor.kind}</option>)}</select></label>
             </div>
+            <div className="geo3d-save-row"><button type="button" onClick={() => setShowAnchorEditor(value => !value)}>
+                {showAnchorEditor ? "Hide Anchor Setup" : "Add Building Anchor"}
+              </button></div>
             <div className="geo3d-save-row"><button className="geo3d-primary" disabled={busy || !previewCoordinate || !previewPlacement} onClick={() => void run(save)}>Save Geo V2 Draft</button><span>Every save advances the draft revision; verification applies only to that saved revision.</span></div>
           </section>
 
-          <section className="geo3d-form-card">
+          {(showAnchorEditor || !state.anchors.some(anchor => anchor.sourceBuildingReleaseId === sourceReleaseId)) && (
+          <section className="geo3d-form-card" data-geo-section="anchor">
             <div className="geo3d-section-head"><div><p className="eyebrow">BUILDING-LOCAL ANCHOR</p><h3>Create explicit model anchor</h3></div></div>
             <div className="geo3d-form-grid">
               <label><span>NAME</span><input value={anchorForm.name} onChange={(event) => setAnchorForm((current) => ({ ...current, name: event.target.value }))} /></label>
@@ -914,6 +919,7 @@ export default function GeoMapper3DV2() {
             <p className="geo3d-help">Coordinates are measured in the immutable Building model's canonical metre frame. Keep “Model origin / custom / 0,0,0” unless a semantic gate/corner has actually been measured; map pixels are never used to guess Building-local coordinates.</p>
             <div className="geo3d-save-row"><button disabled={busy} onClick={() => void run(createAnchor)}>Create & Select Anchor</button></div>
           </section>
+          )}
 
           <section className="geo3d-form-card geo3d-release-card">
             <div className="geo3d-section-head"><div><p className="eyebrow">VERIFY → IMMUTABLE RELEASE</p><h3>Publication gate</h3></div></div>
