@@ -18,7 +18,6 @@ export type GeoPlotDrawerCommercial = {
 
 type Props = {
   plot: GeoPlotDrawerPlot | null;
-  publicationMode: "verified" | "preliminary" | undefined;
   commercial: GeoPlotDrawerCommercial | undefined;
   projectName: string;
   publicPhone?: string;
@@ -35,7 +34,7 @@ const prettyStatus = (status: GeoPlotDrawerCommercial["status"]) =>
   status === "available" ? "Available" : status === "booked" ? "Booked" : "Sold";
 
 export function GeoPlotDetailsDrawer({
-  plot, publicationMode, commercial, projectName, publicPhone, publicWhatsappHref, onClose,
+  plot, commercial, projectName, publicPhone, publicWhatsappHref, onClose,
 }: Props) {
   const [previousPlot,setPreviousPlot] = useState<GeoPlotDrawerPlot | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -79,9 +78,9 @@ export function GeoPlotDetailsDrawer({
           <div className="geo-plot-drawer__heading">
             <span className="geo-plot-drawer__eyebrow">PLOT DETAILS</span>
             <h2>{"Plot "+shown.id}</h2>
-            <span className={"geo-plot-drawer__status geo-plot-drawer__status--"+(commercial?.status||"mapping")}>
-              {commercial?prettyStatus(commercial.status):"Mapped plot"}
-            </span>
+            {commercial?<span className={"geo-plot-drawer__status geo-plot-drawer__status--"+commercial.status}>
+              {prettyStatus(commercial.status)}
+            </span>:null}
           </div>
           <button ref={closeButtonRef} className="geo-plot-drawer__close"
             type="button" aria-label="Close plot details" onClick={onClose}>×</button>
@@ -123,7 +122,7 @@ export function GeoPlotDetailsDrawer({
               </div>
             </> : <p className="geo-plot-drawer__muted">Plot outline is unavailable.</p>}
             <small className="geo-plot-drawer__shape-note">
-              Shape follows the published 3D mapping; dimensions are shown only from approved sources.
+              Shape and dimensions are taken from the published plot mapping.
             </small>
           </section>
           <section className="geo-plot-drawer__facts" aria-label="Plot measurements and status">
@@ -133,9 +132,7 @@ export function GeoPlotDetailsDrawer({
                 <span>{area.label}</span>
                 <b>{formatMeasurement(area.value,area.unit)}</b>
               </div>
-            ) : <div className="geo-plot-drawer__fact">
-              <span>Verified plot area</span><b>Awaiting source approval</b>
-            </div>}
+) : null}
             {allRoles.map(role=>{
               const side=shown.sides[role];
               if(!side||!(side.length>0))return null;
@@ -153,12 +150,6 @@ export function GeoPlotDetailsDrawer({
             {approvedPrice?<div className="geo-plot-drawer__fact">
               <span>Approved price</span><b>{approvedPrice}</b>
             </div>:null}
-            {!commercial?<p className="geo-plot-drawer__muted">
-              Availability and price appear only after verified mapping and owner approval.
-            </p>:null}
-            {publicationMode==="preliminary"?<p className="geo-plot-drawer__review-note">
-              Preliminary boundary: only individually reviewed measurements and directions can be shown.
-            </p>:null}
             {shown.notes?<p className="geo-plot-drawer__notes">{shown.notes}</p>:null}
           </section>
           {callHref||whatsappHref?<nav className="geo-plot-drawer__contact" aria-label="Published project contact actions">
