@@ -5,7 +5,7 @@ import test from "node:test";
 const geoApp = await readFile(new URL("../apps/public/src/geo/GeoPublicDemo.tsx", import.meta.url), "utf8");
 const geoStyles = await readFile(new URL("../apps/public/src/geo/geo-public-demo.css", import.meta.url), "utf8");
 
-test("Geo customer header keeps only the project logo, name, and subtitle", () => {
+test("Geo customer header keeps project branding and icon-only quick actions", () => {
   const headerStart = geoApp.indexOf('<header className="jio-public-header">');
   const headerEnd = geoApp.indexOf("</header>", headerStart);
   assert.ok(headerStart >= 0 && headerEnd > headerStart, "Geo project header must exist");
@@ -15,7 +15,9 @@ test("Geo customer header keeps only the project logo, name, and subtitle", () =
   assert.match(header, /className="jio-public-project-logo"/);
   assert.match(header, /<h1>\{data\.project\.name\}<\/h1>/);
   assert.match(header, /data\.project\.location \|\| "Rekixo AR3D Engine"/);
-  assert.doesNotMatch(header, /INTEGRATED 3D GEO EXPERIENCE|Enter building|Open location|jio-public-header-actions/);
+  assert.match(header, /className="jio-public-header-actions"/);
+  assert.doesNotMatch(header, /INTEGRATED 3D GEO EXPERIENCE|Enter building|Open location/);
+  assert.doesNotMatch(header, />\s*(?:Call|WhatsApp|Admin Panel)\s*<\/a>/);
   assert.doesNotMatch(geoApp, /const mapsUrl\s*=/);
 });
 
