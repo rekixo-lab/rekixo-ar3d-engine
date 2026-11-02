@@ -54,7 +54,7 @@ export async function provisionProjectClient(env,actor,project,body,request){
  if(!origin.startsWith("https://"))throw Error("Client invitation requires HTTPS.");
  return {clientId:client.id,role:client.proposed_role,expiresAt:expires,
    // Fragment is not sent in HTTP requests, proxy logs or Referer headers.
-   inviteUrl:origin+projectClientAdminPath(project.slug)+"#invite="+token};
+   inviteUrl:projectClientAdminUrl(project.slug)+"#invite="+token};
 }
 export async function revokeProjectClient(env,actor,project,body){
  if(!identity(body?.id))throw Error("Valid project client required.");
