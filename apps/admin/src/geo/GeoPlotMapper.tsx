@@ -1045,9 +1045,11 @@ export default function GeoPlotMapper(){
         if(modern && facingFlag && !["true","false"].includes(facingFlag.toLowerCase()))
           throw Error("Plot "+p.id+": invalid road-facing flag.");
         const roadFacing=modern && facingFlag?facingFlag.toLowerCase()==="true":item.roadFacing;
+        const directionColumnPresent=Object.hasOwn(v,prefix+"facingdirection");
         side[role]={...item,length,unit:unit as Side["unit"],source,verified:false,
-          roadFacing,facingDirection:roadFacing&&facingDirection?
-            facingDirection as GeoDirection:item.facingDirection};
+          roadFacing,facingDirection:modern&&directionColumnPresent?
+            (roadFacing&&facingDirection?facingDirection as GeoDirection:undefined):
+            (roadFacing?item.facingDirection:undefined)};
       }
       const area=Number(v.area),areaunit=v.areaunit;
       if(!Number.isFinite(area)||area<=0||!["sqft","sqm","sqyd"].includes(areaunit))
