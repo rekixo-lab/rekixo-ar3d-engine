@@ -36,7 +36,7 @@ Audited 2026-11-02 against
 | Sale/payment ledger | Role-gated accounting | **Not yet available to client**; Engine Owner ledger remains private |
 | Booking customer/broker details | Client details | **Not yet available to client** |
 | Gallery images | Upload/delete | **Not yet available** |
-| Customer contact editing | Whitelisted | **Not yet available**; Engine Owner canonical profile remains owner-only |
+| Customer contact editing | Whitelisted | Client Admin-only customer-facing fields with revision and audit; Owner identity and public-consent remain restricted |
 | Plot notices | Optional drafts/publish | **Not yet available** |
 | Email/mobile password login | Yes | **Not yet available**; current 24h one-time invitation and 8h session |
 | Password reset & forced rotation | Yes | **Not yet available**; Owner can revoke or reissue invite |
@@ -53,9 +53,9 @@ Audited 2026-11-02 against
   the Image Geo masterplan financial ledger. Build a separate role-controlled
   client API, version checks, transaction/audit rows and cash reconciliation
   before any buyer, payment or confirmed-sale writes.
-- **Contacts:** add a narrow client-editable whitelist (not project owner, mapping
-  source, consent, publishing or branding) plus revision safety and public
-  display review; don't use the Engine Owner /manage endpoint.
+- **Contacts:** client-only narrow field whitelist and revision-safe writes are in
+  this PR. Owner must still approve public contact visibility and initialize profile;
+  validate on live devices before broader roles can edit.
 - **Gallery:** project-owned R2 keys, file/MIME/size limits, at-rest visibility,
   safe deletion, audit trail and public rendering rules.
 - **Notices:** draft/review/publish permissions, event audit and project-bound
