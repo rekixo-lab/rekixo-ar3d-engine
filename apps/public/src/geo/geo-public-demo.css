@@ -10,9 +10,18 @@
 
 .jio-public-branding {
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: 10px;
+  overflow: hidden;
+}
+.jio-public-branding > div { min-width: 0; overflow: hidden; }
+.jio-public-branding h1,
+.jio-public-branding h1 + p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .jio-public-project-logo {
   width: 42px;
@@ -34,7 +43,7 @@
   padding: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 10px;
   overflow: visible;
   border: 0 !important;
@@ -42,6 +51,54 @@
   background: transparent !important;
   box-shadow: none !important;
 }
+/* The three public quick actions are icons only, in Call / WhatsApp /
+   Admin order. They stay opposite the project title at every width. */
+.jio-public-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.jio-public-header-action {
+  box-sizing: border-box;
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border: 1px solid #286377;
+  border-radius: 11px;
+  background: rgba(9, 34, 48, .92);
+  color: #c5f1ff;
+  text-decoration: none;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.jio-public-header-action svg { width: 22px; height: 22px; flex: 0 0 22px; }
+.jio-public-header-action--whatsapp { color: #41e68b; }
+.jio-public-header-action--admin { color: #e0f4ff; }
+.jio-public-header-action.is-unavailable {
+  opacity: .42;
+  cursor: not-allowed;
+}
+.jio-public-header-action:not(.is-unavailable):hover {
+  border-color: #63d6c1;
+  background: #114253;
+}
+.jio-public-header-action:focus-visible {
+  outline: 2px solid #83ffe1;
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .jio-public-header-actions { gap: 4px; }
+}
+
 .jio-public-header::before,
 .jio-public-header::after {
   display: none !important;
