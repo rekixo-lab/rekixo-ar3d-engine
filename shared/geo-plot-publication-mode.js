@@ -27,7 +27,10 @@ export function publicGeoPlotFacts(plot,mode){
       edges:Array.isArray(side.edges)?side.edges.filter(
         n=>Number.isInteger(n)&&n>=0&&n<plot.corners.length
       ):[],
-      length:side.length,unit:side.unit,roadFacing:side.roadFacing===true
+      length:side.length,unit:side.unit,roadFacing:side.roadFacing===true,
+      ...(side.roadFacing===true&&typeof side.facingDirection==="string"&&
+         ["north","north-east","east","south-east","south","south-west","west","north-west"]
+           .includes(side.facingDirection)?{facingDirection:side.facingDirection}:{})
     };
   }
   const facing=typeof plot.facing==="string"&&plot.facing.trim()
