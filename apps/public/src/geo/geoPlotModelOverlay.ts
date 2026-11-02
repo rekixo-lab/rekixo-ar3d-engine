@@ -112,17 +112,18 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
   ray.near=0;
   ray.far=Math.max(10,bounds.getSize(new THREE.Vector3()).y+10);
   const fillMaterial=new THREE.MeshBasicMaterial({
-    color:PLOT_COLOR,transparent:true,opacity:.12,side:THREE.DoubleSide,
+    color:PLOT_COLOR,transparent:true,opacity:0,side:THREE.DoubleSide,
     // Keep the model's real depth buffer: a plot behind a 3D wall MUST be
     // occluded in Overview, Front and Corner. Disabling depthTest drew these
     // lines through and beyond boundary walls at steep camera tilts.
     depthTest:true,depthWrite:false
   });
   const strokeMaterial=new THREE.LineBasicMaterial({
-    color:PLOT_COLOR,transparent:true,opacity:.96,depthTest:true,depthWrite:false
+    color:PLOT_COLOR,transparent:true,opacity:0,depthTest:true,depthWrite:false
   });
   // Reuse one material pair for each state, not one allocation per polygon.
-  // The neutral layer remains exactly the original GLB-anchored plot display.
+  // Keep the map visually natural when status is OFF, while transparent hit
+  // meshes still receive normal model-local plot clicks and open the drawer.
   const tinted=(color:number,fillOpacity:number,strokeOpacity:number)=>{
     const fill=fillMaterial.clone();
     fill.color.setHex(color);
@@ -134,11 +135,11 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
   };
   const palette={
     neutral:{fill:fillMaterial,stroke:strokeMaterial},
-    available:tinted(0x1cd680,.20,.96),
-    booked:tinted(0xf2bf25,.21,.96),
-    sold:tinted(0xf04b58,.23,.97),
-    unknown:tinted(0x90abb3,.035,.54),
-    dim:tinted(0x708891,.003,.10)
+    available:tinted(0x1cd680,.44,.96),
+    booked:tinted(0xf2bf25,.52,.96),
+    sold:tinted(0xf04b58,.58,.97),
+    // When one status filter is selected, hide other fills entirely.
+    dim:tinted(0x708891,0,0)
   };
   const plotVisuals=new Map<string,{fill:THREE.Mesh;outline:THREE.LineLoop}>();
   for(const plot of plots){
@@ -163,10 +164,10 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
       for(const [id,parts] of plotVisuals){
         const value=Object.prototype.hasOwnProperty.call(approved,id)?approved[id]:undefined;
         const valid=value==="available"||value==="booked"||value==="sold"
-          ?value:null;
+          ?value:"available";
         const style=!enabled?palette.neutral
           :filter&&valid!==filter?palette.dim
-          :valid?palette[valid]:palette.unknown;
+          :palette[valid];
         parts.fill.material=style.fill;
         parts.outline.material=style.stroke;
       }
