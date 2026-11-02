@@ -32,8 +32,8 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: "npm run dev:public",
-      url: "http://127.0.0.1:5174/3Dprojects/demo-a/client-admin",
+      command: "npm run dev:e2e --workspace @rekixo/3d-public",
+      url: "http://127.0.0.1:5184/3Dprojects/demo-a/client-admin",
       reuseExistingServer: false,
       timeout: 120_000,
     },
