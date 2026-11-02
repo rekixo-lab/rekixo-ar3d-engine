@@ -17,7 +17,8 @@ test("Public Geo defaults to vector satellite with only custom zoom/fullscreen c
   assert.match(mapOptions,/disableDefaultUI:\s*true/);
   assert.match(mapOptions,/keyboardShortcuts:\s*false/);
   assert.match(mapOptions,/mapTypeControl:\s*false/);
-  assert.match(mapOptions,/gestureHandling:\s*"greedy"/);
+  assert.match(mapOptions,/gestureHandling:\s*touchCapable \? "cooperative" : "greedy"/);
+  assert.match(viewer,/touchHost\?\.addEventListener\("touchmove",touchOrbit\.onTouchMove/);
   assert.match(mapActions,/aria-label="Zoom out 2×"/);
   assert.match(mapActions,/aria-label="Zoom in 2×"/);
   assert.match(mapActions,/aria-label="Toggle Geo fullscreen"/);
