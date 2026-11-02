@@ -21,6 +21,9 @@ test("Geo status opens upward without background cards at mobile and desktop siz
         </button>
       </section></main></body></html>`);
     await page.addStyleTag({content:geoCss});
+    // Styles are injected after markup in this fixture: wait for the initial
+    // visibility transition from the unstyled DOM before checking OFF state.
+    await expect(page.locator(".geo-plot-status-options")).toBeHidden();
     const before=await page.evaluate(()=>{
       const s=document.querySelector("main").getBoundingClientRect();
       const b=document.querySelector(".geo-plot-status-toggle").getBoundingClientRect();
