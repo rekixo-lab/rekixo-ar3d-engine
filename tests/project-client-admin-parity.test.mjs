@@ -11,13 +11,14 @@ test("Personal Client Admin uses isolated canonical project-scoped path",()=>{
  assert.throws(()=>projectClientAdminUrl("../logout"),/Invalid project/);
  const routes=read("apps/admin/src/main.tsx");
  assert.match(routes,/projectClientAdmin=path.match/);
- assert.match(routes,/ProjectClientPortal projectSlug=\{projectClientAdmin\[1\]\}/);
+ assert.match(routes,/ClientAdminRedirect slug=\{projectClientAdmin\[1\]\}/);
  assert.ok(routes.indexOf("projectClientAdmin=path.match")<
   routes.indexOf('path === "/3Dprojects/login"'));
  const owner=read("apps/admin/src/layout/EngineAdminShell.tsx");
  assert.doesNotMatch(routes.slice(routes.indexOf("projectClientAdmin=path.match"),
   routes.indexOf('path === "/3Dprojects/client-portal"')),/<EngineAdminShell/);
  assert.match(owner,/session\(\)/);
+ assert.match(routes,/window.location.replace\(projectClientAdminUrl\(slug\)\+window.location.hash\)/);
 });
 test("Owner creates invites, customer Geo and masterplan link to Client Admin rather than owner",()=>{
  const access=read("workers/project-client-access.mjs");
