@@ -794,20 +794,16 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           <div className="geo-plot-status-total">
             <span>Total Plots</span><b>{statusSummary.total}</b>
           </div>
-          {statusSummary.pending>0&&<small className="geo-plot-status-pending">
-            {statusSummary.approved===0?"Status pending verification"
-              :`${statusSummary.pending} statuses pending verification`}
-          </small>}
         </div>
         <button type="button" className="geo-plot-status-toggle"
           aria-controls="geo-plot-status-options" aria-expanded={statusEnabled}
           aria-pressed={statusEnabled}
+          aria-label={statusEnabled?"Hide plot status":"Show plot status"}
           onClick={()=>{
             if(statusEnabled)setStatusFilter(null);
             setStatusEnabled(open=>!open);
           }}>
           <span>STATUS</span>
-          <span className="geo-plot-status-toggle-state">{statusEnabled?"ON":"OFF"}</span>
           <span className="geo-plot-status-switch" aria-hidden="true"><i/></span>
         </button>
       </section>}

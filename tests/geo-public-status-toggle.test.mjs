@@ -49,7 +49,14 @@ test("Status toggle is bottom-left, OFF by default, animated without option back
   assert.match(viewer,/if\(statusEnabled\)setStatusFilter\(null\)/);
   assert.match(viewer,/statusSummary\.total/);
   assert.match(viewer,/statusSummary\.approved===0\?"—"/);
-  assert.match(viewer,/Status pending verification/);
+  assert.doesNotMatch(viewer,/Status pending verification|statuses pending verification/);
+  assert.doesNotMatch(viewer,/geo-plot-status-toggle-state|geo-plot-status-pending/);
+  assert.match(viewer,/aria-label=\{statusEnabled\?"Hide plot status":"Show plot status"\}/);
+  assert.match(viewer,/statusSummary\.approved===0\?"—"/);
+  assert.match(css,/\.geo-public-toolbar-slot\{[^}]*background:transparent !important/);
+  assert.ok(css.includes(".geo-integrated-scene:not(:fullscreen) > .geo-plot-status"));
+  assert.match(css,/bottom:34px;[\s\S]*?bottom:29px;/);
+  assert.doesNotMatch(css,/\.geo-plot-status-toggle-state\{|\.geo-plot-status-pending\{/);
   assert.match(css,/\.geo-plot-status\{[^}]*left:12px;bottom:58px/);
   assert.match(css,/\.geo-plot-status-options\{[^}]*background:transparent/);
   assert.match(css,/\.geo-plot-status-option\{[^}]*background:transparent/);

@@ -52,7 +52,7 @@ test("Geo camera controls are fixed to the viewport bottom with mobile safe-area
   assert.ok(geoStyles.includes("grid-template-columns: repeat(4, minmax(0, 1fr))"));
 });
 
-test("normal camera row spans available width without a panel or button pills", () => {
+test("normal Geo camera row has four independent rounded buttons and no outer panel", () => {
   const transparentRow = geoStyles.slice(geoStyles.indexOf("/* Transparent, full-width camera controls:"));
   assert.match(transparentRow, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(transparentRow, /width:\s*100% !important/);
@@ -61,6 +61,14 @@ test("normal camera row spans available width without a panel or button pills", 
   assert.match(transparentRow, /background:\s*transparent !important/);
   assert.match(transparentRow, /box-shadow:\s*none !important/);
   assert.match(transparentRow, /button\.is-active::after/);
+  const polished = geoStyles.slice(geoStyles.lastIndexOf("/* Customer Geo: independent rounded camera controls"));
+  assert.ok(polished.length > 300);
+  assert.match(polished, /\.geo-public-toolbar-slot\{[\s\S]*background:transparent !important/);
+  assert.match(polished, /\.geo-public-toolbar-slot > \.geo-camera-toolbar--normal-row\{[\s\S]*background:transparent !important/);
+  assert.match(polished, /\.geo-camera-toolbar--normal-row button\{[\s\S]*border-radius:10px !important/);
+  assert.match(polished, /\.geo-camera-toolbar--normal-row button\.is-active\{[\s\S]*border-radius:10px !important/);
+  assert.match(polished, /\.geo-camera-toolbar--normal-row button\.is-active::after\{[\s\S]*display:none/);
+  assert.doesNotMatch(polished, /\.geo-camera-toolbar--fullscreen-clone/);
 });
 
 
