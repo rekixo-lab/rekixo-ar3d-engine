@@ -46,7 +46,7 @@ export function assignVisiblePlotEdge(plot,role,edge,{extend=false}={}){
     const current=Array.isArray(side.edges)?side.edges.filter(x=>x!==edge):[];
     sides[key]={...side,edges:current,verified:false,
       facingDirection:current.length===side.edges?.length?side.facingDirection:undefined,
-      roadFacing:key==="front"&&current.length>0?Boolean(side.roadFacing):false};
+      roadFacing:current.length>0?Boolean(side.roadFacing):false};
   }
   const target=sides[role];
   const old=Array.isArray(before[role]?.edges)?before[role].edges:[];
@@ -63,7 +63,8 @@ export function assignVisiblePlotEdge(plot,role,edge,{extend=false}={}){
       edges=[edge,...target.edges];
     }else throw Error("Add connected side edges in sequence; avoid disconnected chains.");
   }
-  sides[role]={...target,edges,roadFacing:role==="front",
+  sides[role]={...target,edges,
+    roadFacing:role==="front"||Boolean(before[role]?.roadFacing),
     facingDirection:undefined,verified:false};
   return {...plot,sides,facingVerified:false};
 }
