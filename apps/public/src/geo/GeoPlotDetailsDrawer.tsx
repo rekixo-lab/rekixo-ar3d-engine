@@ -67,7 +67,7 @@ export function GeoPlotDetailsDrawer({
     ? publicWhatsappHref+"?text="+encodeURIComponent("Hello, I would like details about Plot "+shown.id+" in "+projectName+".")
     : "";
   const price=commercial?.pricePaise;
-  const approvedPrice=Number.isSafeInteger(price)&&price!==null&&price>0
+  const approvedPrice=typeof price==="number"&&Number.isSafeInteger(price)&&price>0
     ?new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0})
       .format(price/100):"";
   return (
