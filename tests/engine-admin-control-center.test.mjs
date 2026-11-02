@@ -41,7 +41,7 @@ test("Geo uses exactly one mapping editor without duplicate outer step menus", (
   assert.doesNotMatch(geo, /geo-control-flow|MutationObserver/);
   assert.match(mapper, /Save Geo V2 Draft/);
   assert.match(mapper, /Verify Current Preview/);
-  assert.match(mapper, /Publish Immutable Geo Release/);
+  assert.match(mapper, /Publish Update/);
 });
 
 test("Building, Releases and Advanced separate operator concerns", () => {
