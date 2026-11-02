@@ -268,7 +268,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
         </label>
         <label>Password
           <span className="engine-client-admin-password-field">
-            <input type={showPassword?"text":"password"} autoComplete="current-password"
+            <input aria-label="Password" type={showPassword?"text":"password"} autoComplete="current-password"
               value={password} maxLength={128} required placeholder="Enter password"
               onChange={e=>setPassword(e.target.value)}/>
             <button type="button" aria-label={showPassword?"Hide password":"Show password"}
