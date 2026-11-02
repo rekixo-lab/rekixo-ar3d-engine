@@ -103,7 +103,8 @@ function geometrySideLengthMetres(points:Point[],edges:number[],geoScale:number)
   },0);
 }
 function facingFromGeo(points:Point[],edges:number[],heading:number) {
-  return suggestGeoSideFacing(points,edges,heading)||"north";
+  // Never invent North when the selected road edge cannot be resolved.
+  return suggestGeoSideFacing(points,edges,heading);
 }
 async function callApi<T>(url:string,init?:RequestInit):Promise<T> {
   const r=await fetch(url,{cache:"no-store",...init,headers:{"Accept":"application/json",...init?.headers}});
@@ -1734,6 +1735,7 @@ export default function GeoPlotMapper(){
             onClick={()=>setWorking(p=>{
               if(!p)return p;
               const facing=facingFromGeo(p.corners,p.sides.front?.edges||[],geo?.placement.headingDeg||0);
+              if(!facing)return p;
               return {...p,facing,facingVerified:false,
                 sides:{...p.sides,...(p.sides.front?{
                   front:{...p.sides.front,facingDirection:undefined}
