@@ -33,16 +33,19 @@ test("mobile camera buttons fit four columns with transparent controls and no ou
   assert.match(publicCss, /\.jio-public-project-logo\s*\{\s*width:\s*25px;\s*height:\s*25px;/);
 });
 
-test("fullscreen camera controls remain visible as high-contrast buttons in one row", () => {
-  const fullscreenStyles = css.slice(css.indexOf("/* Fullscreen controls intentionally retain the original high-contrast button"));
-  assert.match(fullscreenStyles, /\.geo-camera-toolbar--fullscreen-clone\s*\{[\s\S]*display:\s*flex\s*!important/);
-  assert.match(fullscreenStyles, /flex-flow:\s*row nowrap\s*!important/);
-  assert.match(fullscreenStyles, /visibility:\s*visible\s*!important/);
-  assert.match(fullscreenStyles, /opacity:\s*1\s*!important/);
-  assert.match(fullscreenStyles, /background:\s*rgba\(5, 18, 27, \.76\)\s*!important/);
-  assert.match(fullscreenStyles, /\.geo-camera-toolbar--fullscreen-clone button,[\s\S]*border:\s*1px solid/);
-  assert.match(fullscreenStyles, /\.geo-camera-toolbar--fullscreen-clone button,[\s\S]*background:\s*rgba\(8, 22, 32, \.88\)\s*!important/);
-  assert.match(fullscreenStyles, /@media \(max-width: 640px\)[\s\S]*\.geo-camera-toolbar--fullscreen-clone button,[\s\S]*flex:\s*1 1 0\s*!important/);
+test("fullscreen camera controls have no outer panel and four separate rounded buttons", () => {
+  const fullscreenStyles = css.slice(css.indexOf("/* Geo fullscreen: four independent, rounded camera buttons"));
+  assert.match(fullscreenStyles, /\\.geo-integrated-scene:fullscreen \\.geo-camera-toolbar--fullscreen-clone\\s*\\{[\\s\\S]*display:\\s*grid\\s*!important/);
+  assert.match(fullscreenStyles, /grid-template-columns:\\s*repeat\\(4, minmax\\(0, 1fr\\)\\)/);
+  assert.match(fullscreenStyles, /gap:\\s*clamp\\(5px, 1vw, 11px\\)/);
+  assert.match(fullscreenStyles, /padding:\\s*0 !important;[\\s\\S]*border:\\s*0 !important;[\\s\\S]*background:\\s*transparent !important;/);
+  assert.match(fullscreenStyles, /box-shadow:\\s*none !important;[\\s\\S]*backdrop-filter:\\s*none !important;/);
+  assert.match(fullscreenStyles, /\\.geo-integrated-scene:fullscreen \\.geo-camera-toolbar--fullscreen-clone button\\s*\\{[\\s\\S]*border-radius:\\s*10px !important/);
+  assert.match(fullscreenStyles, /button:hover,[\\s\\S]*button:focus-visible[\\s\\S]*border-radius:\\s*10px !important/);
+  assert.match(fullscreenStyles, /button\\.is-active\\s*\\{[\\s\\S]*border-radius:\\s*10px !important/);
+  assert.match(fullscreenStyles, /button\\.is-active::after\\s*\\{[\\s\\S]*display:\\s*none !important/);
+  assert.match(fullscreenStyles, /button:focus-visible\\s*\\{[\\s\\S]*box-shadow:\\s*0 0 0 2px/);
+  assert.match(fullscreenStyles, /@media \\(max-width: 640px\\)[\\s\\S]*gap:\\s*5px !important/);
 });
 
 test("fullscreen bridge is lazy-loaded only for public Geo routes", () => {
