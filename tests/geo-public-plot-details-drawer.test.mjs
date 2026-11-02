@@ -68,23 +68,26 @@ test("display area comes only from approved public source area and converts unit
   assert.deepEqual(publicGeoAreaUnits({value:99,unit:"modelUnits"}),[]);
 });
 
-test("preliminary public state displays no unreviewed area, sides, facing, road or private notes",()=>{
+test("preliminary public view retains mapped dimensions without exposing internal source notes",()=>{
   const preliminary=publicGeoPlotFacts(mapped,"preliminary");
   assert.equal(preliminary.area?.value,1000);
   assert.equal(preliminary.facing,"north");
   assert.equal(preliminary.road,"30 ft road");
   assert.equal(preliminary.notes,"");
   assert.equal(preliminary.sides.front.edges[0],0);
-  assert.equal(preliminary.sides.back,undefined);
-  assert.ok(publicGeoPlotDiagram(preliminary).sides.every(s=>s.role!=="back"));
+  assert.equal(preliminary.sides.back.length,25);
+  assert.deepEqual(publicGeoPlotDiagram(preliminary).sides.map(s=>s.role),
+    ["front","back","depthA","depthB"]);
   const noReview=publicGeoPlotFacts({...mapped,area:{...mapped.area,verified:false},
     facingVerified:false,sides:Object.fromEntries(Object.entries(mapped.sides)
       .map(([role,side])=>[role,{...side,verified:false}]))},"preliminary");
-  assert.deepEqual(publicGeoAreaUnits(noReview.area),[]);
-  assert.deepEqual(publicGeoPlotDiagram(noReview).sides,[]);
-  assert.equal(noReview.facing,null);
-  assert.equal(noReview.road,null);
+  assert.equal(publicGeoAreaUnits(noReview.area).length,3);
+  assert.equal(publicGeoPlotDiagram(noReview).sides.length,4);
+  assert.equal(noReview.facing,"north");
+  assert.equal(noReview.road,"30 ft road");
   assert.equal(noReview.notes,"");
+  assert.equal(noReview.area?.source,undefined);
+  assert.equal(noReview.sides.front.source,undefined);
 });
 
 test("drawer only changes presentation, preserving click hit testing and camera map flow",()=>{
@@ -97,8 +100,8 @@ test("drawer only changes presentation, preserving click hit testing and camera 
   assert.doesNotMatch(parent,/geo-plot-public-details--status-open/);
   assert.match(drawer,/publicGeoPlotDiagram\(shown\)/);
   assert.match(drawer,/publicGeoAreaUnits\(shown\.area\)/);
-  assert.match(drawer,/commercial\?prettyStatus\(commercial\.status\):"Mapped plot"/);
-  assert.match(drawer,/publicationMode==="preliminary"/);
+  assert.match(drawer,/commercial\?<span/);
+  assert.doesNotMatch(drawer,/publicationMode==="preliminary"/);
   assert.match(drawer,/publicPhone/);
   assert.match(drawer,/publicWhatsappHref/);
   assert.match(drawer,/aria-hidden=\{!plot\} inert=\{!plot\}/);
@@ -116,8 +119,8 @@ test("plot drawer fills map from left/top/bottom while retaining the right strip
   assert.match(css,/mask-image:linear-gradient\(to bottom,#000 0,#000 calc\(100% - 30px\),transparent/);
   assert.match(css,/\.geo-integrated-scene:fullscreen > \.geo-plot-drawer \{[\s\S]*top:0;[\s\S]*bottom:0;[\s\S]*left:0;/);
   assert.match(css,/\.geo-integrated-scene:fullscreen > \.geo-plot-drawer \.geo-plot-drawer__scroll \{[\s\S]*padding-bottom:calc\(94px \+ env\(safe-area-inset-bottom,0px\)\)/);
-  assert.match(css,/\.geo-integrated-scene:has\(> \.geo-plot-drawer\.is-open\) > \.geo-map-quick-actions \{[\s\S]*z-index:20;/);
-  assert.match(css,/\.geo-plot-drawer__head\{padding:60px 12px 10px\}/);
+  assert.doesNotMatch(css,/\.geo-integrated-scene:has\(> \.geo-plot-drawer\.is-open\) > \.geo-map-quick-actions \{/);
+  assert.match(css,/\.geo-plot-drawer__head\{padding:12px 12px 10px\}/);
   assert.match(css,/transform:translate3d\(calc\(-100% - 16px\),0,0\)/);
   assert.match(css,/transition:transform \.26s/);
   assert.match(css,/:has\(> \.geo-plot-drawer\.is-open\) > \.geo-plot-status/);
@@ -126,9 +129,16 @@ test("plot drawer fills map from left/top/bottom while retaining the right strip
 });
 
 
-test("unapproved customer facts are explained without suggesting the entire site is unpublished",()=>{
-  assert.match(drawer,/Awaiting source approval/);
-  assert.match(drawer,/Preliminary boundary: only individually reviewed measurements/);
-  assert.match(drawer,/Availability and price appear only after verified mapping and owner approval/);
-  assert.doesNotMatch(drawer,/<b>Not published<\/b>/);
+test("customer shows entered fields only, without nil or approval banners",()=>{
+  assert.doesNotMatch(drawer,/Awaiting source approval|Not published|Preliminary boundary/);
+  assert.doesNotMatch(drawer,/not independently approved|approval is needed|commercial status and price are/);
+  assert.doesNotMatch(drawer,/Mapped plot"\}/);
+  assert.match(drawer,/Shape and dimensions are taken from the published plot mapping/);
+  assert.match(drawer,/areas.length \? areas.map/);
+  assert.match(drawer,/\) : null\}/);
+  assert.match(css,/\.geo-plot-drawer__head\{padding:12px 12px 10px\}/);
+  assert.match(css,/\.gm-style::after\s*\{[\s\S]*background:#071c27;/);
+  assert.match(css,/\.gm-style-cc,/);
+  assert.match(css,/z-index:101 !important/);
 });
+
