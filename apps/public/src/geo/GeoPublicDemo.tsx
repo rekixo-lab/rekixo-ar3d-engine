@@ -925,7 +925,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
               }
               onClick={()=>{
                 setCameraView(view.id);
-                if(closeupMode)closeupControlRef.current?.preset(view.id);
+                if(closeupMode)closeupControlRef.current?.preset(view.id==="entry"?"front":view.id);
                 else cameraActionRef.current?.(view.id);
               }}
             >
