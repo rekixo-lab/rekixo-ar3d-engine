@@ -13,6 +13,8 @@ import { clientViewerCapabilities } from "./clientPresentation";
 
 const GeoPublicDemo = lazy(() => import("./geo/GeoPublicDemo"));
 const MasterplanPublic = lazy(() => import("./masterplan/MasterplanPublic"));
+// The customer-host Client Admin is bundled from apps/admin. Its JSX, shared
+// management styles and Geo subcomponents must also trigger Public deployments.
 const ProjectClientAdmin = lazy(() => import("../../admin/src/management/ProjectClientPortal"));
 const loadViewer3D = () => import("./viewer/Viewer3D");
 const Viewer3D = lazy(() => loadViewer3D().then((module) => ({ default: module.Viewer3D })));
