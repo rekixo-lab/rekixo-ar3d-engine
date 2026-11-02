@@ -25,6 +25,7 @@ type Props = {
   publicPhone?: string;
   publicWhatsappHref?: string;
   onClose: () => void;
+  onFocusPlot?: () => void;
 };
 const sideNames: Record<string,string> = {
   front: "Front", back: "Back", depthA: "Depth A", depthB: "Depth B",
@@ -36,7 +37,7 @@ const prettyStatus = (status: GeoPlotDrawerCommercial["status"]) =>
   status === "available" ? "Available" : status === "booked" ? "Booked" : "Sold";
 
 export function GeoPlotDetailsDrawer({
-  plot, commercial, projectName, geoHeadingDeg, publicPhone, publicWhatsappHref, onClose,
+  plot, commercial, projectName, geoHeadingDeg, publicPhone, publicWhatsappHref, onClose, onFocusPlot,
 }: Props) {
   const [previousPlot,setPreviousPlot] = useState<GeoPlotDrawerPlot | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -106,6 +107,8 @@ export function GeoPlotDetailsDrawer({
               <span className={"geo-plot-drawer__status geo-plot-drawer__status--"+displayStatus}>
                 {prettyStatus(displayStatus)}
               </span>
+              {onFocusPlot&&<button type="button" className="geo-plot-drawer__focus"
+                onClick={onFocusPlot}>Focus 3D</button>}
             </div>
             {diagram ? <>
               <svg viewBox="0 0 320 210" className="geo-plot-drawer__svg"
