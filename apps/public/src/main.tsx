@@ -790,6 +790,7 @@ const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root mount node");
 const geoRoute = /^\/3Dprojects\/[^/]+\/geo\/?$/.test(window.location.pathname);
 const masterplanRoute = /^\/3Dprojects\/[^/]+\/masterplan\/?$/.test(window.location.pathname);
+const clientAdminMatch = window.location.pathname.match(/^\/3Dprojects\/([a-z0-9]+(?:-[a-z0-9]+)*)\/client-admin\/?$/);
 createRoot(root).render(
   <React.StrictMode>
     <Suspense fallback={<LoadingPage />}>
