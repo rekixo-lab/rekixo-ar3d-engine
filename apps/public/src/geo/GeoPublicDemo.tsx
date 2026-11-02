@@ -10,6 +10,7 @@ import { loadPublicBranding, type PublicProjectBranding } from "../branding";
 import { GeoPlotDetailsDrawer, type GeoPlotDrawerPlot } from "./GeoPlotDetailsDrawer";
 import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shared/geo-plot-viewport.js";
 import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
+import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
 import "./geo-public-demo.css";
 
 type GeoCoordinate = {
@@ -108,6 +109,8 @@ type GoogleMap = {
   setCenter(position: { lat: number; lng: number }): void;
   setZoom(zoom: number): void;
   moveCamera?(options: Record<string, unknown>): void;
+  getHeading?():number|undefined;
+  setHeading?(heading:number):void;
   getRenderingType?(): string;
   getMapCapabilities?(): MapCapabilities;
   getMapTypeId?(): string;
@@ -369,6 +372,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
     let pointerHost:HTMLDivElement|null=null;
     let onNativePointerDown:((event:PointerEvent)=>void)|null=null;
     let onNativePointerUp:((event:PointerEvent)=>void)|null=null;
+    let touchHost:HTMLDivElement|null=null;
+    let touchOrbit:GeoOrbitController|null=null;
     let plotLayer:ModelPlotLayer|null=null;
     let latestProjection:THREE.Matrix4|null=null;
     const plotIds=new Map((data.plotMapping?.plots||[]).map(plot=>[plot.id,plot]));
@@ -409,6 +414,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           lng: data.placement.anchor.longitude,
         };
         const initialCamera = cameraPreset("overview", data.placement.headingDeg);
+        const touchCapable = navigator.maxTouchPoints>0 ||
+          window.matchMedia?.("(pointer:coarse)").matches;
         const map = new google.maps.Map(hostRef.current, {
           center,
           ...initialCamera,
@@ -427,7 +434,9 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           fullscreenControl: false,
           zoomControl: false, // The customer's own minus/plus remain visible.
           draggable: true,
-          gestureHandling: "greedy",
+          // Mobile: one touch rotates via the app; two touches retain native
+          // Google pan/pinch/zoom. Mouse on desktop stays directly draggable.
+          gestureHandling: touchCapable ? "cooperative" : "greedy",
           clickableIcons: false,
         });
 
@@ -476,6 +485,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
             ?{x:touch.clientX,y:touch.clientY}:null;
         };
         mapClick=map.addListener("click",event=>{
+          if(touchOrbit?.suppressClick())return;
           const coords=clickCoordinates(event?.domEvent);
           if(coords)selectAtScreenPoint(coords.x,coords.y);
         });
@@ -493,6 +503,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           pressed={id:event.pointerId,x:event.clientX,y:event.clientY,time:performance.now()};
         };
         onNativePointerUp=event=>{
+          if(touchOrbit?.suppressClick())return;
           const start=pressed;
           pressed=null;
           if(!start||event.pointerId!==start.id||!event.isPrimary||
@@ -502,6 +513,23 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           if(drift>8||performance.now()-start.time>850)return;
           selectAtScreenPoint(event.clientX,event.clientY);
         };
+        // Capture one-finger swipes before Maps' internal touch handlers:
+        // change only the camera heading, never GLB placement or plot coordinates.
+        // Cooperative Maps gestures handle two-finger pan and pinch natively.
+        touchHost=hostRef.current;
+        touchOrbit=createGeoOneFingerOrbit({
+          getHeading:()=>map.getHeading?.()??initialCamera.heading,
+          setHeading:heading=>{
+            if(map.setHeading)map.setHeading(heading);
+            else map.moveCamera?.({heading});
+          },
+          shouldIgnoreTarget:mapControlTarget,
+          onRotate:()=>overlay?.requestRedraw(),
+        });
+        touchHost?.addEventListener("touchstart",touchOrbit.onTouchStart,true);
+        touchHost?.addEventListener("touchmove",touchOrbit.onTouchMove,{capture:true,passive:false});
+        touchHost?.addEventListener("touchend",touchOrbit.onTouchEnd,true);
+        touchHost?.addEventListener("touchcancel",touchOrbit.onTouchCancel,true);
         pointerHost?.addEventListener("pointerdown",onNativePointerDown,true);
         pointerHost?.addEventListener("pointerup",onNativePointerUp,true);
         // Google can capture/reparent pointerup outside the map subtree.
@@ -751,6 +779,13 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         pointerHost.removeEventListener("pointerup",onNativePointerUp,true);
       if(onNativePointerUp)
         window.removeEventListener("pointerup",onNativePointerUp,true);
+      if(touchHost&&touchOrbit){
+        touchHost.removeEventListener("touchstart",touchOrbit.onTouchStart,true);
+        touchHost.removeEventListener("touchmove",touchOrbit.onTouchMove,true);
+        touchHost.removeEventListener("touchend",touchOrbit.onTouchEnd,true);
+        touchHost.removeEventListener("touchcancel",touchOrbit.onTouchCancel,true);
+      }
+      touchHost=null;touchOrbit=null;
       plotLayer?.dispose();
       plotLayer=null;latestProjection=null;preparedPaths=[];
       mapIdle?.remove();
