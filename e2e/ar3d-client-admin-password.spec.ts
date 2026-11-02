@@ -92,3 +92,19 @@ test("Project Client Admin login is project-specific, not the Rekixo Owner panel
  const width=await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth);
  expect(width).toBeLessThanOrEqual(1);
 });
+
+test("Building-only Client Admin goes back to its building homepage",async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await page.route("**/3Dprojects/api/client-portal/**",route=>{
+  const path=new URL(route.request().url()).pathname;
+  return route.fulfill({status:200,contentType:"application/json",
+   body:JSON.stringify(path.endsWith("/login-meta")
+    ?{projectName:"Building Alpha",projectKind:"building"}
+    :{authenticated:false,user:null})});
+ });
+ await page.goto(BASE+"/3Dprojects/building-alpha/client-admin");
+ await expect(page.getByRole("heading",{name:"Builder Admin"})).toBeVisible();
+ await expect(page.getByText("Building Alpha")).toBeVisible();
+ await expect(page.getByRole("link",{name:"Back to Project"}))
+  .toHaveAttribute("href","/3Dprojects/building-alpha");
+});
