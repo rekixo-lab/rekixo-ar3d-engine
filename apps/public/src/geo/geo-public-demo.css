@@ -765,3 +765,14 @@
     width:140px;
   }
 }
+
+/* Fullscreen-only spacing: keep the status switch 16px above the 42px-high
+   camera buttons (10px desktop / 8px mobile inset); follow device safe areas. */
+.geo-integrated-scene:fullscreen > .geo-plot-status {
+  bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+}
+@media (max-width: 640px) {
+  .geo-integrated-scene:fullscreen > .geo-plot-status {
+    bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+  }
+}
