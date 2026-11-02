@@ -102,7 +102,7 @@ export default function MasterplanShareBuilder(){
         <button disabled={busy||!state?.draft.cardAssetId||state?.active?.revision===state?.draft.revision||state?.draft.title!==title||state?.draft.description!==description||
             state?.draft.cardAssetId!==cardId}
           onClick={()=>void exec("POST",{action:"publish",expectedRevision:state?.draft.revision||0})}>
-          {state?.active?.revision===state?.draft.revision?"Published · Current Draft":"Publish WhatsApp Preview"}</button>
+          {state?.active?.revision===state?.draft.revision?"Published · Current Draft":state?.active?"Publish Share Update":"Publish WhatsApp Preview"}</button>
       </div>
       <h2>Published Preview</h2>
       {state?.active?<><p>Live Share v{state.active.version}</p>
