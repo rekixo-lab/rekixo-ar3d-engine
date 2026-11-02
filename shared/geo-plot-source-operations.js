@@ -9,7 +9,7 @@ export function assignFourCornerRoadFront(plot,frontEdge){
   for(let i=0;i<roles.length;i++){
     const role=roles[i],before=plot.sides?.[role];
     sides[role]={...before,edges:[(frontEdge+i)%4],
-      roadFacing:role==="front",verified:false};
+      roadFacing:role==="front",facingDirection:undefined,verified:false};
   }
   return {...plot,sides,facingVerified:false};
 }

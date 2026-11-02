@@ -147,7 +147,12 @@ export function validateGeoPlot(input) {
       if (assigned.has(index)) throw Error("Plot " + id + ": one edge cannot belong to two side roles.");
       assigned.add(index);
     }
+    const manualFacing=side.facingDirection==null||side.facingDirection===""
+      ?null:cleanText(side.facingDirection,24).toLowerCase();
+    if(manualFacing&&!DIRECTIONS.includes(manualFacing))
+      throw Error("Plot "+id+": invalid "+role+" compass-facing direction.");
     normalizedSides[role] = { edges, length: side.length, unit: side.unit, roadFacing: side.roadFacing === true,
+      ...(side.roadFacing===true&&manualFacing?{facingDirection:manualFacing}:{}),
       source: cleanText(side.source, 160), verified: side.verified === true };
   }
   if (layout === "three" && sides.depthB) throw Error("Plot " + id + ": Depth B is not used in three-side layout.");

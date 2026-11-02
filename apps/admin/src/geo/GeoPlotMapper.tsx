@@ -22,6 +22,8 @@ import {nextCsvPlotForDrawing,assignVisiblePlotEdge,
   draftStorageKey,packLocalPlotDraft,unpackLocalPlotDraft,visibleMappingProgress
 } from "../../../../shared/geo-plot-mapper-ux.js";
 import type {SimilarityTransform} from "../../../../shared/geo-plot-image-alignment.js";
+import {GEO_COMPASS_DIRECTIONS,suggestGeoSideFacing,
+  type GeoDirection} from "../../../../shared/geo-plot-facing.js";
 import {newPlotEditHistory,replacePlotEditHistory,updatePlotEditHistory,
   closeGroupedPlotEdit,undoPlotEdit,redoPlotEdit,geometryWithRevokedApprovals,nudgePlotCorner
 } from "../../../../shared/geo-plot-precision-history.js";
@@ -29,7 +31,7 @@ import "./geo-plot-mapper.css";
 
 type Point = [number, number]; // Immutable Building-local X/Z metres.
 type Role = "front" | "back" | "depthA" | "depthB";
-type Side = { edges: number[]; length: number; unit: "ft" | "m"; roadFacing: boolean; source: string; verified: boolean };
+type Side = { edges: number[]; length: number; unit: "ft" | "m"; roadFacing: boolean; facingDirection?: GeoDirection; source: string; verified: boolean };
 type Plot = { id: string; corners: Point[]; layout: "three" | "four";
   sides: Partial<Record<Role, Side>>; area: { value: number; unit: "sqft" | "sqm" | "sqyd"; source: string; verified: boolean };
   facing: string; facingSource:string; facingVerified:boolean; planeY?:number;planeSource?:string;planeVerified?:boolean;road: string; notes: string };
@@ -47,7 +49,7 @@ type PointerPreview = {clientX:number;clientY:number;rawScreen:Point;screen:Poin
   point:Point;kind:"none"|"vertex"|"edge";pointerType:string};
 type PointerStart = {id:number;x:number;y:number;cancelled?:boolean};
 const ROLES: Role[] = ["front", "back", "depthA", "depthB"];
-const directions=["north","north-east","east","south-east","south","south-west","west","north-west"];
+const directions=GEO_COMPASS_DIRECTIONS.map(item=>item.id);
 const emptySide = (edges:number[]=[]):Side => ({edges,length:0,unit:"ft",roadFacing:false,source:"",verified:false});
 const blank = (id:string):Plot => ({id,corners:[],layout:"four",sides:{},
   area:{value:0,unit:"sqft",source:"",verified:false},facing:"north",facingSource:"",facingVerified:false,road:"",notes:""});
@@ -101,19 +103,8 @@ function geometrySideLengthMetres(points:Point[],edges:number[],geoScale:number)
   },0);
 }
 function facingFromGeo(points:Point[],edges:number[],heading:number) {
-  if (points.length<3 || !edges.length) return "north";
-  const cx=points.reduce((v,p)=>v+p[0],0)/points.length;
-  const cz=points.reduce((v,p)=>v+p[1],0)/points.length;
-  let east=0,north=0;
-  for(const i of edges){
-    const a=points[i],b=points[(i+1)%points.length],mx=(a[0]+b[0])/2,mz=(a[1]+b[1])/2;
-    let ex=b[1]-a[1],nz=b[0]-a[0];
-    if((mx-cx)*ex+(mz-cz)*(-nz)<0){ex=-ex;nz=-nz;}
-    east+=ex;north+=nz;
-  }
-  const h=heading*Math.PI/180;
-  const worldE=east*Math.cos(h)+north*Math.sin(h),worldN=-east*Math.sin(h)+north*Math.cos(h);
-  return directions[Math.round(((Math.atan2(worldE,worldN)*180/Math.PI)+360)%360/45)%8];
+  // Never invent North when the selected road edge cannot be resolved.
+  return suggestGeoSideFacing(points,edges,heading);
 }
 async function callApi<T>(url:string,init?:RequestInit):Promise<T> {
   const r=await fetch(url,{cache:"no-store",...init,headers:{"Accept":"application/json",...init?.headers}});
@@ -201,6 +192,7 @@ export default function GeoPlotMapper(){
   // Like the Platform mapper, snapping is opt-in: don't silently move approved corners.
   const [snap,setSnap]=useState(false);
   const [selectedRole,setSelectedRole]=useState<Role>("front");
+  const [selectedFacingRole,setSelectedFacingRole]=useState<Role>("front");
   const [extendSide,setExtendSide]=useState(false);
   const [inspectorTab,setInspectorTab]=useState<"sources"|"plot"|"quality"|"publish">("sources");
   const [recoveredLocalDraft,setRecoveredLocalDraft]=useState<{
@@ -762,11 +754,25 @@ export default function GeoPlotMapper(){
   };
   const changeSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>{
     if(!p)return p;
-    const changesReference=["edges","length","unit","source","roadFacing"].some(k=>Object.hasOwn(patch,k));
-    return {...p,...((Object.hasOwn(patch,"roadFacing") || (role==="front"&&Object.hasOwn(patch,"edges")))?{facingVerified:false}:{}),
-      sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),...(Object.hasOwn(patch,"edges")?{roadFacing:false}:{}),...patch,
+    const changesReference=["edges","length","unit","source","roadFacing","facingDirection"].some(k=>Object.hasOwn(patch,k));
+    return {...p,...((Object.hasOwn(patch,"roadFacing")||Object.hasOwn(patch,"facingDirection") ||
+       Object.hasOwn(patch,"edges"))?{facingVerified:false}:{}),
+      sides:{...p.sides,[role]:{...(p.sides[role]||emptySide()),
+        ...(Object.hasOwn(patch,"edges")?{roadFacing:false,facingDirection:undefined}:{}),
+        ...(patch.roadFacing===false?{facingDirection:undefined}:{}),...patch,
         ...(changesReference?{verified:false}:{})}}};
   });
+  const chooseGeoFacing=(role:Role,direction:GeoDirection|null)=>{
+    setWorking(p=>{
+      if(!p||p.sides[role]?.roadFacing!==true)return p;
+      const current=p.sides[role]!;
+      const suggested=suggestGeoSideFacing(p.corners,current.edges,geo?.placement.headingDeg||0);
+      const resolved=direction||suggested;
+      return {...p,facingVerified:false,
+        ...(role==="front"&&resolved?{facing:resolved}:{}),
+        sides:{...p.sides,[role]:{...current,facingDirection:direction||undefined}}};
+    });
+  };
   const selectRoadFront=(edge:number)=>{
     if(!working)return;
     if(!window.confirm("Make polygon edge "+edge+" the road-facing FRONT? All side and facing approvals will reset. No published plot is changed."))return;
@@ -1033,11 +1039,18 @@ export default function GeoPlotMapper(){
         const source=modern?v[prefix+"source"]:v.source;
         if(!Number.isFinite(length)||length<=0||!["m","ft"].includes(unit)||!source)
           throw Error("Plot "+p.id+": invalid "+role+" measurement/unit/source.");
+        const facingDirection=modern?(v[prefix+"facingdirection"]||"").toLowerCase():"";
+        if(facingDirection&&!directions.includes(facingDirection as GeoDirection))
+          throw Error("Plot "+p.id+": invalid "+role+" Facing Direction.");
         const facingFlag=v[prefix+"roadfacing"];
         if(modern && facingFlag && !["true","false"].includes(facingFlag.toLowerCase()))
           throw Error("Plot "+p.id+": invalid road-facing flag.");
+        const roadFacing=modern && facingFlag?facingFlag.toLowerCase()==="true":item.roadFacing;
+        const directionColumnPresent=Object.hasOwn(v,prefix+"facingdirection");
         side[role]={...item,length,unit:unit as Side["unit"],source,verified:false,
-          roadFacing:modern && facingFlag ? facingFlag.toLowerCase()==="true":item.roadFacing};
+          roadFacing,facingDirection:modern&&directionColumnPresent?
+            (roadFacing&&facingDirection?facingDirection as GeoDirection:undefined):
+            (roadFacing?item.facingDirection:undefined)};
       }
       const area=Number(v.area),areaunit=v.areaunit;
       if(!Number.isFinite(area)||area<=0||!["sqft","sqm","sqyd"].includes(areaunit))
@@ -1055,12 +1068,12 @@ export default function GeoPlotMapper(){
   const exportCsv=()=>{
     const headers=["id","cornersJson","area","areaUnit","areaSource","areaVerified",
       "facing","facingSource","facingVerified","road","notes","planeY","planeSource","planeVerified",
-      ...ROLES.flatMap(role=>[role+"Length",role+"Unit",role+"Source",role+"Verified",role+"RoadFacing"])];
+      ...ROLES.flatMap(role=>[role+"Length",role+"Unit",role+"Source",role+"Verified",role+"RoadFacing",role+"FacingDirection"])];
     const lines=[headers.map(csvCell).join(","),...plots.map(p=>[
       p.id,JSON.stringify(p.corners),p.area.value,p.area.unit,p.area.source,p.area.verified,
       p.facing,p.facingSource,p.facingVerified,p.road,p.notes,p.planeY,p.planeSource,p.planeVerified,
       ...ROLES.flatMap(role=>{const side=p.sides[role];
-        return [side?.length,side?.unit,side?.source,side?.verified,side?.roadFacing];})
+        return [side?.length,side?.unit,side?.source,side?.verified,side?.roadFacing,side?.facingDirection||""];})
     ].map(csvCell).join(","))];
     const url=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"}));
     const a=document.createElement("a");a.href=url;a.download=slug+"-geo-plots.csv";a.click();
@@ -1712,13 +1725,66 @@ export default function GeoPlotMapper(){
           <details open className="geo-plot-inspector-section">
             <summary>03 · Road, facing & north</summary>
           <label>Road / Access<input value={working.road} onChange={e=>setWorking({...working,road:e.target.value,facingVerified:false})}/></label>
-          <label>Facing <select value={working.facing} onChange={e=>setWorking({...working,facing:e.target.value,facingVerified:false})}>
+          <label>Primary Front Facing <select value={working.facing}
+            onChange={e=>setWorking(p=>p?{...p,facing:e.target.value,facingVerified:false,
+              sides:{...p.sides,...(p.sides.front?.roadFacing?{
+                front:{...p.sides.front,facingDirection:e.target.value as GeoDirection}
+              }:{})}}:p)}>
             {directions.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
-          <button type="button" disabled={working.corners.length<3} onClick={()=>setWorking(p=>p?{...p,facing:facingFromGeo(p.corners,p.sides.front?.edges||[],geo?.placement.headingDeg||0),facingVerified:false}:p)}>Suggest Facing From Geo North</button>
+          <button type="button" disabled={working.corners.length<3}
+            onClick={()=>setWorking(p=>{
+              if(!p)return p;
+              const facing=facingFromGeo(p.corners,p.sides.front?.edges||[],geo?.placement.headingDeg||0);
+              if(!facing)return p;
+              return {...p,facing,facingVerified:false,
+                sides:{...p.sides,...(p.sides.front?{
+                  front:{...p.sides.front,facingDirection:undefined}
+                }:{})}};
+            })}>Suggest Primary Front From Geo North</button>
           <label>Facing Source<input value={working.facingSource} placeholder="Geo north / approved master plan reference"
             onChange={e=>setWorking({...working,facingSource:e.target.value,facingVerified:false})}/></label>
           <label className="geo-plot-check"><input type="checkbox" checked={working.facingVerified}
             onChange={e=>setWorking({...working,facingVerified:e.target.checked})}/> Facing verified against reference</label>
+          {working.corners.length>=3&&(()=>{
+            const roadSides=ROLES.filter(role=>working.sides[role]?.roadFacing===true&&
+              (working.layout==="four"||role!=="depthB"));
+            if(!roadSides.length)return <p className="geo-plot-hint">Select Road side on Front / Back / Depth below to enable the per-side compass. Unselected sides are not advertised as facing.</p>;
+            const role=roadSides.includes(selectedFacingRole)?selectedFacingRole:roadSides[0];
+            const side=working.sides[role]!;
+            const suggested=suggestGeoSideFacing(working.corners,side.edges,geo?.placement.headingDeg||0);
+            const selected=side.facingDirection||suggested;
+            return <div className="geo-plot-facing-compass" aria-label="Geo road-side facing compass">
+              <strong>Geo Facing Compass · Road-Facing Sides</strong>
+              <div className="geo-plot-facing-roles" role="group" aria-label="Choose road-facing side">
+                {roadSides.map(key=><button type="button" key={key}
+                  aria-pressed={role===key} className={role===key?"active":""}
+                  onClick={()=>setSelectedFacingRole(key)}>
+                  {key==="front"?"Front":key==="back"?"Back":key==="depthA"?"Depth A":"Depth B"}
+                </button>)}
+              </div>
+              <small>Geo north suggestion: {suggested?
+                GEO_COMPASS_DIRECTIONS.find(v=>v.id===suggested)?.arrow+" "+
+                GEO_COMPASS_DIRECTIONS.find(v=>v.id===suggested)?.label:
+                "Unavailable — check polygon & Geo heading"}</small>
+              <div className="geo-plot-facing-directions" role="group" aria-label={"Compass direction for "+role}>
+                <button type="button" className={!side.facingDirection?"active":""}
+                  aria-pressed={!side.facingDirection} onClick={()=>chooseGeoFacing(role,null)}>
+                  Auto · Geo
+                </button>
+                {GEO_COMPASS_DIRECTIONS.map(item=><button type="button" key={item.id}
+                  className={side.facingDirection===item.id?"active":""}
+                  aria-pressed={side.facingDirection===item.id}
+                  onClick={()=>chooseGeoFacing(role,item.id)}>
+                  <b>{item.arrow}</b> {item.label}
+                </button>)}
+              </div>
+              <small>Customer-facing preview: {selected?
+                GEO_COMPASS_DIRECTIONS.find(v=>v.id===selected)?.arrow+" "+
+                GEO_COMPASS_DIRECTIONS.find(v=>v.id===selected)?.label:
+                "No direction"}. Only mapped road sides appear. Manual overrides affect this side only; Save Mapping Draft and publish to update customers.</small>
+            </div>;
+          })()}
+
           </details>
           <details open className="geo-plot-inspector-section">
             <summary>04 · Front, Back & Depth sizes</summary>

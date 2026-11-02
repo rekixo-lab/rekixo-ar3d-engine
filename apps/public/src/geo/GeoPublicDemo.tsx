@@ -812,6 +812,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         plot={selectedPlot}
         commercial={selectedPlot?data.plotMapping?.commercial?.[selectedPlot.id]:undefined}
         projectName={data.project.name}
+        geoHeadingDeg={data.placement.headingDeg}
         publicPhone={data.publicContacts?.phone}
         publicWhatsappHref={geoWhatsAppHref(data.publicContacts?.whatsapp||"")}
         onClose={()=>setSelectedPlot(null)}
