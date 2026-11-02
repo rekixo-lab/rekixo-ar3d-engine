@@ -25,3 +25,12 @@
 .masterplan-public-loading{position:absolute;inset:0;display:grid;place-items:center;font-size:16px;color:#d9e8ef}
 .masterplan-public footer{padding:12px 20px;font-size:12px;color:#a6c6d2;background:#09202c}
 @media(max-width:650px){.masterplan-public header{padding:10px}.masterplan-public-map{min-height:80vh}.masterplan-public-toolbar{top:6px;left:6px;padding:6px;font-size:11px}.masterplan-public-detail{bottom:10px;left:7px}}
+
+.masterplan-public-header-actions {display:flex;gap:9px;align-items:center}
+.masterplan-public-header-actions .masterplan-public-client-admin {
+  box-sizing:border-box;display:flex;align-items:center;justify-content:center;
+  width:38px;height:38px;min-width:38px;padding:9px;
+  background:#0e2933;border-color:#487b83;
+}
+.masterplan-public-client-admin svg {display:block;width:19px;height:19px}
+.masterplan-public-client-admin:focus-visible{outline:2px solid #8ffad0;outline-offset:2px}
