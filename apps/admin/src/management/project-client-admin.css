@@ -154,3 +154,20 @@ button.engine-client-admin-plot-row:hover{border-color:#71d6ad}
   .engine-client-admin-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   .engine-client-admin-stats article{padding:12px}
 }
+
+.engine-client-admin-contact {
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:13px;
+}
+.engine-client-admin-contact label{display:grid;gap:7px;font-size:12px;color:#c7dbe4}
+.engine-client-admin-contact label:nth-child(2){grid-column:1/-1}
+.engine-client-admin-contact-notice{grid-column:1/-1}
+.engine-client-admin-contact>button {
+  grid-column:1/-1;box-sizing:border-box;min-height:42px;
+  background:#145847;color:#fff;border:1px solid #5bd4a9;
+  border-radius:10px;cursor:pointer;font-weight:800
+}
+@media(max-width:640px){
+ .engine-client-admin-contact{grid-template-columns:minmax(0,1fr)}
+ .engine-client-admin-contact label:nth-child(2){grid-column:auto}
+}
