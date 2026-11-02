@@ -158,10 +158,10 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
   };
   const customerSite=identity?"https://ar3dstudio.in/3Dprojects/"+
     encodeURIComponent(identity.projectSlug)+(masterplanGeo?"/masterplan":"/geo"):"";
-  const filtered=masterplanGeo?(masterplan?.plots||[]).filter(row=>
-    row.id.toLowerCase().includes(plotSearch.trim().toLowerCase())):
-    (commercial?.rows||[]).filter(row=>
-      row.plotId.toLowerCase().includes(plotSearch.trim().toLowerCase()));
+  const filteredMasterplan=(masterplan?.plots||[]).filter(row=>
+    row.id.toLowerCase().includes(plotSearch.trim().toLowerCase()));
+  const filteredCommercial=(commercial?.rows||[]).filter(row=>
+    row.plotId.toLowerCase().includes(plotSearch.trim().toLowerCase()));
   const projectLabel=identity?.projectName||"Project Client Admin";
 
   return <main className="engine-client-admin">
@@ -253,15 +253,15 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
               onChange={e=>setPlotSearch(e.target.value)}/></label>
         </div>
         {masterplanGeo?<div className="engine-client-admin-plot-list">
-          {filtered.map(row=><div className="engine-client-admin-plot-row" key={row.id}>
+          {filteredMasterplan.map(row=><div className="engine-client-admin-plot-row" key={row.id}>
             <strong>Plot {row.id}</strong>
             <span>{row.status==="confirmed"?"Confirmed":row.status==="booked"?"Booked":"Available"}</span>
           </div>)}
-          {!filtered.length&&<p>No matching plot records.</p>}
+          {!filteredMasterplan.length&&<p>No matching plot records.</p>}
           <p>{masterplan?.notice}</p>
         </div>:<>
           <div className="engine-client-admin-plot-list">
-            {filtered.map(row=><button key={row.plotId} type="button"
+            {filteredCommercial.map(row=><button key={row.plotId} type="button"
               className={"engine-client-admin-plot-row"+(plotId===row.plotId?" is-selected":"")}
               onClick={()=>choose(row.plotId)}>
               <strong>Plot {row.plotId}</strong>
@@ -269,7 +269,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
                 "₹"+(row.pricePaise/100).toLocaleString("en-IN")} ·
                 {row.publicApproved?" Public approved":" Private review"}</span>
             </button>)}
-            {!filtered.length&&<p>No reviewed listings match the search.</p>}
+            {!filteredCommercial.length&&<p>No reviewed listings match the search.</p>}
           </div>
           {overview?.permissions.commercialPrepare&&<>
             <div className="engine-client-admin-editor">
