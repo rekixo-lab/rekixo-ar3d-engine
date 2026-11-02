@@ -37,7 +37,19 @@ function moneyToPaise(value:string){
 type MasterplanInventory={releaseId:string|null;plotCount:number;
   counts:{available:number;booked:number;confirmed:number};
   plots:{id:string;status:"available"|"booked"|"confirmed"}[];notice?:string};
-type Panel="overview"|"plots"|"pricing"|"deals";
+type ContactFields={
+  contactName:string;address:string;phonePrimary:string;phoneSecondary:string;
+  whatsapp:string;email:string;websiteUrl:string;mapsUrl:string;brochureUrl:string;
+};
+type ContactState={revision:number;ownerApprovedPublic:boolean;fields:ContactFields};
+const contactLabels:ReadonlyArray<[keyof ContactFields,string]>= [
+  ["contactName","Contact person"],["address","Project address"],
+  ["phonePrimary","Main phone"],["phoneSecondary","Secondary phone"],
+  ["whatsapp","WhatsApp number"],["email","Public contact email"],
+  ["websiteUrl","Website URL"],["mapsUrl","Google Maps URL"],
+  ["brochureUrl","Brochure URL"]
+];
+type Panel="overview"|"plots"|"pricing"|"deals"|"contact";
 const nameOfRole=(value:string)=>value==="client_admin"?"Client Admin":
   value==="approver"?"Approver":value==="editor"?"Editor":"Viewer";
 
@@ -49,6 +61,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
   const [overview,setOverview]=useState<Overview|null>(null);
   const [commercial,setCommercial]=useState<CommercialState|null>(null);
   const [masterplan,setMasterplan]=useState<MasterplanInventory|null>(null);
+  const [contact,setContact]=useState<ContactState|null>(null);
   const [panel,setPanel]=useState<Panel>("overview");
   const [plotSearch,setPlotSearch]=useState("");
   const [plotId,setPlotId]=useState("");
@@ -67,6 +80,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     // A cookie for another project must not populate a project's private page.
     if(!s.authenticated||!s.user||(scopedSlug&&s.user.projectSlug!==scopedSlug)){
       setIdentity(null);setOverview(null);setCommercial(null);setMasterplan(null);
+      setContact(null);
       return;
     }
     const path="/projects/"+encodeURIComponent(s.user.projectSlug);
@@ -81,6 +95,9 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       const rows=await api<CommercialState>(path+"/commercial");
       setMasterplan(null);setCommercial(rows);
     }
+    if(s.user.role==="client_admin"){
+      setContact(await api<ContactState>(path+"/contact"));
+    }else setContact(null);
     setOverview(o);setIdentity(s.user);
   };
   useEffect(()=>{
@@ -138,11 +155,26 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     finally{setBusy(false);}
   };
 
+  const saveContact=async()=>{
+    if(!identity||identity.role!=="client_admin"||!contact||contact.revision<1)return;
+    if(!window.confirm("Save customer-facing contact changes for this project?"))return;
+    setBusy(true);setError("");setMessage("");
+    try{
+      const next=await api<ContactState>("/projects/"+
+        encodeURIComponent(identity.projectSlug)+"/contact","PUT",
+        {expectedRevision:contact.revision,fields:contact.fields});
+      setContact(next);
+      setMessage("Client contact details saved. Project owner approval setting was unchanged.");
+    }catch(e){setError(e instanceof Error?e.message:"Contact update failed.");}
+    finally{setBusy(false);}
+  };
+
   const kind=overview?.project.kind||identity?.projectKind||"legacy";
   const masterplanGeo=kind==="masterplan_geo";
   const availablePanels:Panel[]=masterplanGeo||kind==="building"
     ?["overview","plots"]
     :["overview","plots","pricing",...(overview?.permissions.dealsRead?["deals" as const]:[])];
+  if(identity?.role==="client_admin")availablePanels.push("contact");
   const mappingCount=masterplanGeo?masterplan?.plotCount||0:commercial?.plotCount||0;
   const countFor=(kind:"available"|"booked"|"sold")=>
     (commercial?.rows||[]).filter(x=>x.status===kind).length;
@@ -202,7 +234,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
         {availablePanels.map(item=><button key={item} type="button"
           aria-current={panel===item?"page":undefined} className={panel===item?"is-active":""}
           onClick={()=>setPanel(item)}>{item==="overview"?"Overview":
-          item==="plots"?"Plots":item==="pricing"?"Pricing":"Deals"}</button>)}
+          item==="plots"?"Plots":item==="pricing"?"Pricing":item==="contact"?"Contact":"Deals"}</button>)}
       </nav>
       <section className="engine-client-admin-meta">
         <span>{identity.displayName} · {identity.email}</span>
@@ -302,6 +334,31 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
             </div>
           </>}
         </>}
+      </section>}
+
+      {panel==="contact"&&identity?.role==="client_admin"&&<section className="engine-client-admin-card">
+        <h2>Contact & Location</h2>
+        <p>Only customer-facing details can be edited here. Project Owner name,
+          developer identity, public visibility consent, mapping and releases are owner-controlled.</p>
+        {contact?<form className="engine-client-admin-contact" onSubmit={e=>{
+          e.preventDefault();void saveContact();
+        }}>
+          {contactLabels.map(([key,label])=><label key={key}>{label}
+            <input type={key==="email"?"email":key.endsWith("Url")?"url":
+              ["phonePrimary","phoneSecondary","whatsapp"].includes(key)?"tel":"text"}
+              value={contact.fields[key]} disabled={busy||contact.revision<1}
+              maxLength={key==="address"?600:key.endsWith("Url")?1000:
+                key==="email"?254:["phonePrimary","phoneSecondary","whatsapp"].includes(key)?25:160}
+              onChange={e=>setContact(previous=>previous?
+                {...previous,fields:{...previous.fields,[key]:e.target.value}}:null)} />
+          </label>)}
+          <p className="engine-client-admin-contact-notice">
+            Public display consent: <strong>{contact.ownerApprovedPublic?"Enabled by Owner":"Disabled by Owner"}</strong>
+            {" · "}Contact revision: {contact.revision}
+          </p>
+          <button disabled={busy||contact.revision<1} type="submit">Save Contact Details</button>
+          {contact.revision===0&&<p>The project owner must configure Project Profile first.</p>}
+        </form>:<p>Loading project contact information…</p>}
       </section>}
 
       {panel==="pricing"&&!masterplanGeo&&identity&&<section className="engine-client-admin-card">
