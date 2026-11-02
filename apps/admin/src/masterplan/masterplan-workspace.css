@@ -34,3 +34,38 @@
 .masterplan-dock small{color:#a7c7d5}
 .masterplan-guidance{border-top:1px solid #446378;padding-top:10px}
 @media(max-width:950px){.masterplan-grid{grid-template-columns:1fr}.masterplan-stage{height:55vh;min-height:360px}.masterplan-dock{max-height:none}.masterplan-workspace{padding:10px 6px 50px}}
+
+/* One focused masterplan editor: switch between source calibration and plots. */
+.masterplan-editor-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+.masterplan-editor-tabs button {
+  min-height: 42px;
+  border: 1px solid rgba(132, 152, 181, .35);
+  border-radius: 10px;
+  padding: 9px 13px;
+  background: rgba(23, 41, 66, .65);
+  color: inherit;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.masterplan-editor-tabs button.active {
+  border-color: #28ce82;
+  background: rgba(40, 206, 130, .14);
+}
+.masterplan-editor-tabs button:focus-visible {
+  outline: 2px solid #28ce82;
+  outline-offset: 2px;
+}
+@media (max-width: 560px) {
+  .masterplan-editor-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .masterplan-editor-tabs button { width: 100%; text-align: left; }
+}
