@@ -84,7 +84,7 @@ test("smoothing uses the shortest path safely across 360 degrees",()=>{
   r.orbit.onTouchStart(r.e("start",200));
   r.orbit.onTouchMove(r.e("move",170));
   assert.ok(r.tick());
-  assert.ok(r.heading>355,"left drag crosses heading zero in the short direction");
+  assert.ok(r.heading>0&&r.heading<10,"left drag crosses 360° to the short heading direction");
   let count=0;while(r.tick()&&count++<35){}
   assert.ok(Math.abs(r.heading-8.8)<1e-9);
 });
