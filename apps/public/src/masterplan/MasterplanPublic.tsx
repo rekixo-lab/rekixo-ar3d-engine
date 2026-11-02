@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {projectClientAdminUrl} from "../../../../shared/project-client-admin-url.js";
 import "./masterplan-public.css";
 import {fitImageFrame,panImageFrame,pinchImageFrame} from "../../../../shared/masterplan-image-gestures.js";
 type Point=[number,number];
@@ -179,6 +180,16 @@ export default function MasterplanPublic(){
     <header><div><p>REKIXO · GEO MASTERPLAN</p><h1>{data?.project.name||"Published Geo Masterplan"}</h1>
       {data?.project.location&&<span>{data.project.location}</span>}</div>
       <div className="masterplan-public-header-actions">
+        {data&&<a className="masterplan-public-client-admin" href={projectClientAdminUrl(data.project.slug)}
+          target="_blank" rel="noopener noreferrer" aria-label="Open project Client Admin"
+          title="Client Admin">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <rect x="3" y="3" width="7" height="7" rx="1.4"/>
+            <rect x="14" y="3" width="7" height="7" rx="1.4"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.4"/>
+            <rect x="14" y="14" width="7" height="7" rx="1.4"/>
+          </svg>
+        </a>
         {data&&<a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
           Object.values(locationOf(data.calibration.transform,[.5,.5])).join(","))}`} target="_blank" rel="noreferrer">Open Location</a>}
       </div>
