@@ -39,9 +39,12 @@
   isolation: isolate;
   width: min(1500px, 100%);
   min-height: 0;
+  box-sizing: border-box;
   margin: 0 auto 4px;
   padding: 0;
-  display: flex;
+  /* The legacy fullscreen stylesheet still sets display:grid!important.
+     The public Geo header is always a single flex row. */
+  display: flex !important;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -59,7 +62,10 @@
   align-items: center;
   justify-content: flex-end;
   gap: 7px;
-  margin-left: auto;
+  width: auto !important; /* Counter the retired fullscreen header's 100% width. */
+  margin: 0 0 0 auto;
+  align-self: center;
+  justify-self: auto;
   white-space: nowrap;
 }
 .jio-public-header-action {
@@ -96,6 +102,7 @@
   outline-offset: 2px;
 }
 @media (max-width: 640px) {
+  .jio-public-header { gap: 8px !important; }
   .jio-public-header-actions { gap: 4px; }
 }
 
