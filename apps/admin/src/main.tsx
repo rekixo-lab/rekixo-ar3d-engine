@@ -56,7 +56,10 @@ function ClientAdminRedirect({slug}:{slug:string}){
     // the customer's AR3D domain. Tokens never appear in HTTP requests.
     window.location.replace(projectClientAdminUrl(slug)+window.location.hash);
   },[slug]);
-  return <RouteLoading label="Opening AR3D Client Admin…" />;
+  return <div className="route-loading">
+    <small>AR3D STUDIO</small><p className="eyebrow">CLIENT ADMIN</p>
+    <h1>Opening your project Client Admin…</h1>
+  </div>;
 }
 
 function AdminRouter() {
