@@ -7,7 +7,7 @@ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 test("Personal Client Admin uses isolated canonical project-scoped path",()=>{
  assert.equal(projectClientAdminPath("satharai-50a45356"),"/3Dprojects/satharai-50a45356/client-admin");
  assert.equal(projectClientAdminUrl("satharai-50a45356"),
-  "https://admin.rekixo.com/3Dprojects/satharai-50a45356/client-admin");
+  "https://ar3dstudio.in/3Dprojects/satharai-50a45356/client-admin");
  assert.throws(()=>projectClientAdminUrl("../logout"),/Invalid project/);
  const routes=read("apps/admin/src/main.tsx");
  assert.match(routes,/projectClientAdmin=path.match/);
@@ -49,6 +49,10 @@ test("Session cannot be shared across projects and retains least privilege",()=>
  assert.match(ui,/GeoDealRecordsPanel/);
  assert.match(ui,/saveContact/);
  assert.match(ui,/Contact & Location/);
+ assert.match(ui,/Sign In to Client Admin/);
+ assert.match(ui,/Change Temporary Password/);
+ assert.match(ui,/AR3D STUDIO · CLIENT ADMIN/);
+ assert.doesNotMatch(ui,/REKIXO · PERSONAL CLIENT ADMIN/i);
  assert.match(portal,/clientProjectContact\(request,env,s\)/);
  assert.doesNotMatch(portal,/handleMasterplanSalesAdmin|engineAdminReadAccess/);
 });
