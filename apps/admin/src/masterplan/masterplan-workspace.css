@@ -69,3 +69,6 @@
   }
   .masterplan-editor-tabs button { width: 100%; text-align: left; }
 }
+
+/* Engine shell already supplies the page title and active-project context. */
+.engine-admin-content .masterplan-workspace > header { display: none; }
