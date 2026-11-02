@@ -117,6 +117,29 @@ const navItems: NavItem[] = [
   },
 ];
 
+// Only show operator tasks in the primary navigation. Retained routes are
+// intentionally reachable from their owning workspaces for compatibility.
+const primaryNavSections = new Set<ShellSection>([
+  "overview", "clients", "profile", "masterplan-plots", "building", "geo", "geo-plots", "branding",
+]);
+const primaryNavLabels: Partial<Record<ShellSection, string>> = {
+  overview: "Projects",
+  "masterplan-plots": "Masterplan Plot Mapper",
+  building: "3D Building Editor",
+  geo: "3D Building Geo Editor",
+  "geo-plots": "3D Geo Plot Mapper",
+};
+const primaryNavDescriptions: Partial<Record<ShellSection, string>> = {
+  overview: "Select or create a project",
+  clients: "Access and client accounts",
+  profile: "Builder, contact and location",
+  "masterplan-plots": "Image, GPS and polygon mapping",
+  building: "Model, review and Building publish",
+  geo: "Position and publish on Geo map",
+  "geo-plots": "3D plot polygons and data",
+  branding: "Logo, poster and share links",
+};
+
 function requestedProjectSlug() {
   return new URLSearchParams(window.location.search).get("project")?.trim().toLowerCase() || "";
 }
@@ -326,7 +349,7 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
         </div>
 
         <nav className="engine-admin-nav" aria-label="AR3D Engine sections">
-          {navItems.filter(item=>projectModuleVisible(projectKind,item.id)).map((item) => {
+          {navItems.filter(item=>primaryNavSections.has(item.id) && projectModuleVisible(projectKind,item.id)).map((item) => {
             const active = item.id === section;
             const status = item.id === "building" || item.id === "releases"
               ? buildingLive
@@ -342,8 +365,8 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
               >
                 <span className="engine-admin-nav__icon" aria-hidden="true">{item.short}</span>
                 <span className="engine-admin-nav__copy">
-                  <b>{item.label}</b>
-                  <small>{item.description}</small>
+                  <b>{primaryNavLabels[item.id] || item.label}</b>
+                  <small>{primaryNavDescriptions[item.id] || item.description}</small>
                 </span>
                 {status ? <i className="engine-admin-nav__live" title="Live / active" /> : null}
               </a>
