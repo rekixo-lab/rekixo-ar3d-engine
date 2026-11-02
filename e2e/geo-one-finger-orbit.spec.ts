@@ -15,7 +15,7 @@ test("mobile one-finger drag is orbit, real tap stays tappable, two fingers reac
   await page.addScriptTag({content:
     controllerSource.replaceAll("export function ","function ")+
     "\nwindow.__geoOrbitFactory=createGeoOneFingerOrbit;"});
-  const outcome=await page.evaluate(()=>{
+  const outcome=await page.evaluate(async()=>{
     const scene=document.getElementById("geo")!;
     const tile=document.getElementById("tiles")!;
     const button=document.getElementById("control")!;
@@ -42,6 +42,17 @@ test("mobile one-finger drag is orbit, real tap stays tappable, two fingers reac
     dispatch("touchstart",[finger(1,120)]);
     const noMovement=dispatch("touchmove",[finger(1,122)]);
     const rotated=dispatch("touchmove",[finger(1,180)]);
+    // Heading is eased on requestAnimationFrame, not jumped per touch event.
+    // Run enough real browser frames to settle without a Maps API dependency.
+    await new Promise<void>(resolve=>{
+      let frames=0;
+      const advance=()=>{
+        frames++;
+        if(frames>=18)resolve();
+        else requestAnimationFrame(advance);
+      };
+      requestAnimationFrame(advance);
+    });
     const afterOrbit=heading;
     const suppressed=orbit.suppressClick();
     dispatch("touchend",[]);
@@ -64,7 +75,8 @@ test("mobile one-finger drag is orbit, real tap stays tappable, two fingers reac
   expect(outcome.noMovement,"minor finger drift should not pan").toBe(true);
   expect(outcome.rotated,"one-finger swipe should be consumed by orbit").toBe(true);
   expect(outcome.afterOrbit).toBeCloseTo(90-60*.46,4);
-  expect(outcome.redraws).toBe(1);
+  expect(outcome.redraws,"orbit should render over multiple smooth animation frames").toBeGreaterThan(1);
+  expect(outcome.redraws,"one RAF camera write per frame").toBeLessThanOrEqual(20);
   expect(outcome.suppressed,"rotation must prevent synthetic plot clicks").toBe(true);
   expect(outcome.tapAllowed,"a subsequent genuine tap remains clickable").toBe(true);
   expect(outcome.pinchBlocked,"two-finger native gesture should not be prevented").toBe(false);
