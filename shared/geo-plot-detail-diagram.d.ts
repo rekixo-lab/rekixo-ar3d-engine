@@ -15,7 +15,6 @@ export interface PublicGeoDiagramSegment {
 export interface PublicGeoDiagramSide extends PublicGeoPlotSide {
   role: string;
   label: string;
-  color: string;
   segments: PublicGeoDiagramSegment[];
   labelX: number | null;
   labelY: number | null;
