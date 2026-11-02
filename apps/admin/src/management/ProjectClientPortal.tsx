@@ -2,13 +2,14 @@ import {useEffect,useState} from "react";
 import GeoBulkPricingPanel,{type GeoPriceQuote} from "../geo/GeoBulkPricingPanel";
 import GeoDealRecordsPanel from "../geo/GeoDealRecordsPanel";
 import "./project-management.css";
-type Identity={displayName:string;email:string;role:string;projectSlug:string;projectName:string};
+import "./project-client-admin.css";
+type Identity={displayName:string;email:string;role:string;projectSlug:string;projectName:string;projectKind?:string};
 type Session={authenticated:boolean;user:Identity|null};
 type Commercial={plotId:string;status:"available"|"booked"|"sold";
   pricePaise:number|null;revision:number;publicApproved:boolean;evidenceRef:string};
 type CommercialState={mappingReleaseId:string|null;rows:Commercial[];
   plotCount?:number;plotIds?:string[];notice?:string};
-type Overview={project:{slug:string;name:string;status:string};role:string;
+type Overview={project:{slug:string;name:string;status:string;kind?:string};role:string;
   permissions:{commercialRead:boolean;commercialPrepare:boolean;commercialApprove:boolean;
     dealsRead?:boolean;dealsWrite?:boolean}};
 const ROOT="/3Dprojects/api/client-portal";
@@ -33,12 +34,23 @@ function moneyToPaise(value:string){
   if(n>1000000000000n)throw Error("INR amount exceeds listing safety limit.");
   return Number(n);
 }
-export default function ProjectClientPortal(){
+type MasterplanInventory={releaseId:string|null;plotCount:number;
+  counts:{available:number;booked:number;confirmed:number};
+  plots:{id:string;status:"available"|"booked"|"confirmed"}[];notice?:string};
+type Panel="overview"|"plots"|"pricing"|"deals";
+const nameOfRole=(value:string)=>value==="client_admin"?"Client Admin":
+  value==="approver"?"Approver":value==="editor"?"Editor":"Viewer";
+
+export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:string}){
+  const scopedSlug=projectSlug.trim().toLowerCase();
   const [invite,setInvite]=useState("");
   const [identity,setIdentity]=useState<Identity|null>(null);
   const [email,setEmail]=useState("");
   const [overview,setOverview]=useState<Overview|null>(null);
   const [commercial,setCommercial]=useState<CommercialState|null>(null);
+  const [masterplan,setMasterplan]=useState<MasterplanInventory|null>(null);
+  const [panel,setPanel]=useState<Panel>("overview");
+  const [plotSearch,setPlotSearch]=useState("");
   const [plotId,setPlotId]=useState("");
   const [status,setStatus]=useState("");
   const [rupees,setRupees]=useState("");
@@ -48,33 +60,37 @@ export default function ProjectClientPortal(){
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
+  const sessionPath="/session"+(scopedSlug?"?project="+encodeURIComponent(scopedSlug):"");
+
   const load=async()=>{
-    const s=await api<Session>("/session");
-    setIdentity(s.authenticated?s.user:null);
-    if(!s.user){setOverview(null);setCommercial(null);return;}
+    const s=await api<Session>(sessionPath);
+    // A cookie for another project must not populate a project's private page.
+    if(!s.authenticated||!s.user||(scopedSlug&&s.user.projectSlug!==scopedSlug)){
+      setIdentity(null);setOverview(null);setCommercial(null);setMasterplan(null);
+      return;
+    }
     const path="/projects/"+encodeURIComponent(s.user.projectSlug);
-    const [o,rows]=await Promise.all([
-      api<Overview>(path+"/overview"),
-      api<CommercialState>(path+"/commercial")
-    ]);
-    setOverview(o);setCommercial(rows);
+    const o=await api<Overview>(path+"/overview");
+    if(o.project.slug!==s.user.projectSlug)throw Error("Project scope verification failed.");
+    if(o.project.kind==="masterplan_geo"){
+      const inventory=await api<MasterplanInventory>(path+"/masterplan-inventory");
+      setMasterplan(inventory);setCommercial(null);
+    }else if(o.project.kind==="building" ){
+      setMasterplan(null);setCommercial(null);
+    }else{
+      const rows=await api<CommercialState>(path+"/commercial");
+      setMasterplan(null);setCommercial(rows);
+    }
+    setOverview(o);setIdentity(s.user);
   };
   useEffect(()=>{
     const token=window.location.hash.match(/^#invite=([a-f0-9]{64})$/)?.[1]||"";
-    if(token){setInvite(token);history.replaceState(null,"",location.pathname+location.search);}
-    let live=true;
-    void api<Session>("/session").then(async s=>{
-      if(!live)return;
-      if(!s.user)return;
-      setIdentity(s.user);
-      const path="/projects/"+encodeURIComponent(s.user.projectSlug);
-      const [o,rows]=await Promise.all([
-        api<Overview>(path+"/overview"),api<CommercialState>(path+"/commercial")
-      ]);
-      if(live){setOverview(o);setCommercial(rows);}
-    }).catch(err=>{if(live)setError(String(err));});
-    return()=>{live=false;};
-  },[]);
+    if(token){
+      setInvite(token);
+      history.replaceState(null,"",location.pathname+location.search);
+    }
+    void load().catch(e=>setError(e instanceof Error?e.message:"Client session unavailable."));
+  },[scopedSlug]);
   const selected=commercial?.rows.find(r=>r.plotId.toLowerCase()===plotId.toLowerCase());
   const currentQuote=priceQuotes.find(r=>r.plotId.toLowerCase()===plotId.toLowerCase());
   const choose=(id:string)=>{
@@ -88,114 +104,224 @@ export default function ProjectClientPortal(){
     if(!invite||!email.trim())return;
     setBusy(true);setError("");setMessage("");
     try{
-      await api("/enroll","POST",{token:invite,email:email.trim().toLowerCase()});
+      await api("/enroll","POST",{token:invite,email:email.trim().toLowerCase(),
+        ...(scopedSlug?{projectSlug:scopedSlug}:{})});
       setInvite("");setEmail("");
       await load();
-      setMessage("Project-scoped sign-in established. Owner credentials are not shared.");
+      setMessage("Your project admin session is active.");
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   };
   const logout=async()=>{
-    setBusy(true);try{await api("/logout","POST");setIdentity(null);setOverview(null);
-      setCommercial(null);setMessage("Client session revoked on this device.");}
-    catch(e){setError(e instanceof Error?e.message:String(e));}
+    setBusy(true);
+    try{
+      await api("/logout","POST");
+      setIdentity(null);setOverview(null);setCommercial(null);setMasterplan(null);
+      setMessage("Signed out. Project access revoked on this device.");
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   };
   const save=async()=>{
     if(!identity||!overview?.permissions.commercialPrepare||!plotId||!status)return;
+    if(!window.confirm("Save reviewed commercial record for Plot "+plotId+
+      "? Public changes require explicit approval and supporting evidence."))return;
     setBusy(true);setError("");setMessage("");
     try{
-      const publicFlag=overview.permissions.commercialApprove&&publicApproved;
-      if(!window.confirm("Submit a project-scoped commercial record for Plot "+plotId+
-        "?\n"+(publicFlag?"This will publish the approved listing status/price.":
-          "This remains PRIVATE until approved by an authorized approver.")+
-        "\nNo buyer or receipt information is included."))return;
+      const publicFlag=Boolean(overview.permissions.commercialApprove&&publicApproved);
       const payload={plotId,status,pricePaise:moneyToPaise(rupees),currency:"INR",
         evidenceRef:evidence.trim(),publicApproved:publicFlag,
         expectedRevision:selected?.revision||0};
-      const path="/projects/"+encodeURIComponent(identity.projectSlug)+"/commercial";
-      const next=await api<CommercialState>(path,"PUT",payload);
-      setCommercial(next);setMessage("Commercial record saved with project scope and audit history.");
+      const next=await api<CommercialState>("/projects/"+
+        encodeURIComponent(identity.projectSlug)+"/commercial","PUT",payload);
+      setCommercial(next);setMessage("Project commercial record saved and audited.");
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   };
-  return <main className="engine-manage" style={{maxWidth:920,margin:"0 auto"}}>
-    <header><p className="eyebrow">AR3D ENGINE · PROJECT CLIENT PORTAL</p>
-      <h1>Scoped Project Access</h1>
-      <p>Independent of Engine Owner sign-in · private project data only</p></header>
+
+  const kind=overview?.project.kind||identity?.projectKind||"legacy";
+  const masterplanGeo=kind==="masterplan_geo";
+  const availablePanels:Panel[]=masterplanGeo||kind==="building"
+    ?["overview","plots"]
+    :["overview","plots","pricing",...(overview?.permissions.dealsRead?["deals" as const]:[])];
+  const mappingCount=masterplanGeo?masterplan?.plotCount||0:commercial?.plotCount||0;
+  const countFor=(kind:"available"|"booked"|"sold")=>
+    (commercial?.rows||[]).filter(x=>x.status===kind).length;
+  const statusCounts=masterplanGeo?{
+    available:masterplan?.counts.available||0,
+    booked:masterplan?.counts.booked||0,
+    sold:masterplan?.counts.confirmed||0,
+    unreviewed:0
+  }:{
+    available:countFor("available"),booked:countFor("booked"),
+    sold:countFor("sold"),
+    unreviewed:Math.max(0,mappingCount-(commercial?.rows.length||0))
+  };
+  const customerSite=identity?"https://ar3dstudio.in/3Dprojects/"+
+    encodeURIComponent(identity.projectSlug)+(masterplanGeo?"/masterplan":"/geo"):"";
+  const filtered=masterplanGeo?(masterplan?.plots||[]).filter(row=>
+    row.id.toLowerCase().includes(plotSearch.trim().toLowerCase())):
+    (commercial?.rows||[]).filter(row=>
+      row.plotId.toLowerCase().includes(plotSearch.trim().toLowerCase()));
+  const projectLabel=identity?.projectName||"Project Client Admin";
+
+  return <main className="engine-client-admin">
+    <header className="engine-client-admin-head">
+      <div className="engine-client-admin-brand">
+        <span className="engine-client-admin-mark" aria-hidden="true">
+          <i/><i/><i/><i/>
+        </span>
+        <div>
+          <small>AR3D ENGINE · PERSONAL CLIENT ADMIN</small>
+          <h1>{projectLabel}</h1>
+          <p>{identity?"Private project workspace · "+nameOfRole(identity.role):
+            "Project-specific secure sign-in"}</p>
+        </div>
+      </div>
+      {identity&&<div className="engine-client-admin-head-actions">
+        <a href={customerSite} target="_blank" rel="noopener noreferrer">View customer site</a>
+        <button type="button" disabled={busy} onClick={()=>void logout()}>Sign out</button>
+      </div>}
+    </header>
     {error&&<p className="engine-manage-error" role="alert">{error}</p>}
     {message&&<p className="engine-manage-ok" role="status">{message}</p>}
-    {!identity?<section className="engine-manage-card">
-      <h2>Accept an owner-issued invitation</h2>
-      <p>The owner must confirm your identity and share a one-time link privately.
-        A directory contact alone does not create a login. Links expire after 24 hours.</p>
-      {!invite&&<p>Open the private invitation link issued for your project to continue.</p>}
-      {invite&&<form onSubmit={e=>{e.preventDefault();void login();}}>
-        <label>Invited email address<input type="email" autoComplete="email" required
-          value={email} maxLength={254} onChange={e=>setEmail(e.target.value)}/></label>
-        <div className="engine-manage-actions"><button disabled={busy||!email.trim()}>
-          {busy?"Verifying invitation…":"Accept one-time invitation"}</button></div>
-      </form>}
+    {!identity?<section className="engine-client-admin-signin">
+      <h2>Project Client Admin</h2>
+      <p>Only an owner-approved administrator can access this project's private data.
+        Ask the project owner for a one-time invitation. Links expire after 24 hours.</p>
+      {!invite?<p role="status">Open your project's private invitation link to sign in.</p>:
+        <form onSubmit={e=>{e.preventDefault();void login();}}>
+          <label>Invited email address
+            <input type="email" autoComplete="email" value={email}
+              maxLength={254} required onChange={e=>setEmail(e.target.value)}/>
+          </label>
+          <button type="submit" disabled={busy||!email.trim()}>
+            {busy?"Verifying…":"Activate project access"}</button>
+        </form>}
     </section>:<>
-      <section className="engine-manage-card">
-        <h2>{identity.projectName}</h2>
-        <p>{identity.displayName} · {identity.email} · Role: <strong>{identity.role}</strong></p>
-        <p>Every request rechecks the project grant, role, active release and session revocation.
-          This session cannot open Engine Owner APIs or another project's ledger.</p>
-        <div className="engine-manage-actions">
-          <button type="button" onClick={()=>void load()} disabled={busy}>Refresh project</button>
-          <button type="button" onClick={()=>void logout()} disabled={busy}>Sign out</button>
-        </div>
+      <nav className="engine-client-admin-tabs" aria-label="Client admin sections">
+        {availablePanels.map(item=><button key={item} type="button"
+          aria-current={panel===item?"page":undefined} className={panel===item?"is-active":""}
+          onClick={()=>setPanel(item)}>{item==="overview"?"Overview":
+          item==="plots"?"Plots":item==="pricing"?"Pricing":"Deals"}</button>)}
+      </nav>
+      <section className="engine-client-admin-meta">
+        <span>{identity.displayName} · {identity.email}</span>
+        <span>Role: {nameOfRole(identity.role)} · {identity.projectSlug}</span>
       </section>
-      <section className="engine-manage-card">
-        <h2>Approved Geo Plot Listing Records</h2>
-        <p>{overview?.permissions.commercialApprove?"You may approve source-backed public listings.":
-          overview?.permissions.commercialPrepare?"You may prepare private listing facts for an approver.":
-            "You have read-only access to this project's listing records."}</p>
-        <p>Active mapping release: {commercial?.mappingReleaseId?.slice(0,20)||"not published"}</p>
-        {commercial?.rows.map(row=><p key={row.plotId}>
-          <button type="button" onClick={()=>choose(row.plotId)}>Plot {row.plotId}</button>
-          {" · "}{row.status}{" · "}
-          {row.pricePaise===null?"Price unverified":"₹"+(row.pricePaise/100).toLocaleString("en-IN")}
-          {" · "}{row.publicApproved?"Public approved":"Private review"}</p>)}
-        {!commercial?.rows.length&&<p>No source-backed commercial records for the active mapping release.</p>}
-        {overview?.permissions.commercialPrepare&&<>
-          <label>Existing canonical Plot ID<input value={plotId} maxLength={48}
-            onChange={e=>choose(e.target.value)} placeholder="Exact mapped ID"/></label>
-          <label>Listing status<select value={status} onChange={e=>setStatus(e.target.value)}>
-            <option value="">Select reviewed status</option>
-            <option value="available">Available</option><option value="booked">Booked</option>
-            <option value="sold">Sold</option></select></label>
-          <label>INR listing price (optional)<input value={rupees}
-            inputMode="decimal" onChange={e=>setRupees(e.target.value)}/></label>
-          {currentQuote&&<p>Private CSV price suggestion:
-            {" "}₹{(currentQuote.pricePaise/100).toLocaleString("en-IN")}
-            <button type="button" onClick={()=>{
-              if(!window.confirm("Use reviewed CSV quote? It does not change status or public approval."))return;
-              setRupees(String(currentQuote.pricePaise/100));setEvidence(currentQuote.evidenceRef);
-            }}>Use reviewed CSV price</button>
-          </p>}
-          <label>Source / signed agreement reference<input value={evidence}
-            maxLength={250} onChange={e=>setEvidence(e.target.value)}/></label>
-          {overview.permissions.commercialApprove&&<label>
-            <input type="checkbox" checked={publicApproved}
-              onChange={e=>setPublicApproved(e.target.checked)}/>
-            Explicitly approve for public display</label>}
-          <div className="engine-manage-actions">
-            <button type="button" disabled={busy||!plotId||!status||evidence.trim().length<3}
-              onClick={()=>void save()}>Save scoped commercial record</button></div>
+
+      {panel==="overview"&&<>
+        <section className="engine-client-admin-stats" aria-label="Project plot summary">
+          <article><span>Total Plots</span><strong>{mappingCount}</strong></article>
+          <article><span>Available</span><strong>{statusCounts.available}</strong></article>
+          <article><span>Booked</span><strong>{statusCounts.booked}</strong></article>
+          <article><span>{masterplanGeo?"Confirmed":"Sold"}</span><strong>{statusCounts.sold}</strong></article>
+          {!masterplanGeo&&<article><span>Not reviewed</span><strong>{statusCounts.unreviewed}</strong></article>}
+        </section>
+        <div className="engine-client-admin-grid">
+          <section className="engine-client-admin-card">
+            <h2>Project overview</h2>
+            <p>Published project: <strong>{overview?.project.name}</strong></p>
+            <p>Status: {overview?.project.status}</p>
+            <p>{masterplanGeo?"Masterplan source and private inventory are read-only here.":
+              "Commercial facts are separate from immutable 3D geometry and require explicit public approval."}</p>
+            <div className="engine-client-admin-actions">
+              <button type="button" disabled={busy} onClick={()=>void load()
+                .catch(e=>setError(e instanceof Error?e.message:String(e)))}>Refresh</button>
+              <button type="button" onClick={()=>setPanel("plots")}>View plots</button>
+            </div>
+          </section>
+          <section className="engine-client-admin-card">
+            <h2>Access & responsibilities</h2>
+            <p>{overview?.permissions.commercialApprove&&!masterplanGeo?
+              "Can approve source-backed listing status and prices for public display.":
+              overview?.permissions.commercialPrepare&&!masterplanGeo?
+              "Can prepare private commercial facts for review.":
+              "Can inspect permitted project facts and inventory."}</p>
+            <p>Owner controls 3D mapping, publishing, project access and immutable releases.</p>
+            <p>Client sessions are separately authenticated and checked on every request.</p>
+          </section>
+        </div>
+      </>}
+
+      {panel==="plots"&&<section className="engine-client-admin-card">
+        <div className="engine-client-admin-card-title">
+          <div><h2>{masterplanGeo?"Masterplan inventory":"Geo plot management"}</h2>
+            <p>{masterplanGeo?"Read-only, source-backed plot statuses":
+              "Reviewed status, listing price and approval records"}</p></div>
+          <label className="engine-client-admin-search">Search plot
+            <input value={plotSearch} placeholder="Plot number"
+              onChange={e=>setPlotSearch(e.target.value)}/></label>
+        </div>
+        {masterplanGeo?<div className="engine-client-admin-plot-list">
+          {filtered.map(row=><div className="engine-client-admin-plot-row" key={row.id}>
+            <strong>Plot {row.id}</strong>
+            <span>{row.status==="confirmed"?"Confirmed":row.status==="booked"?"Booked":"Available"}</span>
+          </div>)}
+          {!filtered.length&&<p>No matching plot records.</p>}
+          <p>{masterplan?.notice}</p>
+        </div>:<>
+          <div className="engine-client-admin-plot-list">
+            {filtered.map(row=><button key={row.plotId} type="button"
+              className={"engine-client-admin-plot-row"+(plotId===row.plotId?" is-selected":"")}
+              onClick={()=>choose(row.plotId)}>
+              <strong>Plot {row.plotId}</strong>
+              <span>{row.status} · {row.pricePaise===null?"Price not reviewed":
+                "₹"+(row.pricePaise/100).toLocaleString("en-IN")} ·
+                {row.publicApproved?" Public approved":" Private review"}</span>
+            </button>)}
+            {!filtered.length&&<p>No reviewed listings match the search.</p>}
+          </div>
+          {overview?.permissions.commercialPrepare&&<>
+            <div className="engine-client-admin-editor">
+              <h3>Review listing details</h3>
+              <label>Canonical mapped Plot ID<input value={plotId} maxLength={48}
+                onChange={e=>choose(e.target.value)} placeholder="Exact plot ID"/></label>
+              <label>Listing status<select value={status} onChange={e=>setStatus(e.target.value)}>
+                <option value="">Choose status</option>
+                <option value="available">Available</option>
+                <option value="booked">Booked</option>
+                <option value="sold">Sold</option>
+              </select></label>
+              <label>INR listing price<input value={rupees} inputMode="decimal"
+                onChange={e=>setRupees(e.target.value)}/></label>
+              {currentQuote&&<p>Reviewed CSV quote: ₹{(currentQuote.pricePaise/100).toLocaleString("en-IN")}
+                <button type="button" onClick={()=>{
+                  if(window.confirm("Use reviewed CSV price? Public approval and status stay unchanged.")){
+                    setRupees(String(currentQuote.pricePaise/100));setEvidence(currentQuote.evidenceRef);
+                  }
+                }}>Use quote</button></p>}
+              <label>Evidence / signed agreement reference<input value={evidence}
+                maxLength={250} onChange={e=>setEvidence(e.target.value)}/></label>
+              {overview.permissions.commercialApprove&&<label className="engine-client-admin-inline-check">
+                <input type="checkbox" checked={publicApproved}
+                  onChange={e=>setPublicApproved(e.target.checked)}/>
+                Approve this listing for public display
+              </label>}
+              <button type="button" disabled={busy||!plotId||!status||evidence.trim().length<3}
+                onClick={()=>void save()}>Save scoped listing</button>
+            </div>
+          </>}
         </>}
-        {identity&&<GeoBulkPricingPanel
+      </section>}
+
+      {panel==="pricing"&&!masterplanGeo&&identity&&<section className="engine-client-admin-card">
+        <h2>Private bulk pricing</h2>
+        <GeoBulkPricingPanel
           endpoint={ROOT+"/projects/"+encodeURIComponent(identity.projectSlug)+"/pricing"}
           mappingReleaseId={commercial?.mappingReleaseId||null}
           canEdit={Boolean(overview?.permissions.commercialPrepare)}
-          onQuotes={setPriceQuotes}/>}
-        {overview?.permissions.dealsRead&&identity&&<GeoDealRecordsPanel
-          endpoint={ROOT+"/projects/"+encodeURIComponent(identity.projectSlug)+"/deals"}
-          mappingReleaseId={commercial?.mappingReleaseId||null}
-          plotIds={commercial?.plotIds||[]}
-          canEdit={Boolean(overview.permissions.dealsWrite)}/>}
-      </section>
+          onQuotes={setPriceQuotes}/>
+      </section>}
+
+      {panel==="deals"&&overview?.permissions.dealsRead&&!masterplanGeo&&identity&&
+        <section className="engine-client-admin-card">
+          <h2>Private deal progress</h2>
+          <GeoDealRecordsPanel
+            endpoint={ROOT+"/projects/"+encodeURIComponent(identity.projectSlug)+"/deals"}
+            mappingReleaseId={commercial?.mappingReleaseId||null}
+            plotIds={commercial?.plotIds||[]}
+            canEdit={Boolean(overview.permissions.dealsWrite)}/>
+        </section>}
     </>}
   </main>;
 }
