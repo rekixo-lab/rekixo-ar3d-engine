@@ -472,9 +472,12 @@ export default function ProjectShareBuilder() {
                 {busy === "logo" ? "Uploading draft…" : "Upload logo draft"}
               </button>
             ) : null}
-            <button className="engine-control-button engine-control-button--primary" type="button" onClick={() => void publishLogo()} disabled={busyNow || !state?.logo.draftVersion}>
-              {busy === "publish-logo" ? "Publishing…" : "Publish Logo & Favicon"}
-            </button>
+            <details className="engine-branding-advanced-action">
+              <summary>Advanced · Publish logo only</summary>
+              <button className="engine-control-button" type="button" onClick={() => void publishLogo()} disabled={busyNow || !state?.logo.draftVersion}>
+                {busy === "publish-logo" ? "Publishing…" : "Publish Logo & Favicon"}
+              </button>
+            </details>
             {state?.logo.publishedLogoUrl ? <a className="engine-branding-small-link" href={state.logo.publishedLogoUrl} target="_blank" rel="noreferrer"><BrandingIcon name="external" size={14} /> Open published logo</a> : null}
             {state?.logo.sourceUrl ? <a className="engine-branding-small-link" href={state.logo.sourceUrl} target="_blank" rel="noreferrer" download><BrandingIcon name="external" size={14} /> Download original logo</a> : null}
           </div>
@@ -544,9 +547,12 @@ export default function ProjectShareBuilder() {
                 <BrandingIcon name="upload" size={16} />{busy === "share" ? "Uploading poster…" : "Upload share poster draft"}
               </button>
             ) : null}
-            <button className="engine-control-button engine-control-button--primary" type="button" onClick={() => void publishShare()} disabled={busyNow || !currentShare?.live || !titleValid || !descriptionValid || (!currentShare?.draftCardVersion && !currentShare?.publishedVersion && !(activeExperience === "geo" && reuseBuildingPoster && state?.experiences.building.publishedCardUrl))}>
-              <BrandingIcon name="share" size={16} />{busy === "publish-share" ? "Publishing share…" : `Publish ${activeExperience === "geo" ? "Geo" : "Building"} Share`}
-            </button>
+            <details className="engine-branding-advanced-action">
+              <summary>Advanced · Publish share poster only</summary>
+              <button className="engine-control-button" type="button" onClick={() => void publishShare()} disabled={busyNow || !currentShare?.live || !titleValid || !descriptionValid || (!currentShare?.draftCardVersion && !currentShare?.publishedVersion && !(activeExperience === "geo" && reuseBuildingPoster && state?.experiences.building.publishedCardUrl))}>
+                <BrandingIcon name="share" size={16} />{busy === "publish-share" ? "Publishing share…" : `Publish ${activeExperience === "geo" ? "Geo" : "Building"} Share`}
+              </button>
+            </details>
             <div className="engine-branding-share-actions">
               <button type="button" className="engine-control-button" disabled={!currentShare?.shareUrl} onClick={() => void copyLink()}><BrandingIcon name="copy" size={15} />Copy published link</button>
               {currentShare?.shareUrl ? <a className="engine-control-link" href={currentShare.shareUrl} target="_blank" rel="noreferrer"><BrandingIcon name="external" size={15} />Open shared link</a> : null}
