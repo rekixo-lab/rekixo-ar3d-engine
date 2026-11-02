@@ -626,7 +626,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
               // Same original X/Z frame as the model; placement is shared.
               plotLayer=candidateLayer;
               placement.anchorOffset.add(plotLayer.group);
-              // Only owner-approved statuses are colored; never guess availability.
+              // Match Platform status presentation: unclassified published plots
+              // display Available without changing approved commercial records.
               const updateStatus=(enabled:boolean,filter:GeoPlotStatus|null)=>{
                 candidateLayer.setStatusPresentation(enabled,filter,statusSummary.statusById);
                 overlay?.requestRedraw();
@@ -788,7 +789,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
               <span className="geo-plot-status-option-label">
                 <i className="geo-plot-status-dot" aria-hidden="true"/>{item.label}
               </span>
-              <b>{statusSummary.approved===0?"—":statusSummary[item.id]}</b>
+              <b>{statusSummary[item.id]}</b>
             </button>
           ))}
           <div className="geo-plot-status-total">
