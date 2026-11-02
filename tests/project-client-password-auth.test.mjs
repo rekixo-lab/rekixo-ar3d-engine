@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {DatabaseSync} from "node:sqlite";
-import {ownerProvisionClientPassword} from "../workers/project-client-passwords.mjs";
+import {ownerProvisionClientPassword,ownerCreateClientPassword} from "../workers/project-client-passwords.mjs";
 import {handleProjectClientPortal} from "../workers/project-client-portal.mjs";
 const read=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
 class Stmt {
@@ -28,14 +28,18 @@ function fixture(){
  CREATE TABLE projects_3d(id TEXT PRIMARY KEY,slug TEXT,name TEXT,status TEXT,project_kind TEXT);
  CREATE TABLE project_client_directory_3d(
   id TEXT PRIMARY KEY,project_id TEXT REFERENCES projects_3d(id),display_name TEXT,
-  email TEXT,phone TEXT,proposed_role TEXT,access_state TEXT,updated_by TEXT,updated_at TEXT);
+  email TEXT,phone TEXT,proposed_role TEXT,access_state TEXT,
+  notes TEXT DEFAULT '',created_by TEXT DEFAULT '',created_at TEXT DEFAULT '',
+  updated_by TEXT,updated_at TEXT);
  CREATE TABLE engine_admin_audit(id TEXT PRIMARY KEY,actor_email TEXT,action TEXT,
   project_id TEXT,target_id TEXT,details_json TEXT,created_at TEXT);`);
  sqlite.exec(read("database/migrations/0047_scoped_project_client_access.sql"));
  sqlite.exec(read("database/migrations/0052_project_client_password_access.sql"));
  for(const slug of ["demo-a","demo-b"]){
   sqlite.prepare("INSERT INTO projects_3d VALUES(?,?,?,'published','building')").run(slug,slug,slug);
-  sqlite.prepare("INSERT INTO project_client_directory_3d VALUES(?,?,?,?,?,'client_admin','not_provisioned',?,?)")
+  sqlite.prepare("INSERT INTO project_client_directory_3d "+
+   "(id,project_id,display_name,email,phone,proposed_role,access_state,updated_by,updated_at) "+
+   "VALUES(?,?,?,?,?,'client_admin','not_provisioned',?,?)")
    .run(slug==="demo-a"?"11111111-1111-4111-8111-111111111111":
     "22222222-2222-4222-8222-222222222222",slug,"Client "+slug,
     slug+"@example.test","+919876543210","owner@example.test","2026-11-02");
@@ -51,6 +55,30 @@ const req=(path,method="GET",data,cookie)=>{
  return new Request(base+path,{method,headers,...(data?{body:JSON.stringify(data)}:{})});
 };
 const api=(env,request)=>handleProjectClientPortal(request,env,new URL(request.url));
+test("Owner creates client, grant and password atomically; duplicate login leaves no orphan record",async()=>{
+ const f=fixture();
+ try{
+  const created=await ownerCreateClientPassword(f.env,f.owner,f.project,{
+   displayName:"Another Client",email:"owner2@example.test",phone:"+919888777666",
+   notes:"Client owner",loginType:"mobile"
+  });
+  assert.equal(created.loginId,"+919888777666");
+  const directory=f.sqlite.prepare("SELECT * FROM project_client_directory_3d WHERE id=?")
+   .get(created.clientId);
+  assert.equal(directory.display_name,"Another Client");
+  const grant=f.sqlite.prepare("SELECT * FROM project_client_grants_3d WHERE client_id=?")
+   .get(created.clientId);
+  assert.equal(grant.active,1);
+  assert.equal(grant.role,"client_admin");
+  const before=f.sqlite.prepare("SELECT COUNT(*) AS total FROM project_client_directory_3d").get().total;
+  await assert.rejects(ownerCreateClientPassword(f.env,f.owner,f.project,{
+   displayName:"Duplicate Number",phone:"+919888777666",email:"another@example.test",
+   loginType:"mobile"
+  }),/UNIQUE/);
+  const after=f.sqlite.prepare("SELECT COUNT(*) AS total FROM project_client_directory_3d").get().total;
+  assert.equal(after,before,"failed login creation must rollback directory too");
+ }finally{f.close();}
+});
 test("Owner provisions independent project-bound Mobile Login ID and temporary password",async()=>{
  const f=fixture();
  try{
