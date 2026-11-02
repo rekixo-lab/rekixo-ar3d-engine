@@ -58,6 +58,37 @@ const audit=(env,actor,action,projectId,clientId,details)=>env.DB.prepare(
 ).bind(crypto.randomUUID(),actor,action,projectId,clientId,JSON.stringify(details),now());
 const validId=x=>typeof x==="string"&&/^[0-9a-f-]{36}$/i.test(x);
 
+/** Create the project directory record, grant and first password atomically. */
+export async function ownerCreateClientPassword(env,actor,project,details){
+ if(project.status==="archived")throw Error("Archived projects cannot add clients.");
+ const id=details.id||crypto.randomUUID();
+ if(!validId(id)||typeof details.displayName!=="string"||!details.displayName.trim())
+  throw Error("Valid client name required.");
+ const type=details.loginType==="email"?"email":details.loginType==="mobile"?"mobile":
+  details.phone?"mobile":"email";
+ const loginId=clientLoginId(type==="mobile"?details.phone:details.email,type);
+ if(!loginId)throw Error("Valid "+(type==="mobile"?"mobile number":"email")+" required.");
+ const time=now(),password=randomPassword(),digest=await hashPassword(password);
+ const result=await env.DB.batch([
+  env.DB.prepare("INSERT INTO project_client_directory_3d "+
+   "(id,project_id,display_name,email,phone,proposed_role,access_state,notes,created_by,created_at,updated_by,updated_at) "+
+   "VALUES(?,?,?,?,?,'client_admin','not_provisioned',?,?,?,?,?)")
+   .bind(id,project.id,details.displayName,details.email||"",details.phone||"",
+    details.notes||"",actor.email,time,actor.email,time),
+  env.DB.prepare("INSERT INTO project_client_grants_3d(client_id,project_id,role,epoch,active,granted_by,updated_at) "+
+   "VALUES(?,?,'client_admin',1,1,?,?)").bind(id,project.id,actor.email,time),
+  env.DB.prepare("INSERT INTO project_client_passwords_3d "+
+   "(client_id,project_id,login_type,login_id,password_salt,password_hash,password_version,must_change_password,active,created_at,updated_at) "+
+   "VALUES(?,?,?,?,?,?,1,1,1,?,?)")
+   .bind(id,project.id,type,loginId,digest.salt,digest.hash,time,time),
+  audit(env,actor.email,"project.client_record_added",project.id,id,{proposedRole:"client_admin"}),
+  audit(env,actor.email,"client.password_provisioned",project.id,id,{loginType:type,loginId,grantEpoch:1})
+ ]);
+ if(result.some(item=>item.meta?.changes!==1))
+  throw Error("Client and credentials could not be created consistently.");
+ return {clientId:id,loginType:type,loginId,password,mustChangePassword:true};
+}
+
 /** Explicit owner-only password provisioning/reset; raw password returned ONCE. */
 export async function ownerProvisionClientPassword(env,actor,project,clientId,loginType){
  if(!validId(clientId))throw Error("Valid client ID required.");
