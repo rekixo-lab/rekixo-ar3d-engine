@@ -96,9 +96,6 @@ export function GeoPlotDetailsDrawer({
           <div className="geo-plot-drawer__heading">
             <span className="geo-plot-drawer__eyebrow">PLOT DETAILS</span>
             <h2>{"Plot "+shown.id}</h2>
-            <span className={"geo-plot-drawer__status geo-plot-drawer__status--"+displayStatus}>
-              {prettyStatus(displayStatus)}
-            </span>
           </div>
           <button ref={closeButtonRef} className="geo-plot-drawer__close"
             type="button" aria-label="Close plot details" onClick={onClose}>×</button>
@@ -106,7 +103,9 @@ export function GeoPlotDetailsDrawer({
         <div className="geo-plot-drawer__scroll">
           <section className="geo-plot-drawer__diagram-card" aria-label="Plot boundary diagram">
             <div className="geo-plot-drawer__section-top">
-              <b>Mapped Plot Shape</b>
+              <span className={"geo-plot-drawer__status geo-plot-drawer__status--"+displayStatus}>
+                {prettyStatus(displayStatus)}
+              </span>
             </div>
             {diagram ? <>
               <svg viewBox="0 0 320 210" className="geo-plot-drawer__svg"
