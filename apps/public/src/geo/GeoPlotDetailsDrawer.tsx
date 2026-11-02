@@ -56,6 +56,10 @@ export function GeoPlotDetailsDrawer({
     return ()=>window.removeEventListener("keydown",onKeyDown);
   },[plot,onClose]);
   const shown = plot || previousPlot;
+  // Display-only Platform parity: no published Booked/Sold status means Available.
+  // Never write this fallback to the private commercial ledger.
+  const displayStatus = commercial?.status==="booked"||commercial?.status==="sold"
+    ?commercial.status:"available";
   const diagram = useMemo(()=>shown?publicGeoPlotDiagram(shown):null,[shown]);
   const areas = useMemo(()=>shown?publicGeoAreaUnits(shown.area):[],[shown]);
   const allRoles = shown?.layout==="three" || shown?.corners.length===3
@@ -71,6 +75,7 @@ export function GeoPlotDetailsDrawer({
       .format(price/100):"";
   return (
     <aside className={"geo-plot-drawer"+(plot?" is-open":"")}
+      data-plot-status={displayStatus}
       aria-hidden={!plot} inert={!plot} aria-label="Selected plot details"
       aria-live="off" data-testid="geo-plot-details-drawer">
       {shown && <>
@@ -78,9 +83,9 @@ export function GeoPlotDetailsDrawer({
           <div className="geo-plot-drawer__heading">
             <span className="geo-plot-drawer__eyebrow">PLOT DETAILS</span>
             <h2>{"Plot "+shown.id}</h2>
-            {commercial?<span className={"geo-plot-drawer__status geo-plot-drawer__status--"+commercial.status}>
-              {prettyStatus(commercial.status)}
-            </span>:null}
+            <span className={"geo-plot-drawer__status geo-plot-drawer__status--"+displayStatus}>
+              {prettyStatus(displayStatus)}
+            </span>
           </div>
           <button ref={closeButtonRef} className="geo-plot-drawer__close"
             type="button" aria-label="Close plot details" onClick={onClose}>×</button>
@@ -89,41 +94,30 @@ export function GeoPlotDetailsDrawer({
           <section className="geo-plot-drawer__diagram-card" aria-label="Plot boundary diagram">
             <div className="geo-plot-drawer__section-top">
               <b>Mapped Plot Shape</b>
-              {diagram?<small>{diagram.vertexCount+" corners"}</small>:null}
             </div>
             {diagram ? <>
-              <svg viewBox="0 0 320 220" className="geo-plot-drawer__svg"
+              <svg viewBox="0 0 320 210" className="geo-plot-drawer__svg"
                 role="img" aria-label={"Shape of Plot "+shown.id+" based on published model polygon"}>
                 <polygon points={diagram.pointText} className="geo-plot-drawer__poly"/>
                 {diagram.sides.map(side=>side.segments.map((segment,i)=>
                   <line key={side.role+"-"+i} x1={segment.x1} y1={segment.y1}
                     x2={segment.x2} y2={segment.y2}
-                    stroke={side.color} strokeWidth="3.5" strokeLinecap="round"
-                    vectorEffect="non-scaling-stroke"/>
+                    className="geo-plot-drawer__side-edge" vectorEffect="non-scaling-stroke"/>
                 ))}
                 <text x="160" y="109" textAnchor="middle" dominantBaseline="middle"
                   className="geo-plot-drawer__plot-label">{shown.id}</text>
                 {diagram.sides.map(side=>side.labelX!==null&&side.labelY!==null
                   ?<text key={side.role} x={side.labelX} y={side.labelY}
                     textAnchor="middle" dominantBaseline="middle"
-                    fill={side.color} className="geo-plot-drawer__side-label">{side.label}</text>
+                    className="geo-plot-drawer__side-label">
+                      <tspan x={side.labelX} dy="-0.45em">{side.label}</tspan>
+                      <tspan x={side.labelX} dy="1.3em" className="geo-plot-drawer__side-label-value">
+                        {formatMeasurement(side.length,side.unit)}
+                      </tspan>
+                    </text>
                   :null)}
               </svg>
-              <div className="geo-plot-drawer__side-legend">
-                {diagram.sides.map(side=>
-                  <div key={side.role} className="geo-plot-drawer__side">
-                    <span className="geo-plot-drawer__side-name">
-                      <i style={{backgroundColor:side.color}} aria-hidden="true"/>
-                      {side.label}{side.roadFacing?" · Road":""}
-                    </span>
-                    <b>{formatMeasurement(side.length,side.unit)}</b>
-                  </div>
-                )}
-              </div>
             </> : <p className="geo-plot-drawer__muted">Plot outline is unavailable.</p>}
-            <small className="geo-plot-drawer__shape-note">
-              Shape and dimensions are taken from the published plot mapping.
-            </small>
           </section>
           <section className="geo-plot-drawer__facts" aria-label="Plot measurements and status">
             <h3>Plot Measurements</h3>
