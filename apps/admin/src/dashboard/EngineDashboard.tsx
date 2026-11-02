@@ -386,36 +386,15 @@ export default function EngineDashboard() {
               </section>
 
               {selectedProject.projectKind === "masterplan_geo" ? (
-                <section className="engine-overview-status-grid" aria-label="Masterplan project workflow">
+                <section className="engine-overview-status-grid" aria-label="Masterplan project editor">
                   <article className="engine-control-card">
-                    <div className="engine-overview-card-head"><span>MASTERPLAN SOURCE</span><i>START HERE</i></div>
-                    <h3>Image + Geo Calibration</h3>
-                    <p>Independent 2D source and geographic control points; no Building model required.</p>
-                    <a href={projectHref("masterplan",selectedProject.slug)}>Open Masterplan</a>
-                  </article>
-                  <article className="engine-control-card">
-                    <div className="engine-overview-card-head"><span>PLOT MAPPING</span><i>INDEPENDENT</i></div>
-                    <h3>Polygon Plot Mapping</h3>
-                    <p>Draw plots, assign measurements and facing, verify then publish.</p>
-                    <a href={projectHref("masterplan-plots",selectedProject.slug)}>Open Plot Mapper</a>
-                  </article>
-                  <article className="engine-control-card">
-                    <div className="engine-overview-card-head"><span>CLIENT & BUSINESS</span><i>MANAGEMENT</i></div>
-                    <h3>Project Profile & Clients</h3>
-                    <p>Keep builder contact records and client directory separate from published maps.</p>
-                    <a href={`/3Dprojects/profile?project=${encodeURIComponent(selectedProject.slug)}`}>Open Profile</a>
+                    <div className="engine-overview-card-head"><span>MASTERPLAN PLOT MAPPER</span><i>ONE WORKSPACE</i></div>
+                    <h3>Source, GPS & Plot Mapping</h3>
+                    <p>Upload the original image, calibrate GPS, map plots and measurements, then verify and publish updates in one editor.</p>
+                    <a href={projectHref("masterplan-plots",selectedProject.slug)}>Open Masterplan Editor</a>
                   </article>
                 </section>
               ) : (<section className="engine-overview-status-grid" aria-label="Project readiness">
-                <article className="engine-control-card">
-                  <div className="engine-overview-card-head">
-                    <span>SOURCE PACK</span>
-                    <i className={statusTone(sourceReady ? "ready" : sourcePackError || sourcePack ? "warning" : "idle")}>{sourceReady ? "READY" : sourcePackError ? "API ERROR" : sourcePack ? sourcePack.status.toUpperCase() : "NOT STARTED"}</i>
-                  </div>
-                  <h3>{sourcePackError ? "Source Pack unavailable" : sourcePack ? `Source Pack v${sourcePack.version}` : "Verified originals"}</h3>
-                  <p>Files, geometry authority, scale, component review and durable processing.</p>
-                  <a href={projectHref("source-pack", selectedProject.slug)}>Open Source Pack</a>
-                </article>
 
                 <article className="engine-control-card">
                   <div className="engine-overview-card-head">
@@ -427,6 +406,7 @@ export default function EngineDashboard() {
                   <a href={projectHref("building", selectedProject.slug)}>Open Building</a>
                 </article>
 
+                {selectedProject.projectKind !== "building" && (
                 <article className="engine-control-card">
                   <div className="engine-overview-card-head">
                     <span>GEO</span>
@@ -436,6 +416,7 @@ export default function EngineDashboard() {
                   <p>Exact real-world Building placement. Optional unless the customer needs map context.</p>
                   <a href={projectHref("geo-mapper", selectedProject.slug)}>Open Geo</a>
                 </article>
+                )}
 
                 {(selectedProject.projectKind==="building_geo"||selectedProject.projectKind==="legacy")&&
                 <article className="engine-control-card">
@@ -448,30 +429,9 @@ export default function EngineDashboard() {
                   <p>Import verified CSV inventory, map each real 3D polygon, independently verify and publish.</p>
                   <a href={`/3Dprojects/geo-plots?project=${encodeURIComponent(selectedProject.slug)}`}>Open Geo Plot Mapper</a>
                 </article>}
-                <article className="engine-control-card">
-                  <div className="engine-overview-card-head">
-                    <span>LATEST RELEASE</span>
-                    <i className={statusTone(activeBuilding || activeGeo ? "ready" : "idle")}>{activeGeo ? "GEO" : activeBuilding ? "BUILDING" : "NONE"}</i>
-                  </div>
-                  <h3>{activeGeo ? `Geo v${activeGeo.version}` : activeBuilding ? `Building v${activeBuilding.version}` : "No immutable release"}</h3>
-                  <p>Building and Geo release history, activation and live status in one place.</p>
-                  <a href={projectHref("releases", selectedProject.slug)}>Open Releases</a>
-                </article>
               </section>)}
 
-              {selectedProject.projectKind !== "masterplan_geo" ? <section className="engine-overview-flow engine-control-card">
-                <div>
-                  <p>ENGINE WORKFLOW</p>
-                  <h3>One clear path from source to live experience</h3>
-                </div>
-                <div className="engine-overview-flow__steps">
-                  <a href={projectHref("source-pack", selectedProject.slug)}><span>01</span><b>Source</b><small>Verify inputs</small></a>
-                  <a href={projectHref("building", selectedProject.slug)}><span>02</span><b>Building</b><small>Build and publish</small></a>
-                  <a href={projectHref("geo-mapper", selectedProject.slug)}><span>03</span><b>Geo</b><small>Verified WGS84 placement</small></a>
-                  {(selectedProject.projectKind==="building_geo"||selectedProject.projectKind==="legacy")&&<a href={`/3Dprojects/geo-plots?project=${encodeURIComponent(selectedProject.slug)}`}><span>04</span><b>Geo Plot Mapper</b><small>CSV inventory → 3D polygons</small></a>}
-                  <a href={projectHref("releases", selectedProject.slug)}><span>04</span><b>Release</b><small>Activate and go live</small></a>
-                </div>
-              </section> : null}
+
             </>
           )}
         </div>
