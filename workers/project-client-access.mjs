@@ -1,6 +1,7 @@
 // Owner-only project invitation management. Bearer links are shown exactly once
 // and delivered out-of-band after the owner confirms the intended contact.
 import {PROJECT_CLIENT_ROLES} from "../shared/project-client-roles.js";
+import {projectClientAdminPath} from "../shared/project-client-admin-url.js";
 const enc=new TextEncoder();
 export const clientTokenHash=async token=>Array.from(new Uint8Array(await crypto.subtle.digest(
  "SHA-256",enc.encode(token)))).map(n=>n.toString(16).padStart(2,"0")).join("");
@@ -53,7 +54,7 @@ export async function provisionProjectClient(env,actor,project,body,request){
  if(!origin.startsWith("https://"))throw Error("Client invitation requires HTTPS.");
  return {clientId:client.id,role:client.proposed_role,expiresAt:expires,
    // Fragment is not sent in HTTP requests, proxy logs or Referer headers.
-   inviteUrl:origin+"/3Dprojects/"+encodeURIComponent(project.slug)+"/client-admin#invite="+token};
+   inviteUrl:origin+projectClientAdminPath(project.slug)+"#invite="+token};
 }
 export async function revokeProjectClient(env,actor,project,body){
  if(!identity(body?.id))throw Error("Valid project client required.");
