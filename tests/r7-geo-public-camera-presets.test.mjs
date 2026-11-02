@@ -35,8 +35,9 @@ test("camera presets control the real Google map camera rather than the Building
   assert.match(source, /cameraActionRef\.current\?\.\(view\.id\)/);
 });
 
-test("manual zoom preserves one-finger Google pan and avoids resetting the user's camera", () => {
-  assert.ok(source.includes('gestureHandling: "greedy"'));
+test("manual zoom preserves native multi-finger navigation and avoids resetting the user's camera", () => {
+  assert.ok(source.includes('gestureHandling: touchCapable ? "cooperative" : "greedy"'));
+  assert.ok(source.includes("createGeoOneFingerOrbit({"));
   assert.ok(source.includes("draggable: true"));
   assert.ok(source.includes("zoomActionRef.current = (step) =>"));
   assert.ok(source.includes("map.setZoom(requested)"));
