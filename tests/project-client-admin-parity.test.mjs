@@ -47,6 +47,9 @@ test("Session cannot be shared across projects and retains least privilege",()=>
  assert.match(ui,/masterplan-inventory/);
  assert.match(ui,/GeoBulkPricingPanel/);
  assert.match(ui,/GeoDealRecordsPanel/);
+ assert.match(ui,/saveContact/);
+ assert.match(ui,/Contact & Location/);
+ assert.match(portal,/clientProjectContact\(request,env,s\)/);
  assert.doesNotMatch(portal,/handleMasterplanSalesAdmin|engineAdminReadAccess/);
 });
 test("Image Masterplan client inventory is private, checksum verified and read-only",()=>{
