@@ -28,7 +28,7 @@ test("Visible published plots remain clickable and source-reviewed details remai
   assert.doesNotMatch(viewer,/geo-plot-public-controls|Select a mapped plot|Plots \{showPlotBoundaries/);
   assert.match(viewer,/pickModelGeoPlot\(/);
   assert.match(viewer,/setSelectedPlot\(plotIds\.get\(id\)\|\|null\)/);
-  assert.match(viewer,/selectedPlot && <aside className="geo-plot-public-details"/);
+  assert.match(viewer,/selectedPlot && <aside className=\{`geo-plot-public-details/);
   assert.match(viewer,/publicationMode==="preliminary"/);
   assert.match(viewer,/selectedPlot\.area&&/);
   assert.doesNotMatch(css,/\.geo-plot-public-controls/);

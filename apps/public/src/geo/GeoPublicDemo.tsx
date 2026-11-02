@@ -8,6 +8,7 @@ import { applyRigidBuildingPlacement } from "./geoRigidTransform";
 import { buildModelGeoPlotLayer,pickModelGeoPlot,type ModelPlotLayer } from "./geoPlotModelOverlay";
 import { loadPublicBranding, type PublicProjectBranding } from "../branding";
 import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shared/geo-plot-viewport.js";
+import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 import "./geo-public-demo.css";
 
 type GeoCoordinate = {
@@ -161,6 +162,11 @@ type GeoWindow = Window &
   };
 
 const WEBGL_CONTEXT_TIMEOUT_MS = 12_000;
+const GEO_STATUS_OPTIONS:ReadonlyArray<{id:GeoPlotStatus;label:string}>=[
+  {id:"available",label:"Available"},
+  {id:"booked",label:"Booked"},
+  {id:"sold",label:"Sold"}
+];
 const GEO_CAMERA_VIEWS: Array<{ id: GeoCameraView; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "front", label: "Front" },
@@ -340,6 +346,17 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
   const [satelliteMaxZoom, setSatelliteMaxZoom] = useState<number | null>(null);
   const [zoomNotice, setZoomNotice] = useState("");
   const [failure, setFailure] = useState("");
+  const [statusEnabled,setStatusEnabled]=useState(false);
+  const [statusFilter,setStatusFilter]=useState<GeoPlotStatus|null>(null);
+  const statusSummary=useMemo(()=>summarizeApprovedGeoPlotStatuses(
+    data.plotMapping?.geoReleaseId===data.geoRelease.id?data.plotMapping:null
+  ),[data.plotMapping,data.geoRelease.id]);
+  const statusPresentationRef=useRef<((enabled:boolean,filter:GeoPlotStatus|null)=>void)|null>(null);
+  const statusStateRef=useRef({enabled:statusEnabled,filter:statusFilter});
+  statusStateRef.current={enabled:statusEnabled,filter:statusFilter};
+  useEffect(()=>{
+    statusPresentationRef.current?.(statusEnabled,statusFilter);
+  },[statusEnabled,statusFilter]);
 
   useEffect(() => {
     if (!hostRef.current || !data.maps.apiKey || !data.maps.mapId) return;
@@ -609,6 +626,13 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
               // Same original X/Z frame as the model; placement is shared.
               plotLayer=candidateLayer;
               placement.anchorOffset.add(plotLayer.group);
+              // Only owner-approved statuses are colored; never guess availability.
+              const updateStatus=(enabled:boolean,filter:GeoPlotStatus|null)=>{
+                candidateLayer.setStatusPresentation(enabled,filter,statusSummary.statusById);
+                overlay?.requestRedraw();
+              };
+              statusPresentationRef.current=updateStatus;
+              updateStatus(statusStateRef.current.enabled,statusStateRef.current.filter);
               preparedPaths=(data.plotMapping?.plots||[]).map(plot=>{
                 const path=geoPlotWorldPath(plot,data,
                   Number.isFinite(plot.planeY)?plot.planeY!:modelGroundY);
@@ -717,6 +741,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
       if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
       cameraActionRef.current = null;
       zoomActionRef.current = null;
+      statusPresentationRef.current = null;
       mapZoomChanged?.remove();
       mapClick?.remove();
       if(pointerHost&&onNativePointerDown)
@@ -749,7 +774,44 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           else void scene.requestFullscreen?.().catch(() => undefined);
         }}>⛶</button>
       </nav>
-      {selectedPlot && <aside className="geo-plot-public-details" aria-label="Selected plot details">
+
+      {statusSummary.total>0&&<section className={`geo-plot-status${statusEnabled?" is-open":""}`}
+        aria-label="Plot availability status">
+        <div id="geo-plot-status-options" className="geo-plot-status-options"
+          aria-hidden={!statusEnabled}>
+          {GEO_STATUS_OPTIONS.map(item=>(
+            <button key={item.id} type="button"
+              className={`geo-plot-status-option geo-plot-status-option--${item.id}${statusFilter===item.id?" is-active":""}`}
+              tabIndex={statusEnabled?0:-1}
+              aria-pressed={statusEnabled&&statusFilter===item.id}
+              onClick={()=>setStatusFilter(current=>current===item.id?null:item.id)}>
+              <span className="geo-plot-status-option-label">
+                <i className="geo-plot-status-dot" aria-hidden="true"/>{item.label}
+              </span>
+              <b>{statusSummary.approved===0?"—":statusSummary[item.id]}</b>
+            </button>
+          ))}
+          <div className="geo-plot-status-total">
+            <span>Total Plots</span><b>{statusSummary.total}</b>
+          </div>
+          {statusSummary.pending>0&&<small className="geo-plot-status-pending">
+            {statusSummary.approved===0?"Status pending verification"
+              :`${statusSummary.pending} statuses pending verification`}
+          </small>}
+        </div>
+        <button type="button" className="geo-plot-status-toggle"
+          aria-controls="geo-plot-status-options" aria-expanded={statusEnabled}
+          aria-pressed={statusEnabled}
+          onClick={()=>{
+            if(statusEnabled)setStatusFilter(null);
+            setStatusEnabled(open=>!open);
+          }}>
+          <span>STATUS</span>
+          <span className="geo-plot-status-toggle-state">{statusEnabled?"ON":"OFF"}</span>
+          <span className="geo-plot-status-switch" aria-hidden="true"><i/></span>
+        </button>
+      </section>}
+      {selectedPlot && <aside className={`geo-plot-public-details${statusEnabled?" geo-plot-public-details--status-open":""}`} aria-label="Selected plot details">
         <button type="button" className="geo-plot-public-close" aria-label="Close plot details" onClick={()=>setSelectedPlot(null)}>×</button>
         <strong>Plot {selectedPlot.id}</strong>
         {data.plotMapping?.publicationMode==="preliminary"&&
