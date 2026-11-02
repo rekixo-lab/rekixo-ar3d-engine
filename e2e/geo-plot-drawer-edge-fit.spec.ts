@@ -16,7 +16,13 @@ test("plot details drawer flushes to map edges while preserving title, right str
       </div></div></header>
       <div class="geo-public-map-layout">
         <div class="geo-integrated-scene">
-          <div class="geo-integrated-map"></div>
+          <div class="geo-integrated-map">
+            <div class="gm-style" style="position:absolute;inset:0">
+              <div class="satellite-tile" style="position:absolute;inset:0;background:#826d58"></div>
+              <a href="https://www.google.com/maps/" style="position:absolute;bottom:3px;left:5px">Google</a>
+              <div class="gm-style-cc" style="position:absolute;right:5px;bottom:3px">Imagery attribution</div>
+            </div>
+          </div>
           <nav class="geo-map-quick-actions"><button>−</button><button>+</button><button>⛶</button></nav>
           <section class="geo-plot-status"><button>STATUS</button></section>
           <aside class="geo-plot-drawer is-open" aria-label="Selected plot details">
@@ -50,6 +56,10 @@ test("plot details drawer flushes to map edges while preserving title, right str
         statusVisibility:getComputedStyle(document.querySelector(".geo-plot-status")!).visibility,
         mask:getComputedStyle(document.querySelector(".geo-plot-drawer")!).maskImage,
         scrollerOverflow:getComputedStyle(document.querySelector(".geo-plot-drawer__scroll")!).overflowY,
+        creditRailBackground:getComputedStyle(document.querySelector(".gm-style")!,"::after").backgroundColor,
+        logoZ:Number(getComputedStyle(document.querySelector('.gm-style a[href*="google.com/maps"]')!).zIndex),
+        creditZ:Number(getComputedStyle(document.querySelector(".gm-style-cc")!).zIndex),
+        headingPadding:getComputedStyle(document.querySelector(".geo-plot-drawer__head")!).paddingTop,
       };
     });
     const tag=screen.width+"×"+screen.height;
@@ -62,9 +72,13 @@ test("plot details drawer flushes to map edges while preserving title, right str
     expect(actual.header.bottom,tag+" header outside drawer").toBeLessThanOrEqual(actual.map.top+1);
     if(screen.width<=640)
       expect(actual.dock.top,tag+" four normal camera controls below map").toBeGreaterThanOrEqual(actual.map.bottom-1);
-    expect(actual.zoomZ,tag+" zoom buttons above drawer").toBeGreaterThan(actual.panelZ);
+    expect(actual.zoomZ,tag+" zoom buttons now behind drawer").toBeLessThan(actual.panelZ);
     expect(actual.statusVisibility,tag+" no status panel behind open drawer").toBe("hidden");
     expect(actual.mask,tag+" attribution cutout retained").toContain("30px");
     expect(actual.scrollerOverflow,tag+" internal vertical scrolling").toBe("auto");
+    expect(actual.creditRailBackground,tag+" bottom imagery covered by solid credit rail").toBe("rgb(7, 28, 39)");
+    expect(actual.logoZ,tag+" Google's original logo remains above credit rail").toBe(101);
+    expect(actual.creditZ,tag+" original copyright remains above credit rail").toBe(101);
+    if(screen.width<=640)expect(actual.headingPadding,tag+" no extra 60px header gap").toBe("12px");
   }
 });
