@@ -32,7 +32,7 @@ test("map plot selection accepts direct tap even when Google swallows click, wit
   assert.match(viewer,/pointerHost\.removeEventListener\("pointerup",onNativePointerUp,true\)/);
   assert.match(viewer,/pickModelGeoPlot\(/);
   assert.match(viewer,/setSelectedPlot\(plotIds\.get\(id\)\|\|null\)/);
-  assert.match(viewer,/geo-plot-public-details/);
+  assert.match(viewer,/<GeoPlotDetailsDrawer/);
 });
 
 test("publishing an already-live draft is idempotent without duplicate sqlite insert",()=>{
