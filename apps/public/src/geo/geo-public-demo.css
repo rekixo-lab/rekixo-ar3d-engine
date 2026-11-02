@@ -50,7 +50,7 @@
   }
 }
 @media (max-width: 640px) and (prefers-reduced-motion: reduce) {
-  .geo-header-subtitle.is-overflowing {
+  .jio-public-branding h1 + p.geo-header-subtitle.is-overflowing {
     overflow-x: auto;
     touch-action: pan-x;
   }
