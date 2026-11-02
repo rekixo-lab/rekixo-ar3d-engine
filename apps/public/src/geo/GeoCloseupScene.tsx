@@ -71,6 +71,8 @@ export function GeoCloseupScene({
   const plotLayerRef=useRef<ModelPlotLayer|null>(null);
   const invalidateRef=useRef<(()=>void)|null>(null);
   const initialViewRef=useRef(initialView);
+  const statusRef=useRef({statusEnabled,statusFilter,statuses});
+  statusRef.current={statusEnabled,statusFilter,statuses};
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   useEffect(()=>{
@@ -161,7 +163,7 @@ export function GeoCloseupScene({
       if(!targetInfo)return;
       const direction=camera.position.clone().sub(controls.target).normalize();
       if(!direction.toArray().every(Number.isFinite))direction.set(1,.8,1).normalize();
-      const target=new THREE.Vector3(...targetInfo.target);
+      const target=new THREE.Vector3(targetInfo.target[0],targetInfo.target[1],targetInfo.target[2]);
       controls.target.copy(target);
       camera.position.copy(target).addScaledVector(direction,
         THREE.MathUtils.clamp(targetInfo.distance,controls.minDistance*1.5,controls.maxDistance));
@@ -219,7 +221,8 @@ export function GeoCloseupScene({
       plotLayer=buildModelGeoPlotLayer(verified,plots);
       plotLayerRef.current=plotLayer;
       scene.add(plotLayer.group);
-      plotLayer.setStatusPresentation(statusEnabled,statusFilter,statuses);
+      plotLayer.setStatusPresentation(statusRef.current.statusEnabled,
+        statusRef.current.statusFilter,statusRef.current.statuses);
       applyPreset(initialViewRef.current);
       setLoading(false);
       setError("");
