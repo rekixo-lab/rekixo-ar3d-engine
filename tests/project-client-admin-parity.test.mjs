@@ -50,9 +50,11 @@ test("Session cannot be shared across projects and retains least privilege",()=>
  assert.match(ui,/GeoDealRecordsPanel/);
  assert.match(ui,/saveContact/);
  assert.match(ui,/Contact & Location/);
- assert.match(ui,/Sign In to Client Admin/);
+ assert.match(ui,/Sign in/);
  assert.match(ui,/Change Temporary Password/);
  assert.match(ui,/AR3D STUDIO · CLIENT ADMIN/);
+ assert.match(ui,/engine-client-admin-auth/);
+ assert.match(ui,/engine-client-admin-reveal/);
  assert.doesNotMatch(ui,/REKIXO · PERSONAL CLIENT ADMIN/i);
  assert.match(portal,/clientProjectContact\(request,env,s\)/);
  assert.doesNotMatch(portal,/handleMasterplanSalesAdmin|engineAdminReadAccess/);

@@ -193,3 +193,378 @@ button.engine-client-admin-plot-row:hover{border-color:#71d6ad}
  .engine-client-admin-head {border-radius:13px}
  .engine-client-admin-brand h1 {font-size:20px}
 }
+
+
+/* Compact authentication-only experience: no owner/dashboard layout changes. */
+.engine-client-admin.engine-client-admin-auth {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 17px;
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+  min-height: 100svh;
+  padding: clamp(16px, 4vw, 34px) 16px;
+  overflow-x: clip;
+  background: radial-gradient(ellipse at 50% 35%, #102a30 0, #081720 33%, #050b13 75%);
+}
+.engine-client-admin-auth::before,
+.engine-client-admin-auth::after {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+}
+.engine-client-admin-auth::before {
+  width: min(86vw, 650px);
+  aspect-ratio: 1;
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  transform: translate(-50%, -56%);
+  background: radial-gradient(circle, #0b936547 0, #0b5c4520 35%, transparent 70%);
+  filter: blur(30px);
+  animation: client-auth-ambient 14s ease-in-out infinite alternate;
+}
+.engine-client-admin-auth::after {
+  inset: 0;
+  background-image: linear-gradient(#acd6c707 1px, transparent 1px),
+    linear-gradient(90deg, #acd6c707 1px, transparent 1px);
+  background-size: 49px 49px;
+  mask-image: radial-gradient(ellipse at center, #0007, transparent 70%);
+}
+.engine-client-admin-auth .engine-client-admin-head {
+  width: min(100%, 380px);
+  max-width: 380px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 7px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  animation: client-auth-enter .55s both cubic-bezier(.18,.78,.2,1);
+}
+.engine-client-admin-auth .engine-client-admin-brand {
+  width: 100%;
+  gap: 12px;
+}
+.engine-client-admin-auth .engine-client-admin-brand small {
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: #5ce8bb;
+  letter-spacing: .135em;
+}
+.engine-client-admin-auth .engine-client-admin-brand h1 {
+  margin: 2px 0 0;
+  color: #f0fff9;
+  font-size: clamp(19px, 3.3vw, 24px);
+  font-weight: 800;
+  line-height: 1.22;
+  letter-spacing: -.02em;
+}
+.engine-client-admin-auth .engine-client-admin-mark {
+  width: 43px;
+  height: 43px;
+  min-width: 43px;
+  border: 1px solid #347b74;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #10392f, #0b1e28);
+  box-shadow: inset 0 1px 0 #b3fff015, 0 6px 26px #0003;
+}
+.engine-client-admin-auth .engine-client-admin-mark i {
+  border-color: #7ce8c8;
+  animation: client-auth-mark 3.8s ease-in-out infinite;
+}
+.engine-client-admin-auth .engine-client-admin-mark i:nth-child(2) {animation-delay: .23s}
+.engine-client-admin-auth .engine-client-admin-mark i:nth-child(3) {animation-delay: .46s}
+.engine-client-admin-auth .engine-client-admin-mark i:nth-child(4) {animation-delay: .69s}
+.engine-client-admin-auth .engine-client-admin-signin {
+  position: relative;
+  width: min(100%, 380px);
+  max-width: 380px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: clamp(20px, 4vw, 27px);
+  border: 1px solid #365a66;
+  border-radius: 19px;
+  background: linear-gradient(155deg, #132d3b 0%, #0c1d2b 63%, #0b1a28 100%);
+  box-shadow: 0 20px 62px #0008, inset 0 1px 0 #d6fff21c;
+  animation: client-auth-enter .65s .06s both cubic-bezier(.18,.78,.2,1);
+}
+.engine-client-admin-auth .engine-client-admin-signin::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 19px;
+  right: 19px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #6ef1bf75, transparent);
+  pointer-events: none;
+}
+.engine-client-admin-auth-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+}
+.engine-client-admin-auth-title h2 {
+  margin: 0;
+  color: #f4fffb;
+  font-size: 20px;
+  font-weight: 760;
+  line-height: 1.35;
+  letter-spacing: -.035em;
+}
+.engine-client-admin-auth-accent {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #63e6b4;
+  box-shadow: 0 0 0 4px #31d6a61b, 0 0 15px #4bd8a582;
+}
+.engine-client-admin-auth .engine-client-admin-signin form,
+.engine-client-admin-auth .engine-client-admin-login-form {
+  display: grid;
+  gap: 13px;
+}
+.engine-client-admin-auth .engine-client-admin-signin label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  color: #b8d2d8;
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.engine-client-admin-auth .engine-client-admin-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 45px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid #365768;
+  border-radius: 11px;
+  background: #091b29;
+  color: #82a9b4;
+  box-shadow: inset 0 2px 5px #0002;
+  transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+.engine-client-admin-auth .engine-client-admin-field:focus-within {
+  border-color: #60deb0;
+  background: #0b2330;
+  color: #86f7c8;
+  box-shadow: 0 0 0 3px #48d6a41b, inset 0 2px 5px #0002;
+}
+.engine-client-admin-auth .engine-client-admin-field > svg {
+  width: 17px;
+  height: 17px;
+  min-width: 17px;
+  opacity: .9;
+}
+.engine-client-admin-auth .engine-client-admin-field > input {
+  appearance: none;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  height: 43px;
+  min-height: 43px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: #f0fcfa;
+  caret-color: #6becc3;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 540;
+  line-height: 1.25;
+}
+.engine-client-admin-auth .engine-client-admin-field > input::placeholder {color: #7996a5}
+.engine-client-admin-auth .engine-client-admin-field > input:focus-visible {
+  outline: none;
+}
+.engine-client-admin-auth .engine-client-admin-field input:-webkit-autofill,
+.engine-client-admin-auth .engine-client-admin-field input:-webkit-autofill:hover,
+.engine-client-admin-auth .engine-client-admin-field input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f0fcfa;
+  caret-color: #6becc3;
+  -webkit-box-shadow: 0 0 0 1000px #091b29 inset;
+  transition: background-color 5000s ease-in-out 0s;
+}
+.engine-client-admin-auth .engine-client-admin-password-field {
+  gap: 7px;
+}
+.engine-client-admin-auth .engine-client-admin-password-field .engine-client-admin-reveal {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 38px;
+  min-width: 34px;
+  min-height: 38px;
+  margin-right: -5px;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #a7c9d0;
+  cursor: pointer;
+  transition: color .2s ease, background .2s ease;
+}
+.engine-client-admin-auth .engine-client-admin-reveal:hover {
+  color: #6df1be;
+  background: #224b4a77;
+}
+.engine-client-admin-auth .engine-client-admin-reveal svg {
+  width: 19px;
+  height: 19px;
+}
+.engine-client-admin-auth .engine-client-admin-submit {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 45px;
+  margin-top: 5px;
+  padding: 10px 16px;
+  overflow: hidden;
+  border: 1px solid #46e0af;
+  border-radius: 11px;
+  background: linear-gradient(110deg, #16826a 0%, #16966f 52%, #1a8469 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .015em;
+  box-shadow: 0 5px 20px #087c5d38, inset 0 1px 0 #ffffff24;
+  cursor: pointer;
+  transition: transform .2s ease, box-shadow .2s ease, filter .2s ease;
+}
+.engine-client-admin-auth .engine-client-admin-submit > * {position: relative;z-index: 1}
+.engine-client-admin-auth .engine-client-admin-submit > svg {
+  width: 17px;
+  height: 17px;
+  transition: transform .2s ease;
+}
+.engine-client-admin-auth .engine-client-admin-submit::before {
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 45%;
+  content: "";
+  transform: translateX(-160%) skewX(-23deg);
+  background: linear-gradient(90deg, transparent, #ffffff28, transparent);
+  transition: transform .45s ease;
+}
+.engine-client-admin-auth .engine-client-admin-submit:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 9px 25px #078d6a5b;
+  filter: brightness(1.05);
+}
+.engine-client-admin-auth .engine-client-admin-submit:not(:disabled):hover::before {
+  transform: translateX(330%) skewX(-23deg);
+}
+.engine-client-admin-auth .engine-client-admin-submit:not(:disabled):hover > svg {
+  transform: translateX(3px);
+}
+.engine-client-admin-auth .engine-client-admin-submit:not(:disabled):active {
+  transform: translateY(0) scale(.99);
+}
+.engine-client-admin-auth .engine-client-admin-submit:disabled {
+  opacity: .58;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.engine-client-admin-auth .engine-client-admin-login-hint {
+  margin: 0;
+  color: #86a9b4;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.engine-client-admin-auth .engine-client-admin-auth-help {
+  margin: -9px 0 17px;
+  color: #9dbbc5;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.engine-client-admin-auth .engine-client-admin-text-action {
+  margin: 0;
+  min-height: 36px;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: #82eac0;
+  font-size: 12px;
+  cursor: pointer;
+}
+.engine-client-admin-auth .engine-manage-error,
+.engine-client-admin-auth .engine-manage-ok {
+  box-sizing: border-box;
+  width: min(100%, 380px);
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  animation: client-auth-enter .25s ease-out both;
+}
+@keyframes client-auth-enter {
+  from {opacity: 0;transform: translateY(14px) scale(.985)}
+  to {opacity: 1;transform: translateY(0) scale(1)}
+}
+@keyframes client-auth-ambient {
+  from {transform: translate(-52%, -58%) scale(.96);opacity: .7}
+  to {transform: translate(-48%, -52%) scale(1.08);opacity: 1}
+}
+@keyframes client-auth-mark {
+  0%, 72%, 100% {opacity: .58; box-shadow: none}
+  82% {opacity: 1; box-shadow: 0 0 6px #64efc07a}
+}
+@media (max-width: 520px) {
+  .engine-client-admin.engine-client-admin-auth {gap: 14px;padding: 20px 13px}
+  .engine-client-admin-auth .engine-client-admin-signin {
+    padding: 21px 19px;
+    border-radius: 16px;
+  }
+  .engine-client-admin-auth .engine-client-admin-head {padding: 0 4px}
+  .engine-client-admin-auth .engine-client-admin-auth-title {margin-bottom: 16px}
+}
+@media (max-width: 360px) {
+  .engine-client-admin.engine-client-admin-auth {padding-inline: 12px}
+  .engine-client-admin-auth .engine-client-admin-signin {padding: 18px 16px}
+  .engine-client-admin-auth .engine-client-admin-brand h1 {font-size: 20px}
+  .engine-client-admin-auth .engine-client-admin-login-form {gap: 11px}
+}
+@media (max-height: 560px) {
+  .engine-client-admin.engine-client-admin-auth {justify-content: flex-start}
+}
+@media (prefers-reduced-motion: reduce) {
+  .engine-client-admin-auth::before,
+  .engine-client-admin-auth .engine-client-admin-head,
+  .engine-client-admin-auth .engine-client-admin-signin,
+  .engine-client-admin-auth .engine-client-admin-mark i,
+  .engine-client-admin-auth .engine-manage-error,
+  .engine-client-admin-auth .engine-manage-ok {
+    animation: none !important;
+  }
+  .engine-client-admin-auth .engine-client-admin-field,
+  .engine-client-admin-auth .engine-client-admin-reveal,
+  .engine-client-admin-auth .engine-client-admin-submit,
+  .engine-client-admin-auth .engine-client-admin-submit::before,
+  .engine-client-admin-auth .engine-client-admin-submit > svg {
+    transition: none !important;
+  }
+}
