@@ -92,7 +92,7 @@ test("new projects offer three isolated types without breaking Building-first le
   assert.match(dashboard,/createKind, setCreateKind/);
   assert.match(dashboard,/"building_geo"/);
   assert.match(dashboard,/"masterplan_geo"/);
-  assert.match(dashboard,/selectedProject\.projectKind !== "masterplan_geo"/);
+  assert.match(dashboard,/selectedProject\.projectKind === "masterplan_geo"/);
   assert.match(dashboard,/newProjectStartPath\(createKind\)/);
   assert.match(projectKinds,/return kind === "masterplan_geo" \? "masterplan" : "source-pack"/);
 });
