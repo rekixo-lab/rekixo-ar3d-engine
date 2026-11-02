@@ -94,15 +94,15 @@ const sectionMeta: Record<ShellSection, { eyebrow: string; title: string; help: 
     help:"Review original source files and download verified copies."},
   masterplan:{eyebrow:"IMAGE GEO AUTHORING",title:"Geo Masterplan",
     help:"Upload approved masterplan imagery and calibrate its real-world GPS location."},
-  "masterplan-plots":{eyebrow:"PLOT POLYGONS",title:"Plot Mapper",
+  "masterplan-plots":{eyebrow:"PLOT POLYGONS",title:"Masterplan Plot Mapper",
     help:"Draw and verify plots on the Geo Masterplan image."},
   "mapping-controls":{eyebrow:"PLOT DIMENSIONS",title:"Mapping Controls",
     help:"Review Front/Back/Depth, plot area, directions, road access and source documents."},
   sales:{eyebrow:"PRIVATE BUSINESS",title:"Sales & Accounts",
     help:"Project-isolated inventory and ledger with explicit sale confirmation."},
   overview: {
-    eyebrow: "CONTROL CENTER",
-    title: "Project Overview",
+    eyebrow: "PROJECT DIRECTORY",
+    title: "Projects",
     help: "Current state, next action and customer-facing deliverables.",
   },
   source: {
@@ -112,12 +112,12 @@ const sectionMeta: Record<ShellSection, { eyebrow: string; title: string; help: 
   },
   building: {
     eyebrow: "BUILDING WORKSPACE",
-    title: "3D Building",
+    title: "3D Building Editor",
     help: "Build, review, presentation and immutable Building release workflow.",
   },
   geo: {
     eyebrow: "GEO WORKSPACE",
-    title: "3D Geo Mapper",
+    title: "3D Building Geo Editor",
     help: "Place the immutable Building in the real world, verify it and publish Geo.",
   },
   "geo-plots": {
