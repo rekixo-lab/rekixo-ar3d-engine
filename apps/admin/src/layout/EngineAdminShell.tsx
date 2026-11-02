@@ -23,122 +23,50 @@ type NavItem = {
   description: string;
 };
 
+// Only true operator workspaces belong in navigation. Historical routes,
+// diagnostics and accounting remain available through their contextual owners.
 const navItems: NavItem[] = [
   {
-    id: "overview",
-    label: "Overview",
-    short: "OV",
+    id: "overview", label: "Projects", short: "PR",
     href: (slug) => `/3Dprojects${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Project status and next action",
+    description: "Select or create a project",
   },
   {
-    id: "clients",label:"Clients",short:"CL",
-    href:slug=>`/3Dprojects/clients${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Owner-managed client directory and intended roles",
+    id: "clients", label: "Clients", short: "CL",
+    href: (slug) => `/3Dprojects/clients${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
+    description: "Accounts and project access",
   },
   {
-    id: "profile",label:"Project Profile",short:"PF",
-    href:slug=>`/3Dprojects/profile${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Builder, contacts, address, WhatsApp and maps",
+    id: "profile", label: "Project Profile", short: "PF",
+    href: (slug) => `/3Dprojects/profile${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
+    description: "Builder, contacts and location",
   },
   {
-    id: "assets",label:"Project Assets",short:"AS",
-    href:slug=>`/3Dprojects/assets${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Original source inventory and checksum downloads",
+    id: "masterplan-plots", label: "Masterplan Plot Mapper", short: "MP",
+    href: (slug) => `/3Dprojects/masterplan-plots${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
+    description: "Original image, GPS and polygon plots",
   },
   {
-    id: "masterplan",label:"Geo Masterplan",short:"IM",
-    href:slug=>`/3Dprojects/masterplan${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Approved image source and GPS control points",
-  },
-  {
-    id: "masterplan-plots",label:"Plot Mapper",short:"PL",
-    href:slug=>`/3Dprojects/masterplan-plots${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Draw polygon plots on the approved image",
-  },
-  {
-    id: "mapping-controls",label:"Mapping Controls",short:"MC",
-    href:slug=>`/3Dprojects/mapping-controls${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Dimensions, facing, road and source verification",
-  },
-  {
-    id: "sales",label:"Sales & Accounts",short:"SA",
-    href:slug=>`/3Dprojects/sales${slug?`?project=${encodeURIComponent(slug)}`:""}`,
-    description:"Plot inventory and separate financial records",
-  },
-  {
-    id: "source",
-    label: "Source Pack",
-    short: "SP",
-    href: (slug) => `/3Dprojects/source-pack${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Sources, scale, components and processing",
-  },
-  {
-    id: "building",
-    label: "Building",
-    short: "3D",
+    id: "building", label: "3D Building Editor", short: "3D",
     href: (slug) => `/3Dprojects/building${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Build, review, presentation and publish",
+    description: "Model, components, presentation and publish",
   },
   {
-    id: "geo",
-    label: "Geo",
-    short: "GO",
+    id: "geo", label: "3D Building Geo Editor", short: "GO",
     href: (slug) => `/3Dprojects/geo-mapper${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Real-world placement and Geo publish",
+    description: "Position and publish on Geo map",
   },
   {
-    id: "geo-plots",
-    label: "Geo Plot Mapper",
-    short: "PL",
+    id: "geo-plots", label: "3D Geo Plot Mapper", short: "PL",
     href: (slug) => `/3Dprojects/geo-plots${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "3D polygon plots, measurements and facing",
+    description: "3D polygon mapping and measurements",
   },
   {
-    id: "releases",
-    label: "Releases",
-    short: "RL",
-    href: (slug) => `/3Dprojects/releases${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Immutable Building and Geo history",
-  },
-  {
-    id: "branding",
-    label: "Share & Branding",
-    short: "BR",
+    id: "branding", label: "Share & Branding", short: "BR",
     href: (slug) => `/3Dprojects/share${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Project logo, favicon and Building/Geo share previews",
-  },
-  {
-    id: "advanced",
-    label: "Advanced",
-    short: "AD",
-    href: (slug) => `/3Dprojects/advanced${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
-    description: "Diagnostics, provider settings and danger zone",
+    description: "Logo, poster and share links",
   },
 ];
-
-// Only show operator tasks in the primary navigation. Retained routes are
-// intentionally reachable from their owning workspaces for compatibility.
-const primaryNavSections = new Set<ShellSection>([
-  "overview", "clients", "profile", "masterplan-plots", "building", "geo", "geo-plots", "branding",
-]);
-const primaryNavLabels: Partial<Record<ShellSection, string>> = {
-  overview: "Projects",
-  "masterplan-plots": "Masterplan Plot Mapper",
-  building: "3D Building Editor",
-  geo: "3D Building Geo Editor",
-  "geo-plots": "3D Geo Plot Mapper",
-};
-const primaryNavDescriptions: Partial<Record<ShellSection, string>> = {
-  overview: "Select or create a project",
-  clients: "Access and client accounts",
-  profile: "Builder, contact and location",
-  "masterplan-plots": "Image, GPS and polygon mapping",
-  building: "Model, review and Building publish",
-  geo: "Position and publish on Geo map",
-  "geo-plots": "3D plot polygons and data",
-  branding: "Logo, poster and share links",
-};
 
 function requestedProjectSlug() {
   return new URLSearchParams(window.location.search).get("project")?.trim().toLowerCase() || "";
@@ -349,7 +277,7 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
         </div>
 
         <nav className="engine-admin-nav" aria-label="AR3D Engine sections">
-          {navItems.filter(item=>primaryNavSections.has(item.id) && projectModuleVisible(projectKind,item.id)).map((item) => {
+          {navItems.filter(item=>projectModuleVisible(projectKind,item.id)).map((item) => {
             const active = item.id === section;
             const status = item.id === "building" || item.id === "releases"
               ? buildingLive
@@ -365,8 +293,8 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
               >
                 <span className="engine-admin-nav__icon" aria-hidden="true">{item.short}</span>
                 <span className="engine-admin-nav__copy">
-                  <b>{primaryNavLabels[item.id] || item.label}</b>
-                  <small>{primaryNavDescriptions[item.id] || item.description}</small>
+                  <b>{item.label}</b>
+                  <small>{item.description}</small>
                 </span>
                 {status ? <i className="engine-admin-nav__live" title="Live / active" /> : null}
               </a>
