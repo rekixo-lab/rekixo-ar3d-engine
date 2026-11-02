@@ -66,6 +66,20 @@ test("leftward swipe decreases camera bearing with normalized 0..360 headings",(
   assert.equal(normalizeGeoOrbitHeading(725),5);
 });
 
+test("swipe direction stays consistent across north / 360-degree boundary",()=>{
+  const right=rig(355);
+  right.orbit.onTouchStart(makeEvent([finger(100)]));
+  right.orbit.onTouchMove(makeEvent([finger(130)]));
+  assert.ok(Math.abs(right.heading-8.8)<1e-9,"right swipe wraps forward from 355° to 8.8°");
+  right.orbit.onTouchEnd(makeEvent([]));
+
+  const left=rig(5);
+  left.orbit.onTouchStart(makeEvent([finger(130)]));
+  left.orbit.onTouchMove(makeEvent([finger(100)]));
+  assert.ok(Math.abs(left.heading-351.2)<1e-9,"left swipe wraps backward from 5° to 351.2°");
+  left.orbit.onTouchEnd(makeEvent([]));
+});
+
 test("real tap, vertical-only movement and touch on controls do not rotate",()=>{
   const r=rig(125);
   r.orbit.onTouchStart(makeEvent([finger(200)]));
