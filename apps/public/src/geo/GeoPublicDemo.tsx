@@ -37,6 +37,33 @@ const geoWhatsAppHref=(value:string)=>{
   const number=digits.length===10&&/^[6-9]/.test(digits)?"91"+digits:digits;
   return number.length>=11&&number.length<=15?"https://wa.me/"+number:"";
 };
+
+type GeoHeaderIconKind = "call" | "whatsapp" | "admin";
+function GeoHeaderIcon({kind}:{kind:GeoHeaderIconKind}){
+  if(kind==="admin")return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1.4" />
+      <rect x="14" y="3" width="7" height="7" rx="1.4" />
+      <rect x="3" y="14" width="7" height="7" rx="1.4" />
+      <rect x="14" y="14" width="7" height="7" rx="1.4" />
+    </svg>
+  );
+  if(kind==="whatsapp")return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 11.8a8 8 0 0 1-11.7 7.1L4 20l1.1-4.3a8 8 0 1 1 14.9-3.9Z" />
+      <path d="m8.4 8.1 1.4-.5 1.2 2.6-1 1.1a8.5 8.5 0 0 0 2.8 2.8l1.1-1 2.6 1.2-.5 1.4c-.2.5-.8.8-1.4.7-3.7-.7-6.6-3.6-7.3-7.3-.1-.6.2-1.2.7-1.4Z" />
+    </svg>
+  );
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 16.4v3a2 2 0 0 1-2.2 2 18 18 0 0 1-8-2.8 18 18 0 0 1-5.4-5.4 18 18 0 0 1-2.8-8A2 2 0 0 1 4.6 3h3a2 2 0 0 1 2 1.7c.1.9.3 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.5 11a14 14 0 0 0 4.5 4.5l1.4-1.3a2 2 0 0 1 2.1-.5c.9.4 1.9.6 2.8.7a2 2 0 0 1 1.7 2Z" />
+    </svg>
+  );
+}
+
 type GeoPayload = {
   project: { id: string; slug: string; name: string; location?: string };
   publicContacts?:GeoPublicContacts;
@@ -961,6 +988,14 @@ export default function GeoPublicDemo() {
     );
 
 
+  // Header links use ONLY the owner's explicitly published Geo contacts.
+  const publicPhone=data.publicContacts?.phone?.replace(/[^+0-9]/g,"")||"";
+  const callHref=safeContactDigits(publicPhone).length>=7?"tel:"+publicPhone:"";
+  const whatsappHref=geoWhatsAppHref(
+    data.publicContacts?.whatsapp||data.publicContacts?.phone||""
+  );
+  const adminHref="/3Dprojects?project="+encodeURIComponent(slug);
+
   const mapFallbackReason = !data.maps.apiKey
     ? "Google Maps browser key is not configured"
     : !data.maps.mapId
@@ -977,6 +1012,35 @@ export default function GeoPublicDemo() {
             <p>{data.project.location || "Rekixo AR3D Engine"}</p>
           </div>
         </div>
+        <nav className="jio-public-header-actions" aria-label="Project quick actions">
+          {callHref ? (
+            <a className="jio-public-header-action jio-public-header-action--call"
+              href={callHref} aria-label="Call project contact">
+              <GeoHeaderIcon kind="call" />
+            </a>
+          ) : (
+            <span className="jio-public-header-action is-unavailable"
+              role="img" aria-label="Call unavailable">
+              <GeoHeaderIcon kind="call" />
+            </span>
+          )}
+          {whatsappHref ? (
+            <a className="jio-public-header-action jio-public-header-action--whatsapp"
+              href={whatsappHref} target="_blank" rel="noopener noreferrer"
+              aria-label="Contact project team on WhatsApp">
+              <GeoHeaderIcon kind="whatsapp" />
+            </a>
+          ) : (
+            <span className="jio-public-header-action is-unavailable"
+              role="img" aria-label="WhatsApp unavailable">
+              <GeoHeaderIcon kind="whatsapp" />
+            </span>
+          )}
+          <a className="jio-public-header-action jio-public-header-action--admin"
+            href={adminHref} aria-label="Open project admin panel">
+            <GeoHeaderIcon kind="admin" />
+          </a>
+        </nav>
       </header>
 
       {data.publicContacts && <section className="jio-public-customer-contact" aria-label="Project contacts and location">
@@ -988,12 +1052,6 @@ export default function GeoPublicDemo() {
           {data.publicContacts.address&&<span>{data.publicContacts.address}</span>}
         </div>
         <nav aria-label="Contact project team" className="jio-public-contact-actions">
-          {data.publicContacts.phone&&<a href={"tel:"+data.publicContacts.phone.replace(/[^+0-9]/g,"")}
-            aria-label="Call project contact">Call</a>}
-          {geoWhatsAppHref(data.publicContacts.whatsapp||data.publicContacts.phone)&&
-            <a target="_blank" rel="noopener noreferrer"
-              href={geoWhatsAppHref(data.publicContacts.whatsapp||data.publicContacts.phone)}
-              aria-label="Contact project team on WhatsApp">WhatsApp</a>}
           {geoPublicMapHref(data.publicContacts)&&<a target="_blank" rel="noopener noreferrer"
             href={geoPublicMapHref(data.publicContacts)} aria-label="Open project in Google Maps">
             {data.publicContacts.mapsUrl?"Directions":"Find on Maps"}</a>}
