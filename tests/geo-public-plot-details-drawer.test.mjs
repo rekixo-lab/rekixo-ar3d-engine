@@ -162,7 +162,7 @@ test("compact shape card uses one status color and prints side sizes beside poly
   assert.doesNotMatch(drawer,/geo-plot-drawer__side-legend|geo-plot-drawer__shape-note/);
   assert.doesNotMatch(css,/geo-plot-drawer__side-legend|geo-plot-drawer__shape-note/);
   assert.doesNotMatch(drawer,/Shape and dimensions are taken from the published plot mapping/);
-  assert.match(drawer,/Mapped Plot Shape/);
+  assert.doesNotMatch(drawer,/Mapped Plot Shape/);
 });
 
 test("Plot Measurements section still includes all area units and Front Back Depth A/B",()=>{
@@ -201,4 +201,27 @@ test("real side lengths are placed by the published side-edge mapping",()=>{
   assert.equal(result.sides.find(s=>s.role==="depthA").segments[0].x1,
     result.sides.find(s=>s.role==="depthA").segments[0].x2);
   assert.deepEqual(plot.sides.depthB.edges,[3],"diagram never remaps source edges");
+});
+
+test("plot status appears exactly once in place of shape-card heading, not below plot number",()=>{
+  const head=drawer.slice(
+    drawer.indexOf('<div className="geo-plot-drawer__head">'),
+    drawer.indexOf('<div className="geo-plot-drawer__scroll">'));
+  const card=drawer.slice(
+    drawer.indexOf('<section className="geo-plot-drawer__diagram-card"'),
+    drawer.indexOf('{diagram ? <>'));
+  assert.match(head,/<h2>\{"Plot "\+shown\.id\}<\/h2>/);
+  assert.doesNotMatch(head,/geo-plot-drawer__status/,"plot header must not duplicate the badge");
+  assert.match(card,/geo-plot-drawer__section-top/);
+  assert.match(card,/geo-plot-drawer__status--"\+displayStatus/);
+  assert.match(card,/\{prettyStatus\(displayStatus\)\}/);
+  assert.equal((drawer.match(/prettyStatus\(displayStatus\)/g)||[]).length,1,
+    "only one status chip renders per selected plot");
+  assert.doesNotMatch(card,/Mapped Plot Shape/);
+  assert.match(css,/\.geo-plot-drawer__section-top\{[^}]*justify-content:flex-start/);
+  assert.match(css,/\.geo-plot-drawer__status--available\{/);
+  assert.match(css,/\.geo-plot-drawer__status--booked\{/);
+  assert.match(css,/\.geo-plot-drawer__status--sold\{/);
+  assert.match(drawer,/<section className="geo-plot-drawer__facts" aria-label="Plot measurements and status">/);
+  assert.match(drawer,/Plot Measurements/);
 });
