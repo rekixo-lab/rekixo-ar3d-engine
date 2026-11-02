@@ -23,7 +23,7 @@ test("first Plot Site publishing requires operator confirmation and canonical ar
   const publish = read("workers/release-publish.mjs");
   assert.match(ui, /reviewed the actual GLB\/site bounds, orientation and materials/);
   assert.match(ui, /window\.confirm/);
-  assert.match(ui, /await publishRelease\(slug, draftRevision, true\)/);
+  assert.match(ui, /await publishRelease\(slug, draftRevision, !hasRelease\)/);
   assert.match(cloud, /requireCanonicalSource: true/);
   assert.match(admin, /body\.requireCanonicalSource === true/);
   assert.match(publish, /if \(requireCanonicalSource\)/);
@@ -34,11 +34,15 @@ test("first Plot Site publishing requires operator confirmation and canonical ar
   assert.doesNotMatch(ui, /publishGeoRelease/);
 });
 
-test("legacy Building/Geo publishing and existing immutable releases remain independent", () => {
+test("Building Editor keeps history and subsequent updates isolated from Geo", () => {
   const component = read("apps/admin/src/building/BuildingWorkspace.tsx");
+  const handoff = read("apps/admin/src/building/PlotSiteHandoff.tsx");
   const publisher = read("workers/release-publish.mjs");
   assert.match(component, /<PlotSiteHandoff/);
-  assert.match(component, /Open Component Review/);
-  assert.match(component, /Open Building Releases/);
+  assert.match(component, /SourcePackReview/);
+  assert.match(component, /ComponentMapper/);
+  assert.match(component, /restoreBuildingRelease/);
+  assert.match(handoff, /Publish Update/);
+  assert.match(handoff, /Existing Geo releases stay pinned/);
   assert.match(publisher, /requireCanonicalSource = false/);
 });
