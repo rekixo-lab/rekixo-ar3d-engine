@@ -10,7 +10,7 @@ export interface GeoFacingEntry {
 export interface GeoFacingPlot {
   corners: Array<[number,number]>;
   sides: Partial<Record<GeoFacingRole,{
-    edges:number[];roadFacing?:boolean;facingDirection?:GeoDirection|string;
+    edges?:number[];roadFacing?:boolean;facingDirection?:GeoDirection|string;
   }>>;
   facing?:string|null;
   facingVerified?:boolean;
