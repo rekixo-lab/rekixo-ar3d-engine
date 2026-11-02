@@ -12,6 +12,7 @@ import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shar
 import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
 import {closerGeoCameraZoom} from "../../../../shared/geo-camera-zoom.js";
+import {projectClientAdminUrl} from "../../../../shared/project-client-admin-url.js";
 import "./geo-public-demo.css";
 
 type GeoCoordinate = {
@@ -1020,7 +1021,7 @@ export default function GeoPublicDemo() {
   // Header links use ONLY the owner's explicitly published Geo contacts.
   const publicPhone=data.publicContacts?.phone?.replace(/[^+0-9]/g,"")||"";
   const callHref=safeContactDigits(publicPhone).length>=7?"tel:"+publicPhone:"";
-  const adminHref="/3Dprojects?project="+encodeURIComponent(slug);
+  const adminHref=projectClientAdminUrl(slug);
 
   const mapFallbackReason = !data.maps.apiKey
     ? "Google Maps browser key is not configured"
