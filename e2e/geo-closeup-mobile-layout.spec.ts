@@ -58,8 +58,8 @@ test("independent close-up fills mobile map region while keeping project header,
     expect(result.originalMapDisplay,tag+" no simultaneous Google render").toBe("none");
     expect(Math.abs(result.closeup.left-result.scene.left),tag+" closeup left flush").toBeLessThan(2);
     expect(Math.abs(result.closeup.top-result.scene.top),tag+" closeup top flush").toBeLessThan(2);
-    expect(Math.abs(result.closeup.width-result.scene.width),tag+" closeup width").toBeLessThan(2);
-    expect(Math.abs(result.closeup.height-result.scene.height),tag+" closeup height").toBeLessThan(2);
+    expect(Math.abs(result.closeup.width-result.scene.width),tag+" 1px scene border on each side").toBeLessThanOrEqual(2);
+    expect(Math.abs(result.closeup.height-result.scene.height),tag+" 1px scene border top and bottom").toBeLessThanOrEqual(2);
     expect(result.canvas.width,tag+" full-size 3D canvas").toBeGreaterThan(200);
     expect(result.mode.left,tag+" accessible mode button").toBeGreaterThanOrEqual(result.scene.left);
     expect(result.mode.right,tag+" mode does not overlap right zoom").toBeLessThan(result.actions.left);
