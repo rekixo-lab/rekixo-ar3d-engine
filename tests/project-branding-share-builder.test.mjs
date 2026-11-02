@@ -103,7 +103,7 @@ test("Building and Geo share snapshots publish independently and require live re
   assert.ok(builder.includes('setActiveExperience("geo")'));
   assert.ok(builder.includes("publishProjectShare(slug, activeExperience)"));
   assert.ok(builder.includes("Copy published link"));
-  assert.ok(builder.includes("Use the published Building poster for Geo"));
+  assert.ok(builder.includes("Use the Building poster for Geo"));
   assert.ok(builder.includes("next.experiences.geo.useBuildingPoster"));
   assert.ok(builderStyles.includes(".engine-branding-reuse-poster"));
 });
