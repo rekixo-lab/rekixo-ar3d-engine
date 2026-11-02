@@ -36,7 +36,7 @@ test("Session cannot be shared across projects and retains least privilege",()=>
  const portal=read("workers/project-client-portal.mjs");
  const ui=read("apps/admin/src/management/ProjectClientPortal.tsx");
  const roles=read("shared/project-client-roles.js");
- assert.match(portal,/requestedSlug&&found.slug===requestedSlug/);
+ assert.match(portal,/!requestedSlug\|\|found.slug===requestedSlug/);
  assert.match(portal,/invitation.projectSlug!==projectSlug/);
  assert.match(portal,/p.status<>'archived'/);
  assert.match(portal,/canProjectClient\(s.role,"project.read"\)/);
