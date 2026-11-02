@@ -9,7 +9,7 @@ test("AR3D-branded personal Client Admin supports ID login, mandatory change and
   recorded.push(path);
   const ok=(body:unknown,status=200)=>route.fulfill({
    status,contentType:"application/json",body:JSON.stringify(body)});
-  if(path.endsWith("/login-meta"))return ok({projectName:"Satharai Sample Project"});
+  if(path.endsWith("/login-meta"))return ok({projectName:"Satharai Sample Project",projectKind:"building_geo"});
   if(path.endsWith("/session"))return ok({authenticated:signedIn,
     user:signedIn?{displayName:"Client Owner",email:"",role:"client_admin",
       projectSlug:"demo-a",projectName:"Satharai Sample Project",projectKind:"building_geo",
@@ -47,10 +47,12 @@ test("AR3D-branded personal Client Admin supports ID login, mandatory change and
   return ok({error:"Unexpected request"},404);
  });
  await page.goto(BASE+"/3Dprojects/demo-a/client-admin");
- await expect(page.getByRole("heading",{name:"Satharai Sample Project"})).toBeVisible();
- await expect(page.getByText("AR3D STUDIO · CLIENT ADMIN")).toBeVisible();
- const login=page.getByRole("heading",{name:"Sign in",level:2});
- await expect(login).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Builder Admin",level:1})).toBeVisible();
+ await expect(page.getByText("Satharai Sample Project")).toBeVisible();
+ await expect(page.getByRole("img",{name:"Construction crane"})).toBeVisible();
+ await expect(page.locator(".engine-client-admin-head")).toHaveCount(0);
+ await expect(page.getByRole("link",{name:"Back to Project"})).toHaveAttribute("href","/3Dprojects/demo-a/geo");
+
  await expect(page.getByLabel("Mobile Number or Email ID")).toBeVisible();
  await page.getByLabel("Mobile Number or Email ID").fill("+919876543210");
  await page.getByLabel("Password",{exact:true}).fill("FirstPass1234");
@@ -78,13 +80,31 @@ test("Project Client Admin login is project-specific, not the Rekixo Owner panel
  await page.route("**/3Dprojects/api/client-portal/**",async route=>{
   const p=new URL(route.request().url()).pathname;
   return route.fulfill({status:200,contentType:"application/json",
-    body:JSON.stringify(p.endsWith("/login-meta")?{projectName:"Demo B"}:
+    body:JSON.stringify(p.endsWith("/login-meta")?{projectName:"Demo B",projectKind:"masterplan_geo"}:
       {authenticated:false,user:null})});
  });
  await page.goto(BASE+"/3Dprojects/demo-b/client-admin");
- await expect(page.getByRole("heading",{name:"Demo B"})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Builder Admin",level:1})).toBeVisible();
+ await expect(page.getByText("Demo B")).toBeVisible();
+ await expect(page.getByRole("link",{name:"Back to Project"})).toHaveAttribute("href","/3Dprojects/demo-b/masterplan");
  await expect(page.getByRole("button",{name:"Sign in",exact:true})).toBeVisible();
  await expect(page.getByText(/Rekixo Super Admin/)).toHaveCount(0);
  const width=await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth);
  expect(width).toBeLessThanOrEqual(1);
+});
+
+test("Building-only Client Admin goes back to its building homepage",async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await page.route("**/3Dprojects/api/client-portal/**",route=>{
+  const path=new URL(route.request().url()).pathname;
+  return route.fulfill({status:200,contentType:"application/json",
+   body:JSON.stringify(path.endsWith("/login-meta")
+    ?{projectName:"Building Alpha",projectKind:"building"}
+    :{authenticated:false,user:null})});
+ });
+ await page.goto(BASE+"/3Dprojects/building-alpha/client-admin");
+ await expect(page.getByRole("heading",{name:"Builder Admin"})).toBeVisible();
+ await expect(page.getByText("Building Alpha")).toBeVisible();
+ await expect(page.getByRole("link",{name:"Back to Project"}))
+  .toHaveAttribute("href","/3Dprojects/building-alpha");
 });

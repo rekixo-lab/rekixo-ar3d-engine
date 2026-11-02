@@ -5,8 +5,8 @@ test("Mobile client portal remains readable, touch-accessible and never exposes 
   route.fulfill({status:200,contentType:"application/json",
    body:JSON.stringify({authenticated:false,user:null})}));
  await page.goto("http://127.0.0.1:5184/3Dprojects/demo-a/client-admin");
- await expect(page.getByRole("heading",{name:"Project Client Admin",level:1})).toBeVisible();
- await expect(page.getByRole("heading",{name:"Sign in",level:2})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Builder Admin",level:1})).toBeVisible();
+ await expect(page.getByRole("img",{name:"Construction crane"})).toBeVisible();
  await expect(page.getByRole("button",{name:"Issue scoped invitation"})).toHaveCount(0);
  const geometry=await page.evaluate(()=>({
   viewport:window.innerWidth,document:document.documentElement.scrollWidth,

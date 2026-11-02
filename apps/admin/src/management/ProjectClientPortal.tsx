@@ -53,6 +53,14 @@ type Panel="overview"|"plots"|"pricing"|"deals"|"contact";
 const nameOfRole=(value:string)=>value==="client_admin"?"Client Admin":
   value==="approver"?"Approver":value==="editor"?"Editor":"Viewer";
 
+function BuilderAdminBrand({projectName}:{projectName:string}){
+  return <div className="engine-client-builder-brand">
+    <span className="engine-client-builder-symbol" role="img" aria-label="Construction crane">🏗️</span>
+    <h1>Builder Admin</h1>
+    <p>Project: <strong>{projectName}</strong></p>
+  </div>;
+}
+
 export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:string}){
   const scopedSlug=projectSlug.trim().toLowerCase();
   const [invite,setInvite]=useState("");
@@ -64,6 +72,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
   const [newPassword,setNewPassword]=useState("");
   const [confirmPassword,setConfirmPassword]=useState("");
   const [projectTitle,setProjectTitle]=useState("");
+  const [projectKind,setProjectKind]=useState("");
   const [showPassword,setShowPassword]=useState(false);
   const [overview,setOverview]=useState<Overview|null>(null);
   const [commercial,setCommercial]=useState<CommercialState|null>(null);
@@ -117,8 +126,14 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       setInvite(token);
       history.replaceState(null,"",location.pathname+location.search);
     }
-    if(scopedSlug)void api<{projectName:string}>("/projects/"+encodeURIComponent(scopedSlug)+"/login-meta")
-      .then(v=>setProjectTitle(v.projectName)).catch(()=>setProjectTitle("Project Client Admin"));
+    if(scopedSlug)void api<{projectName:string;projectKind?:string}>(
+      "/projects/"+encodeURIComponent(scopedSlug)+"/login-meta")
+      .then(v=>{
+        setProjectTitle(v.projectName);
+        setProjectKind(v.projectKind||"");
+      })
+      .catch(()=>setProjectTitle("Project"));
+
     void load().catch(e=>setError(e instanceof Error?e.message:"Client session unavailable."));
   },[scopedSlug]);
   const selected=commercial?.rows.find(r=>r.plotId.toLowerCase()===plotId.toLowerCase());
@@ -229,11 +244,14 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     row.id.toLowerCase().includes(plotSearch.trim().toLowerCase()));
   const filteredCommercial=(commercial?.rows||[]).filter(row=>
     row.plotId.toLowerCase().includes(plotSearch.trim().toLowerCase()));
-  const projectLabel=identity?.projectName||projectTitle||"Project Client Admin";
+  const projectLabel=identity?.projectName||projectTitle||"Project";
   const authGate=!identity||Boolean(identity.mustChangePassword);
+  const backProjectHref=scopedSlug?"/3Dprojects/"+encodeURIComponent(scopedSlug)+
+    (projectKind==="masterplan_geo"?"/masterplan":projectKind==="building"?"":"/geo"):
+    "/3Dprojects";
 
   return <main className={"engine-client-admin"+(authGate?" engine-client-admin-auth":"")}>
-    <header className="engine-client-admin-head">
+    {!authGate&&<header className="engine-client-admin-head">
       <div className="engine-client-admin-brand">
         <span className="engine-client-admin-mark" aria-hidden="true">
           <i/><i/><i/><i/>
@@ -248,14 +266,11 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
         <a href={customerSite} target="_blank" rel="noopener noreferrer">View customer site</a>
         <button type="button" disabled={busy} onClick={()=>void logout()}>Sign out</button>
       </div>}
-    </header>
+    </header>}
     {error&&<p className="engine-manage-error" role="alert">{error}</p>}
     {message&&<p className="engine-manage-ok" role="status">{message}</p>}
-    {!identity?<section className="engine-client-admin-signin" aria-labelledby="client-login-heading">
-      <div className="engine-client-admin-auth-title">
-        <span className="engine-client-admin-auth-accent" aria-hidden="true"/>
-        <h2 id="client-login-heading">Sign in</h2>
-      </div>
+    {!identity?<section className="engine-client-admin-signin" aria-label="Builder Admin sign in">
+      <BuilderAdminBrand projectName={projectLabel}/>
       {!invite&&!scopedSlug?<p role="status" className="engine-client-admin-auth-help">
         Open your project's Client Admin link, or use an invitation.
       </p>:!invite?<form className="engine-client-admin-login-form" onSubmit={e=>{
@@ -309,7 +324,8 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
             <path d="M5 12h14m-6-6 6 6-6 6"/>
           </svg>}
         </button>
-        <p className="engine-client-admin-login-hint">Forgot password? Contact admin.</p>
+        {scopedSlug&&<a className="engine-client-admin-back-project"
+          href={backProjectHref}>← Back to Project</a>}
       </form>:
         <form className="engine-client-admin-login-form" onSubmit={e=>{
           e.preventDefault();void login();
@@ -332,12 +348,13 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
           </button>
           <button className="engine-client-admin-text-action" type="button"
             onClick={()=>setInvite("")}>Use ID and password instead</button>
-        </form>}    </section>:identity.mustChangePassword?<section className="engine-client-admin-signin"
+          {scopedSlug&&<a className="engine-client-admin-back-project"
+            href={backProjectHref}>← Back to Project</a>}
+        </form>}
+    </section>:identity.mustChangePassword?<section className="engine-client-admin-signin"
       aria-labelledby="client-change-heading">
-      <div className="engine-client-admin-auth-title">
-        <span className="engine-client-admin-auth-accent" aria-hidden="true"/>
-        <h2 id="client-change-heading">Change Temporary Password</h2>
-      </div>
+      <BuilderAdminBrand projectName={projectLabel}/>
+      <h2 id="client-change-heading" className="engine-client-admin-change-title">Change Temporary Password</h2>
       <p className="engine-client-admin-auth-help">8+ characters · letters and numbers</p>
       <form className="engine-client-admin-login-form" onSubmit={e=>{
         e.preventDefault();void changePassword();
@@ -371,7 +388,10 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
             !oldPassword||newPassword!==confirmPassword}>
           {busy?"Updating…":"Change password"}
         </button>
-      </form>    </section>:<>
+      </form>
+      {scopedSlug&&<a className="engine-client-admin-back-project"
+        href={backProjectHref}>← Back to Project</a>}
+    </section>:<>
       <nav className="engine-client-admin-tabs" aria-label="Client admin sections">
         {availablePanels.map(item=><button key={item} type="button"
           aria-current={panel===item?"page":undefined} className={panel===item?"is-active":""}

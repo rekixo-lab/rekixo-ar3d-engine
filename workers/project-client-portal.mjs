@@ -114,9 +114,10 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
   if(meta){
    if(request.method!=="GET")return response({error:"Method not allowed."},405);
    if(!validProjectSlug(meta[1]))return response({error:"Invalid project."},404);
-   const p=await env.DB.prepare("SELECT name FROM projects_3d WHERE slug=? AND status<>'archived' LIMIT 1")
+   const p=await env.DB.prepare(
+    "SELECT name,project_kind AS projectKind FROM projects_3d WHERE slug=? AND status<>'archived' LIMIT 1")
     .bind(meta[1]).first();
-   return response({projectName:p?.name||"Project Client Admin"});
+   return response({projectName:p?.name||"Project",projectKind:p?.projectKind||null});
   }
   if(url.pathname===PREFIX+"/enroll")return enroll(request,env);
   if(url.pathname===PREFIX+"/session"){

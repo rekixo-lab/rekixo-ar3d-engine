@@ -16,6 +16,10 @@ test("Public deploy follows AR3D Client Admin JSX, CSS and imported Geo modules"
   "apps/admin/src/geo/GeoBulkPricingPanel.tsx",
   "apps/admin/src/geo/GeoDealRecordsPanel.tsx",
   "apps/public/src/main.tsx",
+  "workers/project-client-portal.mjs",
+  "workers/project-client-passwords.mjs",
+  "workers/project-client-contact.mjs",
+  "workers/project-client-masterplan-inventory.mjs",
   "shared/project-client-admin-url.js"
  ]){
   assert.match(file,shouldDeploy,file+" must deploy the customer-hosted Client Admin");
