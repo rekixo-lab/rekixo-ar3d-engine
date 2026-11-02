@@ -458,3 +458,20 @@
   .engine-branding-hero__actions > .engine-control-button { flex: 1 1 auto; }
   .engine-branding-whatsapp-link { width: 100%; justify-content: center; }
 }
+
+.engine-branding-advanced-action {
+  margin-top: 8px;
+  border-top: 1px solid #2d3b51;
+  padding-top: 9px;
+}
+.engine-branding-advanced-action summary {
+  cursor: pointer;
+  color: #9aacc4;
+  font-size: 11px;
+  padding: 5px 0;
+}
+.engine-branding-advanced-action summary:focus-visible {
+  outline: 2px solid #28ce82;
+  outline-offset: 3px;
+}
+.engine-branding-advanced-action[open] button { margin-top: 8px; }
