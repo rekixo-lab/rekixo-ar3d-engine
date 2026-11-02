@@ -456,7 +456,7 @@ export default function EngineDashboard() {
                     onChange={()=>setCreateKind(kind)} />
                   <span><b>{PROJECT_KIND_LABELS[kind]}</b>
                     <small>{kind==="building"?"Customer website, floors, units and walkthrough":
-                      kind==="building_geo"?"Upload a complete 3D masterplan GLB, align it to Geo, then CSV-map every plot":
+                      kind==="building_geo"?"Use an approved 3D Building model, place it on Geo map, then map 3D plots when applicable":
                       "An approved layout image with Geo calibration, polygons and plots"}</small>
                   </span>
                 </label>
