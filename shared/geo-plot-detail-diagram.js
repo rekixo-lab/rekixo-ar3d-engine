@@ -61,5 +61,41 @@ export function publicGeoPlotDiagram(plot){
       length:side.length,unit:side.unit,
       roadFacing:side.roadFacing===true,segments,labelX,labelY}];
   });
+  // A four-role plot reads like a miniature property survey:
+  // Back is above, Front below, Depth B to the left and Depth A to the right.
+  // Raw polygon corners and the authoritative semantic edge/length assignments
+  // never change. These are *caption anchors*, not a rewrite of source edges.
+  // Edge-normal placement used to put Back beside a short/slanted top segment,
+  // visually colliding with Depth A on narrow polygons (e.g. Plot 18).
+  if(roles.length===4){
+    const boxLeft=Math.min(...points.map(p=>p.x));
+    const boxRight=Math.max(...points.map(p=>p.x));
+    const boxTop=Math.min(...points.map(p=>p.y));
+    const boxBottom=Math.max(...points.map(p=>p.y));
+    const anchorX=(boxLeft+boxRight)/2;
+    const anchorY=(boxTop+boxBottom)/2;
+    const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
+    for(const side of sides){
+      if(!side.segments.length)continue;
+      switch(side.role){
+        case "back":
+          side.labelX=anchorX;
+          side.labelY=clamp(boxTop-24,24,184);
+          break;
+        case "front":
+          side.labelX=anchorX;
+          side.labelY=clamp(boxBottom+24,24,184);
+          break;
+        case "depthA":
+          side.labelX=clamp(boxRight+33,38,282);
+          side.labelY=anchorY;
+          break;
+        case "depthB":
+          side.labelX=clamp(boxLeft-33,38,282);
+          side.labelY=anchorY;
+          break;
+      }
+    }
+  }
   return{pointText,vertexCount:points.length,sides};
 }

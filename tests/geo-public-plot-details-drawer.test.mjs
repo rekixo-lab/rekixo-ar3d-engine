@@ -225,3 +225,69 @@ test("plot status appears exactly once in place of shape-card heading, not below
   assert.match(drawer,/<section className="geo-plot-drawer__facts" aria-label="Plot measurements and status">/);
   assert.match(drawer,/Plot Measurements/);
 });
+
+test("four-side diagram aligns Back above, Front below and Depth B/A at the left/right",()=>{
+  const output=publicGeoPlotDiagram(mapped);
+  const bounds=output.pointText.split(" ").map(x=>x.split(",").map(Number));
+  const minX=Math.min(...bounds.map(p=>p[0])),maxX=Math.max(...bounds.map(p=>p[0]));
+  const minY=Math.min(...bounds.map(p=>p[1])),maxY=Math.max(...bounds.map(p=>p[1]));
+  const byRole=Object.fromEntries(output.sides.map(s=>[s.role,s]));
+  assert.equal(byRole.back.labelX,byRole.front.labelX,
+    "back and front captions must be aligned to the same vertical centerline");
+  assert.ok(byRole.back.labelY<minY,"Back caption must sit above the plot");
+  assert.ok(byRole.front.labelY>maxY,"Front caption must sit below the plot");
+  assert.ok(byRole.depthB.labelX<minX,"Depth B caption must sit left of the plot");
+  assert.ok(byRole.depthA.labelX>maxX,"Depth A caption must sit right of the plot");
+  assert.equal(byRole.depthA.labelY,byRole.depthB.labelY,
+    "both depth captions must share a balanced mid-height");
+  assert.deepEqual(output.sides.map(s=>s.label),
+    ["Front","Back","Depth A","Depth B"]);
+  assert.ok(output.sides.every(s=>s.labelX>=38&&s.labelX<=282&&
+    s.labelY>=24&&s.labelY<=184));
+});
+
+test("Plot 18 irregular short Back edge cannot send Back label to Depth A's right column",()=>{
+  // Matches the narrow five-corner visual pattern: a small slanted Back
+  // segment beside the top-right corner previously pushed Back to the right.
+  // The published side assignments and source measurement values remain intact.
+  const plot={...mapped,id:"18",corners:[[0,0],[18,0],[20,3],[20,50],[0,50]],
+    sides:{
+      front:{...mapped.sides.front,edges:[3],length:21.67},
+      back:{...mapped.sides.back,edges:[1],length:26.58},
+      depthA:{...mapped.sides.depthA,edges:[2],length:48.25},
+      depthB:{...mapped.sides.depthB,edges:[4,0],length:53.17},
+    },
+  };
+  const original=structuredClone(plot);
+  const output=publicGeoPlotDiagram(plot);
+  const byRole=Object.fromEntries(output.sides.map(s=>[s.role,s]));
+  const points=output.pointText.split(" ").map(x=>x.split(",").map(Number));
+  assert.equal(byRole.back.labelX,byRole.front.labelX,
+    "even a short diagonal Back segment must render its caption centered above");
+  assert.ok(byRole.back.labelY<Math.min(...points.map(p=>p[1])));
+  assert.ok(byRole.back.labelX<byRole.depthA.labelX);
+  assert.equal(byRole.depthA.labelY,byRole.depthB.labelY);
+  assert.deepEqual(output.sides.map(s=>[s.role,s.length]),[
+    ["front",21.67],["back",26.58],["depthA",48.25],["depthB",53.17],
+  ]);
+  assert.deepEqual(output.sides.find(s=>s.role==="back").segments.length,1);
+  assert.deepEqual(plot,original,"caption alignment must never mutate published mapped polygon data");
+});
+
+test("triangle stays geometry-based and missing dimensions create no invented captions",()=>{
+  const triangle={...mapped,layout:"three",
+    corners:[[0,0],[18,0],[9,19]],sides:{
+      front:{...mapped.sides.front,edges:[0]},
+      back:{...mapped.sides.back,edges:[1]},
+      depthA:{...mapped.sides.depthA,edges:[2]},
+    },
+  };
+  const output=publicGeoPlotDiagram(triangle);
+  assert.equal(output.vertexCount,3);
+  assert.equal(output.sides.length,3);
+  assert.ok(output.sides.every(s=>Number.isFinite(s.labelX)&&Number.isFinite(s.labelY)));
+  const missing={...mapped,sides:{...mapped.sides,back:null}};
+  const display=publicGeoPlotDiagram(missing);
+  assert.equal(display.sides.find(s=>s.role==="back"),undefined);
+  assert.equal(display.sides.find(s=>s.role==="front").length,25);
+});
