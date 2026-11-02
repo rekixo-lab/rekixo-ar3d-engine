@@ -1722,9 +1722,21 @@ export default function GeoPlotMapper(){
           <details open className="geo-plot-inspector-section">
             <summary>03 · Road, facing & north</summary>
           <label>Road / Access<input value={working.road} onChange={e=>setWorking({...working,road:e.target.value,facingVerified:false})}/></label>
-          <label>Facing <select value={working.facing} onChange={e=>setWorking({...working,facing:e.target.value,facingVerified:false})}>
+          <label>Primary Front Facing <select value={working.facing}
+            onChange={e=>setWorking(p=>p?{...p,facing:e.target.value,facingVerified:false,
+              sides:{...p.sides,...(p.sides.front?.roadFacing?{
+                front:{...p.sides.front,facingDirection:e.target.value as GeoDirection}
+              }:{})}}:p)}>
             {directions.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
-          <button type="button" disabled={working.corners.length<3} onClick={()=>setWorking(p=>p?{...p,facing:facingFromGeo(p.corners,p.sides.front?.edges||[],geo?.placement.headingDeg||0),facingVerified:false}:p)}>Suggest Facing From Geo North</button>
+          <button type="button" disabled={working.corners.length<3}
+            onClick={()=>setWorking(p=>{
+              if(!p)return p;
+              const facing=facingFromGeo(p.corners,p.sides.front?.edges||[],geo?.placement.headingDeg||0);
+              return {...p,facing,facingVerified:false,
+                sides:{...p.sides,...(p.sides.front?{
+                  front:{...p.sides.front,facingDirection:undefined}
+                }:{})}};
+            })}>Suggest Primary Front From Geo North</button>
           <label>Facing Source<input value={working.facingSource} placeholder="Geo north / approved master plan reference"
             onChange={e=>setWorking({...working,facingSource:e.target.value,facingVerified:false})}/></label>
           <label className="geo-plot-check"><input type="checkbox" checked={working.facingVerified}
