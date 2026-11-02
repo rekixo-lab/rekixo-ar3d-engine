@@ -35,17 +35,17 @@ test("mobile camera buttons fit four columns with transparent controls and no ou
 
 test("fullscreen camera controls have no outer panel and four separate rounded buttons", () => {
   const fullscreenStyles = css.slice(css.indexOf("/* Geo fullscreen: four independent, rounded camera buttons"));
-  assert.match(fullscreenStyles, /\\.geo-integrated-scene:fullscreen \\.geo-camera-toolbar--fullscreen-clone\\s*\\{[\\s\\S]*display:\\s*grid\\s*!important/);
-  assert.match(fullscreenStyles, /grid-template-columns:\\s*repeat\\(4, minmax\\(0, 1fr\\)\\)/);
-  assert.match(fullscreenStyles, /gap:\\s*clamp\\(5px, 1vw, 11px\\)/);
-  assert.match(fullscreenStyles, /padding:\\s*0 !important;[\\s\\S]*border:\\s*0 !important;[\\s\\S]*background:\\s*transparent !important;/);
-  assert.match(fullscreenStyles, /box-shadow:\\s*none !important;[\\s\\S]*backdrop-filter:\\s*none !important;/);
-  assert.match(fullscreenStyles, /\\.geo-integrated-scene:fullscreen \\.geo-camera-toolbar--fullscreen-clone button\\s*\\{[\\s\\S]*border-radius:\\s*10px !important/);
-  assert.match(fullscreenStyles, /button:hover,[\\s\\S]*button:focus-visible[\\s\\S]*border-radius:\\s*10px !important/);
-  assert.match(fullscreenStyles, /button\\.is-active\\s*\\{[\\s\\S]*border-radius:\\s*10px !important/);
-  assert.match(fullscreenStyles, /button\\.is-active::after\\s*\\{[\\s\\S]*display:\\s*none !important/);
-  assert.match(fullscreenStyles, /button:focus-visible\\s*\\{[\\s\\S]*box-shadow:\\s*0 0 0 2px/);
-  assert.match(fullscreenStyles, /@media \\(max-width: 640px\\)[\\s\\S]*gap:\\s*5px !important/);
+  assert.match(fullscreenStyles, /\.geo-integrated-scene:fullscreen \.geo-camera-toolbar--fullscreen-clone\s*\{[\s\S]*display:\s*grid\s*!important/);
+  assert.match(fullscreenStyles, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(fullscreenStyles, /gap:\s*clamp\(5px, 1vw, 11px\)/);
+  assert.match(fullscreenStyles, /padding:\s*0 !important;[\s\S]*border:\s*0 !important;[\s\S]*background:\s*transparent !important;/);
+  assert.match(fullscreenStyles, /box-shadow:\s*none !important;[\s\S]*backdrop-filter:\s*none !important;/);
+  assert.match(fullscreenStyles, /\.geo-integrated-scene:fullscreen \.geo-camera-toolbar--fullscreen-clone button\s*\{[\s\S]*border-radius:\s*10px !important/);
+  assert.match(fullscreenStyles, /button:hover,[\s\S]*button:focus-visible[\s\S]*border-radius:\s*10px !important/);
+  assert.match(fullscreenStyles, /button\.is-active\s*\{[\s\S]*border-radius:\s*10px !important/);
+  assert.match(fullscreenStyles, /button\.is-active::after\s*\{[\s\S]*display:\s*none !important/);
+  assert.match(fullscreenStyles, /button:focus-visible\s*\{[\s\S]*box-shadow:\s*0 0 0 2px/);
+  assert.match(fullscreenStyles, /@media \(max-width: 640px\)[\s\S]*gap:\s*5px !important/);
 });
 
 test("fullscreen bridge is lazy-loaded only for public Geo routes", () => {
@@ -62,7 +62,7 @@ test("fullscreen uses the Geo scene and places the cloned camera dock at the bot
   assert.ok(publicSource.includes("fullscreenControl: false"));
   assert.ok(publicSource.includes("scene.requestFullscreen?.()"));
   assert.ok(publicSource.includes("document.exitFullscreen()"));
-  const fullscreenDock = css.slice(css.lastIndexOf("/* The scene's own fullscreen"));
+  const fullscreenDock = css.slice(css.indexOf("/* Geo fullscreen: four independent, rounded camera buttons"));
   assert.ok(fullscreenDock.includes(".geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone"));
   assert.ok(fullscreenDock.includes("bottom: calc(10px + env(safe-area-inset-bottom"));
 });
