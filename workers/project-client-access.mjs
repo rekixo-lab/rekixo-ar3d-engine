@@ -1,7 +1,7 @@
 // Owner-only project invitation management. Bearer links are shown exactly once
 // and delivered out-of-band after the owner confirms the intended contact.
 import {PROJECT_CLIENT_ROLES} from "../shared/project-client-roles.js";
-import {projectClientAdminPath} from "../shared/project-client-admin-url.js";
+import {projectClientAdminUrl} from "../shared/project-client-admin-url.js";
 const enc=new TextEncoder();
 export const clientTokenHash=async token=>Array.from(new Uint8Array(await crypto.subtle.digest(
  "SHA-256",enc.encode(token)))).map(n=>n.toString(16).padStart(2,"0")).join("");
