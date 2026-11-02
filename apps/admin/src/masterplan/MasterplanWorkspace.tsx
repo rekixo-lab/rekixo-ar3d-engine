@@ -68,7 +68,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const [draft,setDraft]=useState<MasterplanDraft|null>(null);
   const [assets,setAssets]=useState<CloudAssetSummary[]>([]);
   const [tool,setTool]=useState<Tool>("pan");
-  const [panel,setPanel]=useState<"source"|"plots">(mode==="source"?"source":"plots");
+  const [panel,setPanel]=useState<"source"|"plots">(() => new URLSearchParams(location.search).get("tab")==="source" || mode==="source" ? "source" : "plots");
   const [working,setWorking]=useState<Plot|null>(null);
   const [originalId,setOriginalId]=useState<string|null>(null);
   const [controlIndex,setControlIndex]=useState<number|null>(null);
@@ -146,6 +146,13 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
         action==="publish"?"Immutable Geo Masterplan published to customer site.":"Previous immutable release activated.");
     }catch(e){setError(e instanceof Error?e.message:"Operation failed.");}
     finally{setBusy(false);}
+  }
+  function selectPanel(next:"source"|"plots") {
+    if(panel===next)return;
+    const url=new URL(window.location.href);
+    url.searchParams.set("tab",next);
+    window.history.replaceState({},"",url.pathname+url.search);
+    setPanel(next);setTool("pan");
   }
   function newBoundary(){
     if(!draft)return;
@@ -258,9 +265,9 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       <span>Live <b>{state.activeRelease?"v"+state.activeRelease.version:"Not published"}</b></span></div>}
     <nav className="masterplan-editor-tabs" aria-label="Masterplan editor tools">
       <button type="button" aria-pressed={panel==="source"} className={panel==="source"?"active":""}
-        onClick={()=>{setPanel("source");setTool("pan");}}>01 · Source & GPS</button>
+        onClick={()=>selectPanel("source")}>01 · Source & GPS</button>
       <button type="button" aria-pressed={panel==="plots"} className={panel==="plots"?"active":""}
-        onClick={()=>{setPanel("plots");setTool("pan");}}>02 · Plot Mapper & Measurements</button>
+        onClick={()=>selectPanel("plots")}>02 · Plot Mapper & Measurements</button>
     </nav>
     <div className="masterplan-tools">
       <button onClick={()=>setTool("pan")} className={tool==="pan"?"active":""}>Pan</button>
