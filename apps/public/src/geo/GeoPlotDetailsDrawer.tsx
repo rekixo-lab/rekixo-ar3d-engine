@@ -132,7 +132,7 @@ export function GeoPlotDetailsDrawer({
                 <span>{area.label}</span>
                 <b>{formatMeasurement(area.value,area.unit)}</b>
               </div>
-) : null}
+            ) : null}
             {allRoles.map(role=>{
               const side=shown.sides[role];
               if(!side||!(side.length>0))return null;
@@ -148,7 +148,7 @@ export function GeoPlotDetailsDrawer({
               <span>Road access</span><b>{shown.road}</b>
             </div>:null}
             {approvedPrice?<div className="geo-plot-drawer__fact">
-              <span>Approved price</span><b>{approvedPrice}</b>
+              <span>Price</span><b>{approvedPrice}</b>
             </div>:null}
             {shown.notes?<p className="geo-plot-drawer__notes">{shown.notes}</p>:null}
           </section>
