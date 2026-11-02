@@ -7,26 +7,33 @@ export function normalizeGeoPlotPublicationMode(value){
 export function publicGeoPlotFacts(plot,mode){
   const kind=normalizeGeoPlotPublicationMode(mode);
   if(!plot||typeof plot!=="object")throw Error("Invalid mapped plot.");
-  // A fully source-approved historical release retains existing content.
+  // A historical verified release keeps its existing public contract.
   if(kind==="verified")return plot;
-  // Preliminary releases may show the polygon and its canonical ID, but
-  // NOT unapproved area, lengths, facing, road or free-text notes.
-  const area=plot.area?.verified===true&&Boolean(plot.area?.source)?{
-    value:plot.area.value,unit:plot.area.unit
-  }:null;
-  const facing=plot.facingVerified===true&&Boolean(plot.facingSource)?plot.facing:null;
+  // Preliminary is already an intentionally published mapping release. Show
+  // non-empty measured fields as saved on that release even when their separate
+  // source-review checkbox was not checked. Never expose private draft notes,
+  // internal source/evidence strings, approval flags or unapproved commercial data.
+  const allowedAreaUnits=new Set(["sqft","sqm","sqyd"]);
+  const area=Number.isFinite(plot.area?.value)&&plot.area.value>0&&
+    allowedAreaUnits.has(plot.area.unit)
+    ?{value:plot.area.value,unit:plot.area.unit}:null;
+  const allowedSideUnits=new Set(["ft","m"]);
   const sides={};
-  for(const [role,side] of Object.entries(plot.sides||{})){
-    if(side?.verified===true&&Boolean(side.source)){
-      // Expose only the approved side's own edge indices so the read-only
-      // customer diagram can label the real polygon without guessing roles.
-      sides[role]={edges:Array.isArray(side.edges)?[...side.edges]:[],
-        length:side.length,unit:side.unit,roadFacing:side.roadFacing===true};
-    }
+  for(const role of ["front","back","depthA","depthB"]){
+    const side=plot.sides?.[role];
+    if(!side||!Number.isFinite(side.length)||side.length<=0||
+      !allowedSideUnits.has(side.unit))continue;
+    sides[role]={
+      edges:Array.isArray(side.edges)?side.edges.filter(
+        n=>Number.isInteger(n)&&n>=0&&n<plot.corners.length
+      ):[],
+      length:side.length,unit:side.unit,roadFacing:side.roadFacing===true
+    };
   }
-  const road=plot.road&&plot.sides?.front?.verified===true&&
-    plot.sides.front.roadFacing===true&&Boolean(plot.sides.front.source)
-    ?plot.road:null;
+  const facing=typeof plot.facing==="string"&&plot.facing.trim()
+    ?plot.facing.trim():null;
+  const road=typeof plot.road==="string"&&plot.road.trim()
+    ?plot.road.trim():null;
   return {id:plot.id,corners:plot.corners,layout:plot.layout,
     ...(plot.planeVerified===true&&Boolean(plot.planeSource)&&Number.isFinite(plot.planeY)
       ?{planeY:plot.planeY}:{}),

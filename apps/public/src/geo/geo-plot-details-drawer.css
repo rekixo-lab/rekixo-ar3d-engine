@@ -115,7 +115,7 @@
   .geo-plot-drawer{top:0;bottom:0;left:0;width:calc(100% - 55px);max-height:none;border-radius:0 15px 0 0}
   /* Keep the top-right map zoom/fullscreen buttons above the heading.
      The pane starts at y=0, only its interactive content moves down. */
-  .geo-plot-drawer__head{padding:60px 12px 10px}
+  .geo-plot-drawer__head{padding:12px 12px 10px}
   .geo-plot-drawer__scroll{padding:10px 11px max(44px,env(safe-area-inset-bottom,0px))}
   .geo-plot-drawer__diagram-card{padding:8px}
 }
@@ -130,10 +130,8 @@
 .geo-integrated-scene:fullscreen > .geo-plot-drawer .geo-plot-drawer__scroll {
   padding-bottom:calc(94px + env(safe-area-inset-bottom,0px));
 }
-/* Map zoom/fullscreen actions remain reachable above the flush drawer. */
-.geo-integrated-scene:has(> .geo-plot-drawer.is-open) > .geo-map-quick-actions {
-  z-index:20;
-}
+/* Let the drawer cover the map's quick zoom/fullscreen controls as well. 
+   Closing the drawer restores their normal interaction automatically. */
 @media(prefers-reduced-motion:reduce){
   .geo-plot-drawer{transition-duration:.01ms;transition-delay:0s;will-change:auto}
 }
@@ -143,4 +141,22 @@
 .geo-integrated-scene:has(> .geo-plot-drawer.is-open) > .geo-plot-status {
   visibility:hidden;
   pointer-events:none;
+}
+
+/* Keep original Google attribution visible, but cover the underlying imagery
+   with an opaque matching footer while the drawer is open. The drawer itself
+   still meets the bottom map edge and the browser's native credit links remain. */
+.geo-integrated-scene:has(> .geo-plot-drawer.is-open) .geo-integrated-map .gm-style::after {
+  content:"";
+  position:absolute;
+  left:0;right:0;bottom:0;
+  height:30px;
+  z-index:100;
+  pointer-events:none;
+  background:#071c27;
+}
+.geo-integrated-scene:has(> .geo-plot-drawer.is-open) .geo-integrated-map .gm-style-cc,
+.geo-integrated-scene:has(> .geo-plot-drawer.is-open) .geo-integrated-map .gm-style a[href*="google.com/maps"],
+.geo-integrated-scene:has(> .geo-plot-drawer.is-open) .geo-integrated-map .gm-style a[href*="maps.google"] {
+  z-index:101 !important;
 }

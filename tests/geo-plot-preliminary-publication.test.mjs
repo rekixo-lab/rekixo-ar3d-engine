@@ -27,34 +27,39 @@ test("preliminary publish preserves valid mapped geometry while verified source 
   assert.throws(()=>validateGeoPlotCollection([{...plot,corners:[[0,0],[10,10],[10,0],[0,10]]}]),/self-intersecting/);
   assert.throws(()=>validateGeoPlotCollection([plot,{...plot,id:"2"}]),/overlap/);
 });
-test("preliminary public plot hides all unverified site facts and commercial notes",()=>{
+test("published preliminary mapping shows entered dimensions without requiring separate source approval",()=>{
   const pub=publicGeoPlotFacts(plot,"preliminary");
   assert.deepEqual(pub.corners,plot.corners);
   assert.equal(pub.id,"1");
-  assert.equal(pub.area,null);
-  assert.equal(pub.facing,null);
-  assert.equal(pub.road,null);
-  assert.deepEqual(pub.sides,{});
-  assert.equal(pub.notes,"");
-  assert.equal(Object.hasOwn(pub,"planeY"),false,"unreviewed Y must use canonical model-ground fallback");
+  assert.deepEqual(pub.area,{value:100,unit:"sqm"});
+  assert.equal(pub.facing,"north");
+  assert.equal(pub.road,"23 feet road");
+  assert.deepEqual(Object.keys(pub.sides),["front","back","depthA","depthB"]);
+  assert.deepEqual(pub.sides.front.edges,[0]);
+  assert.equal(pub.sides.depthA.length,10);
+  assert.equal(pub.notes,"","private source note must not appear in customer response");
+  assert.equal(Object.hasOwn(pub.area,"verified"),false);
+  assert.equal(Object.hasOwn(pub.area,"source"),false);
+  assert.equal(Object.hasOwn(pub.sides.front,"source"),false);
+  assert.equal(Object.hasOwn(pub,"planeY"),false,"unreviewed model height stays private");
   assert.equal(normalizeGeoPlotPublicationMode("verified"),"verified");
   assert.throws(()=>normalizeGeoPlotPublicationMode("mislabeled"),/Unknown/);
 });
-test("preliminary public plot may show individually verified fields but not unapproved road",()=>{
+test("optional missing fields stay blank, and data is never fabricated",()=>{
   const staged=structuredClone(plot);
-  staged.area.verified=true;staged.area.source="approved masterplan";
-  staged.sides.depthA.verified=true;staged.sides.depthA.source="approved drawing";
-  staged.facingVerified=true;staged.facingSource="survey north";
+  staged.facing="";
+  staged.road="";
+  staged.area.value=0;
+  staged.sides.depthA.length=0;
   const pub=publicGeoPlotFacts(staged,"preliminary");
-  assert.deepEqual(pub.area,{value:100,unit:"sqm"});
-  assert.equal(pub.facing,"north");
-  assert.deepEqual(Object.keys(pub.sides),["depthA"]);
-  assert.deepEqual(pub.sides.depthA.edges,[1],"only approved side edge indices are public");
+  assert.equal(pub.area,null);
+  assert.equal(pub.facing,null);
   assert.equal(pub.road,null);
-  const approved=publicGeoPlotFacts({...staged,road:"23 feet road",
-    sides:{...staged.sides,front:{...staged.sides.front,verified:true,
-      source:"approved road drawing",roadFacing:true}}},"preliminary");
-  assert.equal(approved.road,"23 feet road");
+  assert.equal(pub.sides.depthA,undefined);
+  assert.equal(pub.sides.front.length,10);
+  assert.equal(pub.notes,"");
+  assert.deepEqual(plot.area,{value:100,unit:"sqm",source:"",verified:false},
+    "public presentation may not mutate sealed mapping data");
 });
 test("historic verified releases retain their existing content",()=>{
   const obj=publicGeoPlotFacts(plot,"verified");
@@ -80,7 +85,7 @@ test("release mode is immutable D1 metadata, owner-only CAS, old verified schema
   assert.match(published,/row\.publication_mode/);
   assert.match(published,/publicGeoPlotFacts\(plot,publicationMode\)/);
   assert.match(published,/publicationMode==="verified"/);
-  assert.match(read("apps/public/src/geo/GeoPlotDetailsDrawer.tsx"),/publicationMode==="preliminary"/);
+  assert.doesNotMatch(read("apps/public/src/geo/GeoPlotDetailsDrawer.tsx"),/Preliminary boundary|Awaiting source approval|Not published/);
   assert.match(publicUI,/<GeoPlotDetailsDrawer/);
   assert.match(admin,/Publish Preliminary Mapping · Editable Later/);
   assert.match(admin,/Publish Verified Mapping to Customer Site/);
