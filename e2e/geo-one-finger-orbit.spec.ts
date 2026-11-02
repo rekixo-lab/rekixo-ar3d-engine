@@ -69,8 +69,8 @@ test("mobile one-finger drag is orbit, real tap stays tappable, two fingers reac
   });
   expect(outcome.noMovement,"minor finger drift should not pan").toBe(true);
   expect(outcome.rotated,"one-finger swipe should be consumed by orbit").toBe(true);
-  expect(outcome.liveHeading,"heading changes before touchend").toBeCloseTo(90-60*.46,4);
-  expect(outcome.afterReverse,"left swipe immediately reverses").toBeCloseTo(90-20*.46,4);
+  expect(outcome.liveHeading,"right swipe increases heading before touchend").toBeCloseTo(90+60*.46,4);
+  expect(outcome.afterReverse,"left swipe decreases heading immediately").toBeCloseTo(90+20*.46,4);
   expect(outcome.afterOrbit,"no post-release rotation tail").toBeCloseTo(outcome.afterReverse,4);
   expect(outcome.redraws,"one redraw per actual drag update").toBe(2);
   expect(outcome.captures,"map gesture ownership is restored for native pinch and taps")
