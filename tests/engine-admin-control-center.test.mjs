@@ -4,9 +4,9 @@ import fs from "node:fs";
 
 const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Engine admin exposes one systematic six-section control center", () => {
+test("Engine admin shows focused project-type navigation instead of technical subpages", () => {
   const shell = read("apps/admin/src/layout/EngineAdminShell.tsx");
-  for (const label of ["Overview", "Source Pack", "Building", "Geo", "Releases", "Advanced"]) {
+  for (const label of ["Projects", "Clients", "Project Profile", "3D Building Editor", "3D Building Geo Editor", "Masterplan Plot Mapper", "3D Geo Plot Mapper", "Share & Branding"]) {
     assert.match(shell, new RegExp(`label:\\s*\\"${label}\\"`));
   }
   assert.match(shell, /ACTIVE PROJECT/);
