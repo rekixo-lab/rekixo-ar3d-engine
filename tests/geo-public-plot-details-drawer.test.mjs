@@ -291,4 +291,3 @@ test("triangle stays geometry-based and missing dimensions create no invented ca
   assert.equal(display.sides.find(s=>s.role==="back"),undefined);
   assert.equal(display.sides.find(s=>s.role==="front").length,25);
 });
-
