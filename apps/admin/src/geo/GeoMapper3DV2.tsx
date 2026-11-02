@@ -260,7 +260,6 @@ function previewStateLabel(state: GeoIntegratedPreviewState) {
 }
 
 export default function GeoMapper3DV2() {
-  const [projectList, setProjectList] = useState<CloudProjectSummary[]>([]);
   const [selectedSlug, setSelectedSlug] = useState("");
   const [state, setState] = useState<GeoV2State>();
   const [releaseItems, setReleaseItems] = useState<CloudReleaseSummary[]>([]);
@@ -325,7 +324,6 @@ export default function GeoMapper3DV2() {
       .then((payload) => {
         if (!live || !payload) return;
         const [projectResult, maps] = payload;
-        setProjectList(projectResult.projects);
         if (maps.apiKey) {
           setMapsApiKey(maps.apiKey);
           setConfiguredMapsApiKey(maps.apiKey);
@@ -713,20 +711,6 @@ export default function GeoMapper3DV2() {
 
   return (
     <main className={`geo3d-shell geo3d-v2-shell${focusMode ? " geo3d-v2-shell--focus-active" : ""}`}>
-      <header className="geo3d-topbar">
-        <div>
-          <p className="eyebrow">REKIXO AR3D ENGINE · GEO V2</p>
-          <h1>WGS84 + ENU 3D Geo Mapper</h1>
-          <p>Rigid Building placement only. Masterplan calibration never warps Building geometry.</p>
-        </div>
-        <div className="geo3d-actions">
-          <select value={selectedSlug} disabled={busy} onChange={(event) => setSelectedSlug(event.target.value)}>
-            {projectList.map((project) => <option key={project.id} value={project.slug}>{project.name}</option>)}
-          </select>
-          {selectedSlug && <a href={`/3Dprojects/${encodeURIComponent(selectedSlug)}/geo`} target="_blank" rel="noreferrer">Public Geo</a>}
-          <a href="/3Dprojects">Projects</a>
-        </div>
-      </header>
 
       {error && <div className="geo3d-alert geo3d-alert--error">{error}</div>}
       {message && <div className="geo3d-alert geo3d-alert--ok">{message}</div>}
@@ -759,7 +743,7 @@ export default function GeoMapper3DV2() {
           <section className="geo3d-workspace geo-v2-workspace--integrated">
             <article className={`geo3d-map-card geo-v2-integrated-card${focusMode ? " geo-v2-integrated-card--focus" : ""}${!dockOpen ? " geo-v2-integrated-card--dock-closed" : ""}`}>
               <div className="geo3d-section-head geo-v2-focus-header">
-                <div><p className="eyebrow">GEO SITE ALIGNMENT</p><h3>3D Plot Site · Satellite Alignment</h3></div>
+                <div><p className="eyebrow">GEO SITE ALIGNMENT</p><h3>3D Building · Geo Alignment</h3></div>
                 <div className="geo-v2-focus-actions">
                   {geoDerivativeAvailable && <label className="geo-v2-variant-control"><span>COMPARE GEOMETRY</span>
                     <select aria-label="3D preview geometry variant" value={previewVariant} onChange={(event) => setPreviewVariant(event.target.value as "canonical" | "geo")}>
@@ -899,7 +883,7 @@ export default function GeoMapper3DV2() {
                     onClick={() => {
                       if (window.confirm("Publish this exact saved and verified Geo placement to the public website? Confirm the actual site corners, orientation and scale were checked."))
                         void run(publish);
-                    }}>Publish Geo</button>
+                    }}>{geoReleaseState?.activeRelease ? "Publish Update" : "Publish Geo"}</button>
                 </div>
               </footer>}
               <p className="geo3d-help">Normal map click/drag moves the WGS84 anchor. While a P1–P4 Map capture is active, the WGS84 anchor is locked and the next map click records only that real-site control point.</p>
@@ -936,7 +920,7 @@ export default function GeoMapper3DV2() {
             <div className="geo3d-section-head"><div><p className="eyebrow">VERIFY → IMMUTABLE RELEASE</p><h3>Publication gate</h3></div></div>
             <div className="geo3d-save-row">
               <button disabled={busy || Boolean(verificationBlocker)} onClick={() => void run(verify)}>Verify Current Preview</button>
-              <button className="geo3d-primary" disabled={busy || !publishReady} onClick={() => void run(publish)}>Publish Immutable Geo Release</button>
+              <button className="geo3d-primary" disabled={busy || !publishReady} onClick={() => void run(publish)}>{geoReleaseState?.activeRelease ? "Publish Update" : "Publish Geo"}</button>
               <span className={verificationBlocker ? "geo-v2-verification-note geo-v2-verification-note--blocked" : "geo-v2-verification-note"}>{verificationBlocker || (geoReleaseState?.previewVerified ? "Current saved revision is verified and ready to publish." : "Integrated preview is ready. Verify this saved revision next.")}</span>
             </div>
             {!!geoReleaseState?.releases.length && <div className="geo-v2-release-list">{geoReleaseState.releases.map((release) => <article key={release.id}><div><strong>Geo v{release.version}{release.active ? " · LIVE" : ""}</strong><small>{release.id}</small></div>{!release.active && <button disabled={busy} onClick={() => void run(() => activate(release.id))}>Activate</button>}</article>)}</div>}
@@ -944,11 +928,13 @@ export default function GeoMapper3DV2() {
         </>
       )}
 
-      <section className="geo3d-form-card">
-        <div className="geo3d-section-head"><div><p className="eyebrow">MAP PROVIDER</p><h3>Browser key</h3></div></div>
+      <details className="geo3d-form-card geo3d-provider-details">
+        <summary>Map Settings · Technical</summary>
+        <p className="geo3d-help">Google Maps browser key. Usually only configured once.</p>
         <div className="geo3d-key-row"><input type="password" value={mapsApiKey} onChange={(event) => setMapsApiKey(event.target.value)} placeholder="Google Maps browser API key" /><button disabled={busy} onClick={() => void run(saveKey)}>Save Key</button></div>
         <p className="geo3d-help">The authoring map uses only the last saved key, so editing this field cannot tear down a live placement session.</p>
-      </section>
+        <a className="geo3d-help" href="/3Dprojects/advanced">Advanced provider configuration</a>
+      </details>
     </main>
   );
 }
