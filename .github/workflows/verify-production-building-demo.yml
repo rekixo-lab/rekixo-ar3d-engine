@@ -25,15 +25,22 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Check out production verifier
+      - name: Check out exact successfully deployed commit
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.workflow_run.head_sha || 'main' }}
+          fetch-depth: 2
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+
+      - name: Determine whether changed UI affects the Building demo
+        id: scope
+        if: github.event_name == 'workflow_run'
+        run: node scripts/ci-change-scope.mjs push >> "$GITHUB_OUTPUT"
 
       - name: Verify live Building demo readiness
         env:
@@ -53,12 +60,22 @@ jobs:
           rm -f "$OUT"
 
       - name: Install live browser-test dependencies
+        if: github.event_name != 'workflow_run' || steps.scope.outputs.run_building_browser == 'true'
         run: npm ci
 
+      - name: Restore cached Chromium
+        if: github.event_name != 'workflow_run' || steps.scope.outputs.run_building_browser == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install Chromium for live customer verification
+        if: github.event_name != 'workflow_run' || steps.scope.outputs.run_building_browser == 'true'
         run: npx --no-install playwright install --with-deps chromium
 
       - name: Verify live floor-review buttons on the actual customer site
+        if: github.event_name != 'workflow_run' || steps.scope.outputs.run_building_browser == 'true'
         env:
           REKIXO_PUBLIC_ORIGIN: https://ar3dstudio.in
           REKIXO_FLOOR_UI_PROJECT_SLUG: ${{ inputs.project_slug || vars.REKIXO_DEMO_PROJECT_SLUG || 'jyoti-paradise' }}

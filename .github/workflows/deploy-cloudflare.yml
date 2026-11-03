@@ -21,6 +21,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
 
@@ -41,6 +42,7 @@ jobs:
           fetch-depth: 2
 
       - name: Require merged PR for production push
+        id: merged-pr
         if: github.event_name == 'push'
         shell: bash
         env:
@@ -67,13 +69,14 @@ jobs:
           const fs = require("fs");
           const payload = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
           const mergeSha = process.argv[3];
-          const mergedToMain = Array.isArray(payload) && payload.some(
+          const matchingPr = Array.isArray(payload) && payload.find(
             (pr) => pr && pr.merged_at && pr.base?.ref === "main" && pr.merge_commit_sha === mergeSha
           );
-          if (!mergedToMain) {
+          if (!matchingPr || !matchingPr.head?.sha) {
             console.error("::error::Production deploy blocked: no merged PR to main matches this exact commit SHA.");
             process.exit(1);
           }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, "pr_head_sha=" + matchingPr.head.sha + "\n");
           console.log("Production commit is associated with a merged PR to main.");
           NODE
           rm -f "$BODY"
@@ -106,21 +109,86 @@ jobs:
             echo "project_reset_changed=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Detect safe fast-UI deployment scope
+        id: scope
+        if: github.event_name == 'push'
+        run: node scripts/ci-change-scope.mjs push >> "$GITHUB_OUTPUT"
+
+      - name: Require successful PR CI for fast UI deployment
+        # Never skip full production tests on an unvalidated PR. GitHub
+        # pull_request validation runs are keyed to the actual PR head SHA.
+        if: github.event_name == 'push' && steps.scope.outputs.lane == 'ui'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ steps.merged-pr.outputs.pr_head_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$PR_HEAD_SHA"
+          BODY="$(mktemp)"
+          STATUS="$(curl --silent --show-error --output "$BODY" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$PR_HEAD_SHA&event=pull_request&per_page=20")"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Could not confirm successful PR CI (HTTP $STATUS)."
+            rm -f "$BODY"
+            exit 1
+          fi
+          node - "$BODY" "$PR_HEAD_SHA" <<'NODE'
+          const fs = require("fs");
+          const payload = JSON.parse(fs.readFileSync(process.argv[2],"utf8"));
+          const expectedSha = process.argv[3];
+          const verified = Array.isArray(payload.workflow_runs) &&
+            payload.workflow_runs.some(run =>
+              run.head_sha === expectedSha &&
+              run.event === "pull_request" &&
+              run.path === ".github/workflows/validate.yml" &&
+              run.status === "completed" &&
+              run.conclusion === "success"
+            );
+          if (!verified) {
+            console.error("::error::Fast UI deployment requires passing PR validation for this exact commit.");
+            process.exit(1);
+          }
+          console.log("Exact PR head SHA has completed successful validation.");
+          NODE
+          rm -f "$BODY"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
+      # PR validation already typechecked, built, tested and browser-smoked
+      # this exact stylesheet-only change. Full-risk changes ALWAYS retest.
       - name: Verify generalized Engine
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui'
         run: npm test
 
+      # Skipping duplicate full tests must not skip the build required for
+      # fresh public/admin CSS assets. Wrangler must deploy newly built bytes.
+      - name: Build validated fast-UI assets for production
+        if: github.event_name == 'push' && steps.scope.outputs.lane == 'ui'
+        run: npm run build
+
+      - name: Restore cached Chromium
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install browser E2E runner
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui'
         run: npx --no-install playwright install --with-deps chromium
 
       - name: Run browser E2E smoke
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui'
         run: npx --no-install playwright test --config playwright.config.ts
 
       - name: Require Cloudflare deployment secret
@@ -162,6 +230,7 @@ jobs:
         run: node scripts/purge-project-r2-prefix.mjs
 
       - name: Verify remote Engine Admin secret names
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui' || steps.scope.outputs.ui_admin_changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -193,6 +262,7 @@ jobs:
 
       - name: Check Cloudflare Containers access
         id: containers-access
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui' || steps.scope.outputs.ui_admin_changed == 'true'
         shell: bash
         run: |
           set -uo pipefail
@@ -211,9 +281,10 @@ jobs:
         run: node scripts/prepare-published-designs.mjs
 
       - name: Build and upload Geo model derivatives
+        # Stylesheet-only public changes never mutate canonical GLBs or R2.
         if: >-
           (github.event_name == 'workflow_dispatch' && inputs.deployment_scope == 'engine-all') ||
-          (github.event_name == 'push' && steps.public_runtime.outputs.changed == 'true')
+          (github.event_name == 'push' && steps.public_runtime.outputs.changed == 'true' && steps.scope.outputs.lane != 'ui')
         shell: bash
         run: |
           set -euo pipefail
@@ -262,6 +333,7 @@ jobs:
         # If the account/token cannot manage Containers, skip the rollout so
         # normal Admin releases remain healthy and the DWG route fails closed.
         id: admin-deploy
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui' || steps.scope.outputs.ui_admin_changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -272,7 +344,7 @@ jobs:
           fi
 
       - name: Report DWG processor deployment state
-        if: steps.containers-access.outputs.available != 'true'
+        if: steps.admin-deploy.conclusion == 'success' && steps.containers-access.outputs.available != 'true'
         shell: bash
         run: |
           echo "::warning::Rekixo Admin is deployed, but native DWG decoding is not active on Cloudflare yet. Auto Build will preserve DWG as evidence and continue safely with the remaining source pack."

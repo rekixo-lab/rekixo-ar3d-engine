@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# New CSS commits cancel obsolete PR runs. Never cancel production deploys.
+concurrency:
+  group: rekixo-engine-validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     # Playwright 1.55.1 cannot install Chromium dependencies on ubuntu26.04.
@@ -23,9 +28,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install
         run: npm ci
+
+      - name: Detect low-risk stylesheet-only change
+        id: scope
+        if: github.event_name == 'pull_request'
+        run: node scripts/ci-change-scope.mjs pr >> "$GITHUB_OUTPUT"
 
       - name: Typecheck
         run: npm run typecheck
@@ -43,9 +54,11 @@ jobs:
         run: node --test tests/*.test.mjs
 
       - name: Migration verification
+        if: github.event_name != 'pull_request' || steps.scope.outputs.lane != 'ui'
         run: npm run test:migrations
 
       - name: Validate Admin Worker bundle and Wrangler config
+        if: github.event_name != 'pull_request' || steps.scope.outputs.lane != 'ui'
         run: >-
           npx --no-install wrangler deploy
           --dry-run
@@ -53,19 +66,36 @@ jobs:
           --outdir .wrangler-admin-dry-run
 
       - name: Validate Public Worker bundle and Wrangler config
+        if: github.event_name != 'pull_request' || steps.scope.outputs.lane != 'ui'
         run: >-
           npx --no-install wrangler deploy
           --dry-run
           --config wrangler.public.jsonc
           --outdir .wrangler-public-dry-run
 
+      - name: Restore cached Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install browser E2E runner
         run: npx --no-install playwright install --with-deps chromium
 
       - name: Run browser E2E smoke
+        if: github.event_name != 'pull_request' || steps.scope.outputs.lane != 'ui'
         run: npx --no-install playwright test --config playwright.config.ts
 
+      - name: Run fast browser UI smoke
+        if: github.event_name == 'pull_request' && steps.scope.outputs.lane == 'ui'
+        env:
+          FAST_SPECS: ${{ steps.scope.outputs.fast_browser_specs }}
+        run: |
+          test -n "$FAST_SPECS"
+          npx --no-install playwright test $FAST_SPECS --config playwright.config.ts
+
       - name: Discover live production floor-controls smoke
+        if: github.event_name != 'pull_request' || steps.scope.outputs.lane != 'ui'
         run: npx --no-install playwright test e2e/production-floor-controls.spec.ts --config playwright.production.config.ts --list
 
       - name: Diff whitespace safety
