@@ -214,7 +214,7 @@ export default function EngineDashboard() {
             ? {label:"Verify Masterplan Draft",help:`${draft.plots.length} mapped plots. Review measurements, GPS and source evidence before publishing.`,tab:"plots"}
             : active?.draftRevision!==draft.revision
               ? {label:"Publish Verified Masterplan",help:"The current draft is verified and ready for its own immutable release.",tab:"plots"}
-              : {label:"Masterplan Published",help:`Live v${active.version} · ${draft.plots.length} mapped plots. Review customer handoff before sharing.`,tab:"plots"};
+              : {label:"Masterplan Published",help:`Live v${active?.version ?? '?'} · ${draft.plots.length} mapped plots. Review customer handoff before sharing.`,tab:"plots"};
       return {label:next.label,help:next.help,
         href:projectHref(next.tab==="source"?"masterplan":"masterplan-plots",selectedProject.slug),
         action:"link" as const};
