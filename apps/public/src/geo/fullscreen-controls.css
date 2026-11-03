@@ -200,8 +200,8 @@
 }
 
 
-/* Geo fullscreen: five independent, rounded actions, like the normal board.
-   Only the five actions receive backgrounds; the shared dock remains invisible. */
+/* Geo fullscreen: six independent desktop/tablet actions, five on phones.
+   Only the actions receive backgrounds; the shared dock remains invisible. */
 .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone {
   position: absolute !important;
   z-index: 2147483646 !important;
@@ -210,7 +210,7 @@
   left: 50% !important;
   right: auto !important;
   display: grid !important;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
   align-items: stretch !important;
   gap: clamp(5px, 1vw, 11px) !important;
   box-sizing: border-box !important;
@@ -295,7 +295,11 @@
 }
 
 @media (max-width: 640px) {
+  .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button.geo-aerial-view {
+    display: none !important;
+  }
   .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
     bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
     width: calc(100% - 16px) !important;
     max-width: calc(100% - 16px) !important;

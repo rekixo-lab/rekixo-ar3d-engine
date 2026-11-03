@@ -5,14 +5,16 @@ import test from "node:test";
 const source = fs.readFileSync("apps/public/src/geo/GeoPublicDemo.tsx", "utf8");
 const css = fs.readFileSync("apps/public/src/geo/geo-public-demo.css", "utf8");
 
-test("public Geo offers three presets plus project Re-enter instead of Aerial", () => {
+test("public Geo keeps three camera presets and adds desktop/tablet Aerial", () => {
   for (const label of ["Overview", "Front", "Corner"]) {
     assert.match(source, new RegExp(`label: \\"${label}\\"`));
   }
   const availableViews=source.slice(source.indexOf("const GEO_CAMERA_VIEWS"),source.indexOf("let mapsPromise"));
   assert.doesNotMatch(availableViews,/Entry view/);
-  assert.equal((availableViews.match(/label: "/g)||[]).length,3);
-  assert.doesNotMatch(availableViews,/Aerial/);
+  assert.equal((availableViews.match(/label: "/g)||[]).length,4);
+  assert.match(availableViews,/Aerial/);
+  assert.match(source,/case "aerial":[\s\S]*tilt: 0/);
+  assert.match(css,/button\.geo-aerial-view\s*\{\s*display: none !important/);
   assert.match(source,/aria-label="Re-enter project map"/);
   assert.match(source,/onClick=\{\(\) => reenterActionRef\.current\?\.\(\)\}/);
   assert.match(source,/reenterActionRef\.current = \(\) => applyCamera\("overview"\)/);

@@ -38,10 +38,12 @@ test("mobile Geo dock fits five actions with transparent controls and no outer p
   assert.match(publicCss, /\.jio-public-project-logo\s*\{\s*width:\s*34px;\s*height:\s*34px;/);
 });
 
-test("fullscreen Geo dock has five independent actions including the 3D website link", () => {
-  const fullscreenStyles = css.slice(css.indexOf("/* Geo fullscreen: five independent, rounded actions"));
+test("fullscreen Geo dock has six desktop/tablet actions and five on phones", () => {
+  const fullscreenStyles = css.slice(css.indexOf("/* Geo fullscreen: six independent desktop/tablet actions"));
   assert.match(fullscreenStyles, /\.geo-integrated-scene:fullscreen \.geo-camera-toolbar--fullscreen-clone\s*\{[\s\S]*display:\s*grid\s*!important/);
-  assert.match(fullscreenStyles, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
+  assert.match(fullscreenStyles, /grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\)/);
+  assert.match(fullscreenStyles, /button\.geo-aerial-view\s*\{\s*display:\s*none !important/);
+  assert.match(fullscreenStyles, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\) !important/);
   assert.match(fullscreenStyles, /gap:\s*clamp\(5px, 1vw, 11px\)/);
   assert.match(fullscreenStyles, /padding:\s*0 !important;[\s\S]*border:\s*0 !important;[\s\S]*background:\s*transparent !important;/);
   assert.match(fullscreenStyles, /box-shadow:\s*none !important;[\s\S]*backdrop-filter:\s*none !important;/);
@@ -68,7 +70,7 @@ test("fullscreen uses the Geo scene and places the cloned camera dock at the bot
   assert.ok(publicSource.includes("fullscreenControl: false"));
   assert.ok(publicSource.includes("scene.requestFullscreen?.()"));
   assert.ok(publicSource.includes("document.exitFullscreen()"));
-  const fullscreenDock = css.slice(css.indexOf("/* Geo fullscreen: five independent, rounded actions"));
+  const fullscreenDock = css.slice(css.indexOf("/* Geo fullscreen: six independent desktop/tablet actions"));
   assert.ok(fullscreenDock.includes(".geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone"));
   assert.ok(fullscreenDock.includes("bottom: calc(10px + env(safe-area-inset-bottom"));
 });
