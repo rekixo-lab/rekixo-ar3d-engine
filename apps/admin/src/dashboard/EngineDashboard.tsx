@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ADMIN_BASE_PATH, type EngineExperienceSummary } from "@rekixo/3d-contracts";
 import { geoPublicProjectPath, publicProjectPath } from "@rekixo/3d-engine-core";
 import {
@@ -13,7 +13,14 @@ import {
 } from "../studio/cloud";
 import { newProject, projectSlug } from "../studio/domain";
 import { PROJECT_KIND_LABELS, newProjectStartPath, type EngineProjectKind } from "../../../../shared/engine-project-kinds.js";
+import ProjectHandoffCheck from "./ProjectHandoffCheck";
 import "./engine-dashboard.css";
+
+type MasterplanOverviewState = {
+  draft: {revision:number; verifiedRevision:number|null; imageAssetId:string|null;
+    controlPoints:unknown[]; plots:Array<{id:string}>};
+  activeRelease:{id:string;version:number;draftRevision:number}|null;
+};
 
 type SourcePackState = {
   latestPack?: {
@@ -39,8 +46,14 @@ export default function EngineDashboard() {
   const [projectItems, setProjectItems] = useState<CloudProjectSummary[]>([]);
   const [selectedSlug, setSelectedSlug] = useState(requestedProjectSlug());
   const [search, setSearch] = useState("");
+  const [projectTotal,setProjectTotal] = useState(0);
+  const [projectNextOffset,setProjectNextOffset] = useState(0);
+  const [projectHasMore,setProjectHasMore] = useState(false);
+  const [projectPageBusy,setProjectPageBusy] = useState(false);
+  const searchRequestId=useRef(0);
   const [buildingReleases, setBuildingReleases] = useState<CloudReleaseSummary[]>([]);
   const [geoState, setGeoState] = useState<CloudGeoReleaseState>();
+  const [masterplanState,setMasterplanState] = useState<MasterplanOverviewState|null>(null);
   const [geoPlotState,setGeoPlotState] = useState<{
     activeMapping?:{id:string;current:boolean}|null;
     draft?:{plots?:Array<{id:string}>}|null;
@@ -58,46 +71,98 @@ export default function EngineDashboard() {
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  async function loadProjects() {
+  async function loadProjects(query="") {
+    const requestId=++searchRequestId.current;
     setLoading(true);
     setError("");
     try {
-      const result = await projects("", "active", 100, 0);
-      setProjectItems(result.projects);
-      const requested = requestedProjectSlug();
-      const next = result.projects.find((item) => item.slug === requested)?.slug || result.projects[0]?.slug || "";
-      setSelectedSlug(next);
-      if (!requested && next) {
-        const url = new URL(window.location.href);
-        url.searchParams.set("project", next);
-        window.history.replaceState({}, "", url);
+      const result=await projects(query,"active",100,0);
+      const current=selectedSlug||requestedProjectSlug();
+      let items=result.projects;
+      if(current&&!items.some(item=>item.slug===current)){
+        const focused=await projects(current,"active",20,0);
+        const match=focused.projects.find(item=>item.slug===current);
+        if(match)items=[match,...items];
       }
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Engine projects load nahi hue.");
-    } finally {
-      setLoading(false);
-    }
+      if(requestId!==searchRequestId.current)return;
+      setProjectItems(items);
+      setProjectTotal(result.total);
+      setProjectNextOffset(result.nextOffset);
+      setProjectHasMore(result.hasMore);
+      const next=items.find(item=>item.slug===current)?.slug||items[0]?.slug||"";
+      setSelectedSlug(next);
+      if(!requestedProjectSlug()&&next){
+        const url=new URL(window.location.href);
+        url.searchParams.set("project",next);
+        window.history.replaceState({},"",url);
+      }
+    }catch(reason){
+      if(requestId===searchRequestId.current)
+        setError(reason instanceof Error?reason.message:"Engine projects load nahi hue.");
+    }finally{if(requestId===searchRequestId.current)setLoading(false);}
   }
 
-  useEffect(() => {
-    void loadProjects();
-  }, []);
+  async function loadMoreProjects(){
+    if(projectPageBusy||!projectHasMore)return;
+    const requestId=searchRequestId.current;
+    setProjectPageBusy(true);
+    try{
+      const result=await projects(search,"active",100,projectNextOffset);
+      if(requestId!==searchRequestId.current)return;
+      setProjectItems(current=>{
+        const known=new Set(current.map(item=>item.slug));
+        return [...current,...result.projects.filter(item=>!known.has(item.slug))];
+      });
+      setProjectNextOffset(result.nextOffset);
+      setProjectHasMore(result.hasMore);
+    }catch(reason){if(requestId===searchRequestId.current)
+      setError(reason instanceof Error?reason.message:"More projects could not load.");
+    }finally{setProjectPageBusy(false);}
+  }
+
+  useEffect(()=>{
+    const timer=window.setTimeout(()=>{void loadProjects(search.trim());},search.trim()?250:0);
+    return ()=>window.clearTimeout(timer);
+  },[search]);
 
   useEffect(() => {
     if (!selectedSlug) {
       setBuildingReleases([]);
       setGeoState(undefined);
+      setMasterplanState(null);
       setGeoPlotState(null);
       setExperienceItems([]);
       setSourcePack(null);
       return;
     }
 
+    const selectedEntry=projectItems.find(project=>project.slug===selectedSlug);
+    // Do not fire Building/Geo APIs until project kind is known from the registry.
+    if(!selectedEntry){setDetailLoading(false);return;}
     let live = true;
     setDetailLoading(true);
     setError("");
     setSourcePackError("");
+    setBuildingReleases([]);setExperienceItems([]);setGeoState(undefined);
     setGeoPlotState(null);
+    setSourcePack(null);setMasterplanState(null);
+    const selectedKind=selectedEntry.projectKind;
+    if(selectedKind==="masterplan_geo"){
+      void fetch(`${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(selectedSlug)}/masterplan-geo`,
+        {headers:{Accept:"application/json"},cache:"no-store"})
+        .then(async response=>{
+          const payload=await response.json() as MasterplanOverviewState & {error?:string};
+          if(!response.ok)throw Error(payload.error||"Masterplan state unavailable.");
+          return payload;
+        }).then(payload=>{
+          if(!live)return;
+          setBuildingReleases([]);setExperienceItems([]);setGeoState(undefined);
+          setSourcePack(null);setMasterplanState(payload);
+        }).catch(error=>{
+          if(live)setError(error instanceof Error?error.message:"Masterplan state unavailable.");
+        }).finally(()=>{if(live)setDetailLoading(false);});
+      return ()=>{live=false;};
+    }
     const geoPlotRequest=fetch(
       `${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(selectedSlug)}/geo-plots`,
       {headers:{Accept:"application/json"},cache:"no-store"}
@@ -152,22 +217,16 @@ export default function EngineDashboard() {
     return () => {
       live = false;
     };
-  }, [selectedSlug]);
+  }, [selectedSlug, projectItems]);
 
   const selectedProject = useMemo(
     () => projectItems.find((project) => project.slug === selectedSlug),
     [projectItems, selectedSlug],
   );
 
-  const visibleProjects = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return projectItems;
-    return projectItems.filter((project) =>
-      [project.name, project.slug, project.location]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query)),
-    );
-  }, [projectItems, search]);
+  const visibleProjects = projectItems.filter(project=>
+    !search.trim() || [project.name,project.slug,project.location].some(value=>
+      String(value||"").toLowerCase().includes(search.trim().toLowerCase())));
 
   const activeBuilding = buildingReleases.find((release) => release.active);
   const activeGeo = geoState?.activeRelease || null;
@@ -177,12 +236,22 @@ export default function EngineDashboard() {
   const geoLive = Boolean(activeGeo && selectedProject?.status === "published");
 
   const nextAction = useMemo(() => {
-    if (selectedProject?.projectKind === "masterplan_geo") return {
-      label: "Prepare Geo Masterplan",
-      help: "Upload the approved masterplan image, verify geographic control points, then map polygon plots independently of Building.",
-      href: projectHref("masterplan", selectedProject.slug),
-      action: "link" as const,
-    };
+    if (selectedProject?.projectKind === "masterplan_geo") {
+      const draft=masterplanState?.draft;
+      const active=masterplanState?.activeRelease;
+      const next=(!draft?.imageAssetId)
+        ? {label:"Upload Original Masterplan",help:"Choose the approved source image before mapping.",tab:"source"}
+        : (!draft.plots.length||draft.controlPoints.length<3)
+          ? {label:"Complete GPS & Plot Mapping",help:`${draft.plots.length} plots mapped · ${draft.controlPoints.length} GPS controls. Finish source-backed entries.`,tab:"plots"}
+          : draft.verifiedRevision!==draft.revision
+            ? {label:"Verify Masterplan Draft",help:`${draft.plots.length} mapped plots. Review measurements, GPS and source evidence before publishing.`,tab:"plots"}
+            : active?.draftRevision!==draft.revision
+              ? {label:"Publish Verified Masterplan",help:"The current draft is verified and ready for its own immutable release.",tab:"plots"}
+              : {label:"Masterplan Published",help:`Live v${active?.version ?? '?'} · ${draft.plots.length} mapped plots. Review customer handoff before sharing.`,tab:"plots"};
+      return {label:next.label,help:next.help,
+        href:projectHref(next.tab==="source"?"masterplan":"masterplan-plots",selectedProject.slug),
+        action:"link" as const};
+    }
     if (!selectedProject) {
       return {
         label: "Create your first Engine project",
@@ -251,7 +320,7 @@ export default function EngineDashboard() {
       href: projectHref("releases", selectedProject.slug),
       action: "link" as const,
     };
-  }, [selectedProject, sourceReady, activeBuilding, geoExperience, activeGeo, geoPlotState, sourcePackError]);
+  }, [selectedProject, masterplanState, sourceReady, activeBuilding, geoExperience, activeGeo, geoPlotState, sourcePackError]);
 
   function selectProject(slug: string) {
     setSelectedSlug(slug);
@@ -301,14 +370,14 @@ export default function EngineDashboard() {
           <div className="engine-overview-projects__head">
             <div>
               <p>YOUR PROJECTS</p>
-              <h2>{projectItems.length} project{projectItems.length === 1 ? "" : "s"}</h2>
+              <h2>{projectTotal} project{projectTotal === 1 ? "" : "s"}</h2>
             </div>
             <button className="engine-overview-add" type="button" onClick={() => setShowCreate(true)}>+</button>
           </div>
 
           <label className="engine-overview-search">
             <span>Search project</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name / location" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name / slug / location" />
           </label>
 
           <div className="engine-overview-project-list">
@@ -331,6 +400,10 @@ export default function EngineDashboard() {
               <div className="engine-overview-empty-list">No matching project</div>
             ) : null}
           </div>
+          {projectHasMore && <button className="engine-control-button" type="button"
+            disabled={projectPageBusy||loading} onClick={()=>void loadMoreProjects()}>
+            {projectPageBusy?"Loading…":"Load More Projects"}
+          </button>}
 
           <button className="engine-control-button engine-control-button--primary engine-overview-create-wide" type="button" onClick={() => setShowCreate(true)}>
             + Create New Project
@@ -362,6 +435,9 @@ export default function EngineDashboard() {
                   <span>{selectedProject.location || selectedProject.slug} · {PROJECT_KIND_LABELS[selectedProject.projectKind || "legacy"]}</span>
                 </div>
                 <div className="engine-overview-live-actions">
+                  {selectedProject.projectKind==="masterplan_geo" && masterplanState?.activeRelease ? (
+                    <a href={`/3Dprojects/${encodeURIComponent(selectedProject.slug)}/masterplan`} target="_blank" rel="noreferrer">Open Masterplan Live</a>
+                  ) : null}
                   {buildingLive ? (
                     <a href={publicProjectPath(selectedProject.slug)} target="_blank" rel="noreferrer">Open Building Live</a>
                   ) : null}
@@ -376,7 +452,7 @@ export default function EngineDashboard() {
                 <div>
                   <p>RECOMMENDED ACTION</p>
                   <h3>{detailLoading ? "Checking project state…" : nextAction.label}</h3>
-                  <span>{detailLoading ? "Current source, releases and experiences are loading." : nextAction.help}</span>
+                  <span>{detailLoading ? "Checking current project draft and publication." : nextAction.help}</span>
                 </div>
                 {nextAction.action === "create" ? (
                   <button className="engine-control-button engine-control-button--primary" type="button" onClick={() => setShowCreate(true)}>Create Project</button>
@@ -430,7 +506,9 @@ export default function EngineDashboard() {
                   <a href={`/3Dprojects/geo-plots?project=${encodeURIComponent(selectedProject.slug)}`}>Open Geo Plot Mapper</a>
                 </article>}
               </section>)}
-
+              <ProjectHandoffCheck key={selectedProject.slug} slug={selectedProject.slug}
+                kind={selectedProject.projectKind||"legacy"} buildingLive={buildingLive}
+                geoLive={geoLive} geoMapped={Boolean(geoPlotState?.activeMapping?.current)} />
 
             </>
           )}

@@ -81,12 +81,12 @@ export default function EngineAdvanced() {
   async function load() {
     setError("");
     const [projectResult, maps, mapIdState, deletion] = await Promise.all([
-      projects("", "active", 100, 0),
+      projects("", "all", 100, 0),
       geoMapsSettings().catch(() => ({ apiKey: null })),
       loadMapId().catch(() => ({ mapId: null, configured: false })),
       deletionStatus().catch(() => ({ job: null })),
     ]);
-    setProjectCount(projectResult.projects.length);
+    setProjectCount(projectResult.total);
     setMapsKey(maps.apiKey || "");
     setMapsConfigured(Boolean(maps.apiKey));
     setMapId(mapIdState.mapId || "");
@@ -230,6 +230,22 @@ export default function EngineAdvanced() {
           <div><dt>Recommended model key</dt><dd>{status?.uploadContract?.recommendedKey || (slug ? `projects/${slug}/models/exterior-v1.glb` : "—")}</dd></div>
           <div><dt>Media prefix</dt><dd>{slug ? `projects/${slug}/media/` : "—"}</dd></div>
         </dl>
+      </section>
+
+      <section className="engine-advanced-panel engine-control-card" aria-label="Backup and restore readiness">
+        <header><div><p>RECOVERY READINESS</p><h2>Cloud backup & restore checklist</h2>
+          <span>No automatic backup certification is implied by a project JSON manifest or a published release.</span>
+        </div><b className="engine-advanced-state">MANUAL REVIEW</b></header>
+        <ol className="engine-advanced-backup-list">
+          <li>Freeze project writes during the snapshot. Export current isolated Engine D1 database.</li>
+          <li>Archive every project-owned R2 object byte under <code>projects/{slug||"selected-project"}/</code>.</li>
+          <li>Verify asset byte sizes and SHA-256 checksums against the signed inventory.</li>
+          <li>Restore the D1 export and R2 objects in a separate, non-production environment and verify live release bindings.</li>
+          <li>Record owner sign-off and repeat after significant source replacement or publication.</li>
+        </ol>
+        <p className="engine-advanced-backup-note">3D Geo has operator scripts for complete D1/R2 archive and isolated restore rehearsal; the image Masterplan workflow still needs its own documented recovery drill. Neither is confirmed until actually executed.</p>
+        <a href="https://github.com/rekixo-lab/rekixo-ar3d-engine/blob/main/docs/RECOVERY-RUNBOOK.md"
+          target="_blank" rel="noopener noreferrer">Open Recovery Runbook</a>
       </section>
 
       <section className="engine-advanced-danger engine-control-card">

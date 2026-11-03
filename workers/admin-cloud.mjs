@@ -544,8 +544,8 @@ async function listCloudProjects(env, url) {
   const params = [...statuses];
   let filter = `p.status IN (${placeholders})`;
   if (q) {
-    filter += " AND (lower(p.name) LIKE ? OR lower(p.slug) LIKE ?)";
-    params.push(`%${q}%`, `%${q}%`);
+    filter += " AND (lower(p.name) LIKE ? OR lower(p.slug) LIKE ? OR lower(COALESCE(p.location,\'\')) LIKE ?)";
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
 
   const select = env.DB.prepare(

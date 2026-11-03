@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { listAssets, uploadAsset, type CloudAssetSummary } from "../studio/cloud";
 import type { Asset } from "../studio/domain";
 import {fitImageFrame,imageWorldAt,panImageFrame,pinchImageFrame,zoomImageFrame} from "../../../../shared/masterplan-image-gestures.js";
 import {assignFourCornerRoadFront} from "../../../../shared/geo-plot-source-operations.js";
+import {packMasterplanRecovery,unpackMasterplanRecovery,reviewMasterplanCsv,invalidateMasterplanSourceProof,
+  type MasterplanCsvReview} from "../../../../shared/masterplan-workflow.js";
 import "./masterplan-workspace.css";
 
 type Point=[number,number];type Role="front"|"back"|"depthA"|"depthB";
@@ -13,6 +15,8 @@ type Plot={id:string;corners:Point[];layout:"three"|"four";sides:Partial<Record<
 type Control={u:number;v:number;lat:number;lng:number;source:string;verified:boolean};
 type MasterplanDraft={revision:number;verifiedRevision:number|null;imageAssetId:string|null;
   width:number;height:number;controlPoints:Control[];plots:Plot[]};
+type LocalSnapshot={draft:MasterplanDraft;working:Plot|null;originalId:string|null;dirty:boolean;savedAt?:string};
+type ImageComparison={file:File;width:number;height:number;previewUrl:string};
 type MasterplanState={project:{slug:string;name:string;status:string};draft:MasterplanDraft;
   activeRelease:{id:string;version:number;draftRevision:number}|null;history:Array<{id:string;version:number}>};
 type Mode="source"|"plots"|"controls";
@@ -70,9 +74,19 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const [tool,setTool]=useState<Tool>("pan");
   const [panel,setPanel]=useState<"source"|"plots">(() => new URLSearchParams(location.search).get("tab")==="source" || mode==="source" ? "source" : "plots");
   const [working,setWorking]=useState<Plot|null>(null);
+  const [plotHistory,setPlotHistory]=useState<{past:Plot[];future:Plot[]}>({past:[],future:[]});
+  const [draftHistory,setDraftHistory]=useState<{past:MasterplanDraft[];future:MasterplanDraft[]}>({past:[],future:[]});
   const [originalId,setOriginalId]=useState<string|null>(null);
   const [controlIndex,setControlIndex]=useState<number|null>(null);
   const [dirty,setDirty]=useState(false);const [busy,setBusy]=useState(false);
+  const [advanced,setAdvanced]=useState(false);
+  const [csvPreview,setCsvPreview]=useState<MasterplanCsvReview<Plot>|null>(null);
+  const [csvName,setCsvName]=useState("");
+  const [imageComparison,setImageComparison]=useState<ImageComparison|null>(null);
+  const [imageCompared,setImageCompared]=useState(false);
+  const [recovery,setRecovery]=useState<LocalSnapshot|null>(null);
+  const [recoveryConflict,setRecoveryConflict]=useState(false);
+  const recoveryKey=slug?"rekixo-masterplan-working-v1:"+slug:"";
   const [error,setError]=useState("");const [status,setStatus]=useState("");
   const [imageUrl,setImageUrl]=useState("");
   const [frame,setFrame]=useState({x:0,y:0,w:1,h:1});
@@ -88,43 +102,214 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     const next=await parseResponse<MasterplanState>(r);
     if(activeProject.current!==id)return;
     setState(next);setDraft(next.draft);setAssets(a.assets);setWorking(null);setDirty(false);
+    try{
+      const saved=window.localStorage.getItem(recoveryKey);
+      const matched=unpackMasterplanRecovery<LocalSnapshot>(saved,{
+        projectSlug:slug,revision:next.draft.revision,imageAssetId:next.draft.imageAssetId});
+      setRecovery(matched);setRecoveryConflict(Boolean(saved&&!matched));
+    }catch{setRecovery(null);setRecoveryConflict(false);}
+    setPlotHistory({past:[],future:[]});setDraftHistory({past:[],future:[]});setCsvPreview(null);
     setFrame(fitImageFrame({width:next.draft.width||1,height:next.draft.height||1}));
     setError("");setStatus("");
-  },[slug,endpoint]);
+  },[slug,endpoint,recoveryKey]);
   useEffect(()=>{let on=true;void load().catch(e=>{if(on)setError(String(e));});
     return()=>{on=false;};},[load]);
+  useEffect(()=>()=>{if(imageComparison?.previewUrl)URL.revokeObjectURL(imageComparison.previewUrl);},[imageComparison?.previewUrl]);
   useEffect(()=>{
     const source=assets.find(a=>a.id===draft?.imageAssetId);
     setImageUrl(source?.contentUrl ? source.contentUrl+"?preview=1" : "");
   },[draft?.imageAssetId,assets]);
-  function changeDraft(patch:Partial<MasterplanDraft>){
-    setDraft(d=>d?{...d,...patch}:d);setDirty(true);
+  const flushRecoveryRef=useRef<()=>void>(()=>{});
+  flushRecoveryRef.current=()=>{
+    if(!state||!draft||!recoveryKey||(!dirty&&!hasPendingPlot()))return;
+    const body=packMasterplanRecovery({projectSlug:slug,revision:state.draft.revision,
+      imageAssetId:state.draft.imageAssetId,draft,working,originalId,dirty});
+    try{window.localStorage.setItem(recoveryKey,body);}catch{/* Storage may be unavailable. */}
+  };
+  useEffect(()=>{
+    if(!state||!draft)return;
+    const timeout=window.setTimeout(()=>flushRecoveryRef.current(),350);
+    const flush=()=>flushRecoveryRef.current();
+    const hidden=()=>{if(document.visibilityState==="hidden")flush();};
+    window.addEventListener("pagehide",flush);
+    document.addEventListener("visibilitychange",hidden);
+    return ()=>{window.clearTimeout(timeout);
+      window.removeEventListener("pagehide",flush);
+      document.removeEventListener("visibilitychange",hidden);};
+  },[state?.draft.revision,draft,working,originalId,dirty,recoveryKey]);
+  useEffect(()=>{
+    const onUnload=(event:BeforeUnloadEvent)=>{
+      if(!dirty&&!hasPendingPlot())return;
+      flushRecoveryRef.current();
+      event.preventDefault();event.returnValue="";
+    };
+    window.addEventListener("beforeunload",onUnload);
+    return ()=>window.removeEventListener("beforeunload",onUnload);
+  },[dirty,working,originalId,draft]);
+  function recoverLocal(){
+    if(!recovery||!state||dirty||hasPendingPlot())return;
+    if(!window.confirm("Restore local unapplied edits for this exact server revision? Nothing will publish automatically."))return;
+    setDraft(recovery.draft);setWorking(recovery.working);
+    setOriginalId(recovery.originalId);setDirty(recovery.dirty);
+    setPlotHistory({past:[],future:[]});setDraftHistory({past:[],future:[]});
+    setRecovery(null);setRecoveryConflict(false);
+    setStatus("Local draft restored. Review, Apply Plot and Save Draft before verification.");
   }
-  async function upload(file:File){
-    if(dirty||working)throw Error("Apply any open plot and Save the current mapping draft before replacing its source image.");
-    if(draft?.imageAssetId&&(draft.plots.length>0||draft.controlPoints.length>0)){
-      if(!window.confirm("Replacing this masterplan image clears the CURRENT DRAFT's "+
-        draft.plots.length+" polygons and "+draft.controlPoints.length+
-        " GPS controls. Published releases remain immutable. A private review JSON will download now. Continue?"))return;
-      exportMasterplanDraftReview(slug,draft);
+  function discardRecovery(){
+    if(!window.confirm("Discard the browser-only recovery snapshot for this project?"))return;
+    try{window.localStorage.removeItem(recoveryKey);}catch{}
+    setRecovery(null);setRecoveryConflict(false);
+  }
+  function downloadRecovery(){
+    try{
+      const raw=window.localStorage.getItem(recoveryKey);if(!raw)return;
+      const uri=URL.createObjectURL(new Blob([raw],{type:"application/json"}));
+      const link=document.createElement("a");link.href=uri;
+      link.download=slug+"-manual-recovery.json";link.click();
+      window.setTimeout(()=>URL.revokeObjectURL(uri),2000);
+    }catch{setError("Browser recovery export unavailable.");}
+  }
+  async function previewCsv(file:File){
+    if(!draft||dirty||hasPendingPlot())throw Error("Apply and Save current mapping before importing a CSV.");
+    if(file.size>2000000)throw Error("CSV exceeds 2 MB.");
+    const review=reviewMasterplanCsv<Plot>(await file.text(),draft.plots);
+    setCsvPreview(review);setCsvName(file.name);
+    setStatus("CSV analysed; existing polygons and published releases have not changed.");
+  }
+  function applyCsvPreview(){
+    if(!csvPreview||dirty||hasPendingPlot()||(!csvPreview.changed.length&&!csvPreview.added.length))return;
+    if(!window.confirm("Apply CSV values to the LOCAL DRAFT only? Existing polygon positions are protected. Changed source approvals remain unverified until independently rechecked."))return;
+    changeDraft({plots:csvPreview.plots});
+    setCsvPreview(null);setStatus("CSV values staged in draft only. Review missing-data warnings, then Save Draft and Verify.");
+  }
+  function missingData(){
+    if(!draft)return [];
+    const issues:string[]=[];
+    if(draft.controlPoints.length<3)issues.push("At least 3 GPS control points required");
+    draft.controlPoints.forEach((p,i)=>{
+      if(!p.verified||!p.source)issues.push("GPS "+(i+1)+": unverified source");
+    });
+    for(const plot of draft.plots){
+      if(!plot.area.value||!plot.area.source||!plot.area.verified)issues.push("Plot "+plot.id+": area needs verification");
+      if(!plot.facingSource||!plot.facingVerified)issues.push("Plot "+plot.id+": facing needs verification");
+      for(const role of roles){
+        if(role==="depthB"&&plot.layout==="three")continue;
+        const side=plot.sides[role];
+        if(!side?.length||!side.verified||!side.source)
+          issues.push("Plot "+plot.id+": "+role+" source / length / approval missing");
+      }
+      if(plot.road&&!plot.sides.front?.roadFacing)issues.push("Plot "+plot.id+": road-facing front needs review");
     }
+    return issues;
+  }
+  function changeDraft(patch:Partial<MasterplanDraft>){
+    if(!draft)return;
+    setDraftHistory(h=>({past:[...h.past.slice(-7),structuredClone(draft)],future:[]}));
+    setCsvPreview(null);setDraft({...draft,...patch});setDirty(true);
+  }
+  function hasPendingPlot(){
+    if(!working)return false;
+    if(!originalId)return true;
+    const original=draft?.plots.find(p=>p.id===originalId);
+    return !original||JSON.stringify(original)!==JSON.stringify(working);
+  }
+  function confirmClosePlot(){
+    if(!hasPendingPlot())return true;
+    if(!window.confirm("This plot has unapplied changes. Discard these local plot edits?"))return false;
+    if(!dirty)try{window.localStorage.removeItem(recoveryKey);}catch{}
+    return true;
+  }
+  function checkpointPlot(){
+    if(working)setPlotHistory(h=>({past:[...h.past.slice(-39),structuredClone(working)],future:[]}));
+  }
+  function editWorking(update:(plot:Plot)=>Plot){
+    if(!working)return;
+    const next=update(working);
+    if(JSON.stringify(next)===JSON.stringify(working))return;
+    checkpointPlot();setWorking(next);
+  }
+  function undo(){
+    if(working&&plotHistory.past.length){
+      const previous=plotHistory.past.at(-1)!;
+      setPlotHistory(h=>({past:h.past.slice(0,-1),future:[...h.future,structuredClone(working)]}));
+      setWorking(previous);return;
+    }
+    if(!working&&draft&&draftHistory.past.length){
+      const previous=draftHistory.past.at(-1)!;
+      setDraftHistory(h=>({past:h.past.slice(0,-1),future:[...h.future,structuredClone(draft)]}));
+      setDraft(previous);setDirty(true);
+    }
+  }
+  function redo(){
+    if(working&&plotHistory.future.length){
+      const next=plotHistory.future.at(-1)!;
+      setPlotHistory(h=>({past:[...h.past,structuredClone(working)],future:h.future.slice(0,-1)}));
+      setWorking(next);return;
+    }
+    if(!working&&draft&&draftHistory.future.length){
+      const next=draftHistory.future.at(-1)!;
+      setDraftHistory(h=>({past:[...h.past,structuredClone(draft)],future:h.future.slice(0,-1)}));
+      setDraft(next);setDirty(true);
+    }
+  }
+  async function prepareSource(file:File){
+    if(dirty||hasPendingPlot())throw Error("Apply and Save current work before replacing its source.");
+    if(!["image/png","image/jpeg","image/webp"].includes(file.type))
+      throw Error("Use original PNG, JPG or WebP masterplan.");
+    if(file.size>16*1024*1024)throw Error("Choose an image under 16 MB.");
+    const image=await createImageBitmap(file),width=image.width,height=image.height;
+    image.close();
+    if(width>50000||height>50000)throw Error("Masterplan pixel dimensions exceed allowed bounds.");
+    if(draft?.imageAssetId&&(draft.plots.length>0||draft.controlPoints.length>0)){
+      setImageComparison({file,width,height,previewUrl:URL.createObjectURL(file)});
+      setImageCompared(false);return;
+    }
+    await upload(file,false);
+  }
+  async function upload(file:File,preserve=false):Promise<boolean>{
+    if(dirty||hasPendingPlot())throw Error("Apply any open plot and Save the current mapping draft before replacing its source image.");
     if(!["image/png","image/jpeg","image/webp"].includes(file.type))
       throw Error("Use original PNG, JPG or WebP masterplan.");
     if(file.size>16*1024*1024)throw Error("Choose an optimized masterplan image under 16 MB.");
     const image=await createImageBitmap(file);
     const width=image.width,height=image.height;image.close();
     if(width>50000||height>50000)throw Error("Masterplan image pixel size is too large.");
+    if(preserve&&(!draft||draft.width!==width||draft.height!==height||!imageCompared))
+      throw Error("To keep geometry, first compare both same-size images and check the alignment confirmation.");
+    if(draft?.imageAssetId&&(draft.plots.length>0||draft.controlPoints.length>0)){
+      const message=preserve
+        ?"Preserve polygon positions and GPS coordinates for the NEW same-size image as an UNVERIFIED draft? All survey, facing and measurement approvals will be revoked. You must visually recheck every plot and GPS point."
+        :"Replace image and CLEAR the CURRENT DRAFT's "+draft.plots.length+" polygons and "+draft.controlPoints.length+
+          " GPS points? Published releases remain immutable. Review backup JSON downloads first.";
+      if(!window.confirm(message))return false;
+      exportMasterplanDraftReview(slug,draft);
+    }
     const checksum=new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer()));
     const hash=Array.from(checksum,x=>x.toString(16).padStart(2,"0")).join("");
     const data:Asset={id:crypto.randomUUID(),projectId:slug,name:file.name,
       type:file.type,size:file.size,hash,blob:file};
     const result=await uploadAsset(slug,data,"source");
-    if(activeProject.current!==slug)return;
+    if(activeProject.current!==slug)return false;
     setAssets(a=>[...a.filter(v=>v.id!==result.asset.id),result.asset]);
-    changeDraft({imageAssetId:result.asset.id,width,height,controlPoints:[],plots:[],
+    const kept=preserve&&draft?invalidateMasterplanSourceProof(draft):null;
+    changeDraft({imageAssetId:result.asset.id,width,height,
+      controlPoints:kept?.controlPoints||[],plots:kept?.plots||[],
       verifiedRevision:null});
-    setFrame(fitImageFrame({width,height}));setWorking(null);
-    setStatus("Original image archived; all previous calibration and polygons cleared. Save the new draft.");
+    setCsvPreview(null);setFrame(fitImageFrame({width,height}));
+    setWorking(null);setPlotHistory({past:[],future:[]});
+    setStatus(preserve
+      ?"New source staged with old plot geometry UNVERIFIED. Check every polygon and GPS point; Save, Verify and Publish remain separate."
+      :"Original image uploaded; existing draft calibration and polygons cleared. Save the new draft.");
+    return true;
+  }
+  async function acceptComparedSource(preserve:boolean){
+    if(!imageComparison)return;
+    setBusy(true);setError("");
+    try{
+      const applied=await upload(imageComparison.file,preserve);
+      if(applied){setImageComparison(null);setImageCompared(false);}
+    }catch(error){setError(error instanceof Error?error.message:String(error));}
+    finally{setBusy(false);}
   }
   async function operation(action:"save"|"verify"|"publish"|"activate",releaseId?:string){
     if(!draft||!state)return;
@@ -141,6 +326,9 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       const next=await parseResponse<MasterplanState>(reply);
       if(activeProject.current!==slug)return;
       setState(next);setDraft(next.draft);setDirty(false);setWorking(null);
+      setPlotHistory({past:[],future:[]});setDraftHistory({past:[],future:[]});
+      try{window.localStorage.removeItem(recoveryKey);}catch{}
+      setRecovery(null);setRecoveryConflict(false);
       setStatus(action==="save"?"Masterplan draft saved and server read-back confirmed.":
         action==="verify"?"Source, GPS controls, source-backed plot measurements verified.":
         action==="publish"?"Immutable Geo Masterplan published to customer site.":"Previous immutable release activated.");
@@ -148,20 +336,26 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     finally{setBusy(false);}
   }
   function selectPanel(next:"source"|"plots") {
-    if(panel===next)return;
+    if(panel===next||!confirmClosePlot())return;
+    setWorking(null);setOriginalId(null);setPlotHistory({past:[],future:[]});
     const url=new URL(window.location.href);
     url.searchParams.set("tab",next);
     window.history.replaceState({},"",url.pathname+url.search);
     setPanel(next);setTool("pan");
   }
   function newBoundary(){
-    if(!draft)return;
+    if(!draft||!confirmClosePlot())return;
+    setPlotHistory({past:[],future:[]});
     const ids=new Set(draft.plots.map(x=>x.id));let n=1;while(ids.has(String(n)))n++;
     setOriginalId(null);setWorking(newPlot(String(n)));setTool("draw");
   }
-  function choose(p:Plot){setOriginalId(p.id);setWorking(structuredClone(p));setTool("edit");}
+  function choose(p:Plot){
+    if(working?.id===p.id&&originalId===p.id)return;
+    if(!confirmClosePlot())return;
+    setPlotHistory({past:[],future:[]});setOriginalId(p.id);setWorking(structuredClone(p));setTool("edit");
+  }
   function updatePlot<K extends keyof Plot>(key:K,value:Plot[K]){
-    setWorking(p=>p?{...p,[key]:value}:p);
+    editWorking(p=>({...p,[key]:value}));
   }
   function apply(){
     if(!working||!draft) return;
@@ -173,14 +367,14 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     const plots=[...draft.plots.filter(p=>p.id!==(originalId||id)),{...working,id}]
       .sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
     changeDraft({plots});setWorking(null);setOriginalId(null);setTool("pan");
+    setPlotHistory({past:[],future:[]});
     setStatus("Polygon and dimensions staged. Save Draft to persist.");
   }
   function zoom(factor:number,uv?:Point){
     if(!draft)return;
     setFrame(previous=>zoomImageFrame(previous,{width:draft.width,height:draft.height},factor,uv));
   }
-  const setSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>{
-    if(!p)return p;
+  const setSide=(role:Role,patch:Partial<Side>)=>editWorking(p=>{
     const changed=["edges","length","unit","source","roadFacing"].some(k=>Object.hasOwn(patch,k));
     return {...p,...((Object.hasOwn(patch,"roadFacing") || (role==="front"&&Object.hasOwn(patch,"edges")))?{facingVerified:false}:{}),
       sides:{...p.sides,[role]:{...(p.sides[role]||blankSide()),...(Object.hasOwn(patch,"edges")?{roadFacing:false}:{}),...patch,
@@ -189,7 +383,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const setRoadFront=(edge:number)=>{
     if(!working)return;
     if(!window.confirm("Make edge "+edge+" the road-facing Front? All side/facing approvals will be reset."))return;
-    setWorking(p=>p?assignFourCornerRoadFront(p,edge):p);
+    editWorking(p=>assignFourCornerRoadFront(p,edge));
   };
   function down(e:ReactPointerEvent<SVGSVGElement>){
     const svg=svgRef.current;if(!svg||!draft)return;
@@ -206,13 +400,13 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       const near=draft.plots.flatMap(plot=>plot.corners).find(q=>
         Math.hypot((q[0]-p[0])*draft.width,(q[1]-p[1])*draft.height)<8*frame.w/(svg.clientWidth||1));
       const corners=[...working.corners,near||p];
-      setWorking({...working,corners,layout:corners.length===3?"three":"four",sides:assignSides(corners)});
+      editWorking(p=>({...p,corners,layout:corners.length===3?"three":"four",sides:assignSides(corners)}));
       return;
     }
     if(tool==="edit"&&working){
       const hit=working.corners.findIndex(q=>
         Math.hypot((q[0]-p[0])*draft.width,(q[1]-p[1])*draft.height)<12*frame.w/(svg.clientWidth||1));
-      if(hit>=0){dragRef.current=hit;e.currentTarget.setPointerCapture(e.pointerId);}
+      if(hit>=0){checkpointPlot();dragRef.current=hit;e.currentTarget.setPointerCapture(e.pointerId);}
     }
   }
   function move(e:ReactPointerEvent<SVGSVGElement>){
@@ -248,6 +442,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     pointerRef.current.delete(e.pointerId);dragRef.current=null;
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   }
+  const missingIssues=useMemo(()=>missingData(),[draft]);
   const approved=state?.draft.verifiedRevision===state?.draft.revision&&Boolean(state?.draft.revision);
   const alreadyLive=Boolean(approved&&state?.activeRelease?.draftRevision===state?.draft.revision);
   const publishedUrl=slug?`/3Dprojects/${encodeURIComponent(slug)}/masterplan`:"";
@@ -258,6 +453,14 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       <p>Project: <strong>{state?.project.name||slug}</strong> · Building model/release not required. Approved image and GPS controls remain separate from 3D Buildings.</p></header>
     {error&&<p role="alert" className="masterplan-error">{error}</p>}
     {status&&<p role="status" className="masterplan-ok">{status}</p>}
+    {(recovery||recoveryConflict)&&<section className="masterplan-recovery" role="status">
+      <strong>{recovery?"Recover unsaved Masterplan work":"Recovery from a different draft revision blocked"}</strong>
+      <p>{recovery?"Unapplied edits were found in this browser for the exact saved source and revision.":
+        "The browser has an older local snapshot. It was not applied. Export it for manual review or discard it."}</p>
+      {recovery&&<button type="button" disabled={dirty||hasPendingPlot()} onClick={recoverLocal}>Restore Local Draft</button>}
+      <button type="button" onClick={downloadRecovery}>Download Recovery JSON</button>
+      <button type="button" onClick={discardRecovery}>Discard Recovery</button>
+    </section>}
     {state&&<div className="masterplan-stats">
       <span>Draft <b>r{draft?.revision||0}</b></span><span>Plots <b>{draft?.plots.length||0}</b></span>
       <span>GPS Points <b>{draft?.controlPoints.length||0}</b></span>
@@ -274,6 +477,10 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       <button onClick={()=>zoom(.8)}>Zoom +</button>
       <button onClick={()=>zoom(1.25)}>Zoom −</button>
       <button onClick={()=>draft&&setFrame(fitImageFrame({width:draft.width,height:draft.height}))}>Fit</button>
+      <button disabled={busy||!(working?plotHistory.past.length:draftHistory.past.length)} onClick={undo}>Undo</button>
+      <button disabled={busy||!(working?plotHistory.future.length:draftHistory.future.length)} onClick={redo}>Redo</button>
+      <button type="button" aria-pressed={advanced} className={advanced?"active":""}
+        onClick={()=>setAdvanced(value=>!value)}>{advanced?"Advanced ✓":"Advanced"}</button>
       {panel==="plots"&&<button onClick={newBoundary} disabled={!imageUrl}>+ New Polygon</button>}
       <button disabled={!dirty||busy||!draft?.imageAssetId} onClick={()=>void operation("save")}>Save Draft</button>
       <button disabled={dirty||busy||!state?.draft.revision||Boolean(working)} onClick={()=>void operation("verify")}>Verify</button>
@@ -322,20 +529,34 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       <aside className="masterplan-dock">
         {panel==="source"?<>
           <h2>Original Masterplan</h2>
-          {draft?.imageAssetId&&<button type="button" disabled={!draft}
+          {advanced&&draft?.imageAssetId&&<button type="button" disabled={!draft}
             onClick={()=>draft&&exportMasterplanDraftReview(slug,draft)}>
             Download source-change review snapshot (JSON · not a full backup)
           </button>}
           <label>Upload image (PNG, JPG, WebP · max 16 MB)
             <input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy}
               onChange={e=>{const file=e.target.files?.[0];e.target.value="";
-                if(file){setBusy(true);void upload(file).catch(x=>setError(String(x))).finally(()=>setBusy(false));}}}/></label>
+                if(file){setBusy(true);void prepareSource(file).catch(x=>setError(String(x))).finally(()=>setBusy(false));}}}/></label>
           <p>{source?.name||"No image"} · {draft?.width||0}×{draft?.height||0} px</p>
+          {imageComparison&&<section className="masterplan-image-comparison">
+            <strong>Safe Image Replace · Compare Before Applying</strong>
+            <div className="masterplan-image-comparison__grid">
+              <figure><img src={imageUrl} alt="Current source map"/><figcaption>Current original</figcaption></figure>
+              <figure><img src={imageComparison.previewUrl} alt="Replacement map candidate"/><figcaption>New candidate</figcaption></figure>
+            </div>
+            <p>{imageComparison.width} × {imageComparison.height} px. Keep geometry only if corresponding plot corners and GPS anchors line up exactly. No published map will change yet.</p>
+            <label className="masterplan-check"><input type="checkbox" checked={imageCompared}
+              onChange={e=>setImageCompared(e.target.checked)}/> I compared image alignment and source evidence</label>
+            <button type="button" disabled={busy||!imageCompared||imageComparison.width!==draft?.width||imageComparison.height!==draft?.height}
+              onClick={()=>void acceptComparedSource(true)}>Keep Geometry as Unverified Draft</button>
+            <button type="button" disabled={busy} onClick={()=>void acceptComparedSource(false)}>Replace and Reset Mapping Draft</button>
+            <button type="button" disabled={busy} onClick={()=>{setImageComparison(null);setImageCompared(false);}}>Cancel</button>
+          </section>}
           <h2>Geo Control Points</h2>
           <p>Use 3–24 surveyed control points. Select Position and tap matching location on the image; then enter exact Latitude/Longitude and source.</p>
           {draft?.controlPoints.map((cp,i)=><fieldset key={i}><legend>Control Point {i+1}</legend>
             <button onClick={()=>{setTool("point");setControlIndex(i);}}>Set Image Position</button>
-            <small>U {cp.u.toFixed(6)}, V {cp.v.toFixed(6)}</small>
+            {advanced&&<small>U {cp.u.toFixed(6)}, V {cp.v.toFixed(6)}</small>}
             <label>Latitude <input type="number" step="any" value={cp.lat}
               onChange={e=>changeDraft({controlPoints:draft.controlPoints.map((v,j)=>
                 j===i?{...v,lat:Number(e.target.value),verified:false}:v)})}/></label>
@@ -346,21 +567,43 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               draft.controlPoints.map((v,j)=>j===i?{...v,source:e.target.value,verified:false}:v)})}/></label>
             <label className="masterplan-check"><input type="checkbox" checked={cp.verified} onChange={e=>changeDraft({
               controlPoints:draft.controlPoints.map((v,j)=>j===i?{...v,verified:e.target.checked}:v)})}/> Source verified</label>
-            <button onClick={()=>changeDraft({controlPoints:draft.controlPoints.filter((_,j)=>j!==i)})}>Remove Point</button>
+            {advanced&&<button onClick={()=>changeDraft({controlPoints:draft.controlPoints.filter((_,j)=>j!==i)})}>Remove Point</button>}
           </fieldset>)}
           <button disabled={!draft||draft.controlPoints.length>=24} onClick={()=>draft&&changeDraft({
             controlPoints:[...draft.controlPoints,{u:.5,v:.5,lat:0,lng:0,source:"",verified:false}]})}>+ Add GPS Point</button>
         </>:<>
           <h2>Plot Inventory</h2>
+          <label>Import Plot Data CSV (preview first · draft only)
+            <input type="file" accept=".csv,text/csv" disabled={busy||dirty||Boolean(working)||!draft}
+              onChange={e=>{const file=e.target.files?.[0];e.target.value="";
+                if(file)void previewCsv(file).catch(error=>setError(error instanceof Error?error.message:String(error)));}}/>
+          </label>
+          {csvPreview&&<section className="masterplan-csv-preview" role="status">
+            <strong>CSV Review · {csvName}</strong>
+            <p>{csvPreview.rowCount} source IDs · {csvPreview.added.length} new polygons · {csvPreview.changed.length} metadata updates</p>
+            <p>{csvPreview.unmapped.length} plots need drawing · {csvPreview.missing.length} mapped IDs absent from CSV · {csvPreview.issues.length} measurement/review issues</p>
+            {csvPreview.unmapped.length>0&&<small>Unmapped: {csvPreview.unmapped.slice(0,12).join(", ")}</small>}
+            {csvPreview.missing.length>0&&<small>Existing plots not in CSV (preserved): {csvPreview.missing.slice(0,12).join(", ")}</small>}
+            {csvPreview.issues.slice(0,8).map((issue,i)=><small key={i}>{issue}</small>)}
+            <button type="button" disabled={dirty||Boolean(working)||(!csvPreview.changed.length&&!csvPreview.added.length)}
+              onClick={applyCsvPreview}>Apply CSV to Draft Only</button>
+            <button type="button" onClick={()=>setCsvPreview(null)}>Cancel Import</button>
+          </section>}
+          <details className="masterplan-missing-data">
+            <summary>Missing Data Checker · {missingIssues.length} issues</summary>
+            {missingIssues.length===0?<p>All mapped plot fields are source-reviewed.</p>:
+              <ul>{missingIssues.slice(0,35).map((issue,i)=><li key={i}>{issue}</li>)}</ul>}
+            {missingIssues.length>35&&<small>Showing first 35; download mapping CSV for a full source review.</small>}
+          </details>
           <div className="masterplan-inventory">{draft?.plots.map(p=><button key={p.id} type="button"
             className={working?.id===p.id?"active":""} onClick={()=>choose(p)}>{p.id}</button>)}</div>
           {working?<fieldset><legend>Plot {working.id}</legend>
             <label>Plot Number <input value={working.id} readOnly={originalId!==null}
               onChange={e=>updatePlot("id",e.target.value)}/></label>
-            <small>{working.corners.length} polygon corners</small>
-            <button disabled={!working.corners.length} onClick={()=>setWorking(p=>p?{...p,
+            {advanced&&<small>{working.corners.length} polygon corners</small>}
+            <button disabled={!working.corners.length} onClick={()=>editWorking(p=>({...p,
               corners:p.corners.slice(0,-1),sides:assignSides(p.corners.slice(0,-1)),
-               area:{...p.area,verified:false},facingVerified:false}:p)}>Undo Corner</button>
+               area:{...p.area,verified:false},facingVerified:false}))}>Undo Corner</button>
             <button disabled={working.corners.length<3} onClick={()=>setTool("edit")}>Drag Corners</button>
             <label>Approved Area<input type="number" step="any" min="0" value={working.area.value||""}
               onChange={e=>updatePlot("area",{...working.area,value:Number(e.target.value),verified:false})}/></label>
@@ -368,18 +611,18 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               {...working.area,unit:e.target.value as Plot["area"]["unit"],verified:false})}>
                 <option value="sqft">sqft</option><option value="sqm">sqm</option><option value="sqyd">sqyd</option>
               </select></label>
-            <label>Approved Area Source<input value={working.area.source} onChange={e=>
-              updatePlot("area",{...working.area,source:e.target.value,verified:false})}/></label>
-            <label className="masterplan-check"><input type="checkbox" checked={working.area.verified}
-              onChange={e=>updatePlot("area",{...working.area,verified:e.target.checked})}/> Area verified</label>
-            <label>Facing<select value={working.facing} onChange={e=>setWorking({
-              ...working,facing:e.target.value,facingVerified:false})}>
+            {advanced&&<label>Approved Area Source<input value={working.area.source} onChange={e=>
+              updatePlot("area",{...working.area,source:e.target.value,verified:false})}/></label>}
+            {advanced&&<label className="masterplan-check"><input type="checkbox" checked={working.area.verified}
+              onChange={e=>updatePlot("area",{...working.area,verified:e.target.checked})}/> Area verified</label>}
+            <label>Facing<select value={working.facing} onChange={e=>editWorking(p=>({...p,
+              facing:e.target.value,facingVerified:false}))}>
               {directions.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
-            <label>Facing Source<input value={working.facingSource} onChange={e=>
-              setWorking({...working,facingSource:e.target.value,facingVerified:false})}/></label>
-            <label className="masterplan-check"><input type="checkbox" checked={working.facingVerified}
-              onChange={e=>updatePlot("facingVerified",e.target.checked)}/> Facing reviewed</label>
-            <label>Road<input value={working.road} onChange={e=>setWorking(p=>p?{...p,road:e.target.value,facingVerified:false}:p)}/></label>
+            {advanced&&<label>Facing Source<input value={working.facingSource} onChange={e=>
+              editWorking(p=>({...p,facingSource:e.target.value,facingVerified:false}))}/></label>}
+            {advanced&&<label className="masterplan-check"><input type="checkbox" checked={working.facingVerified}
+              onChange={e=>updatePlot("facingVerified",e.target.checked)}/> Facing reviewed</label>}
+            <label>Road<input value={working.road} onChange={e=>editWorking(p=>({...p,road:e.target.value,facingVerified:false}))}/></label>
             {working.corners.length===4&&working.layout==="four"&&<label>Road-facing FRONT edge
               <select value={working.sides.front?.edges[0]??0} onChange={e=>setRoadFront(Number(e.target.value))}>
                 {working.corners.map((_,i)=><option key={i} value={i}>Edge {i} · Corner {i+1} → {i===3?1:i+2}</option>)}
@@ -388,22 +631,23 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               <p className="masterplan-guidance">Review the Front boundary against the road on the approved image. Mark its Road-facing checkbox.</p>}
             {roles.filter(role=>working.layout!=="three"||role!=="depthB").map(role=>{
               const side=working.sides[role]||blankSide();return <fieldset key={role}><legend>{role}</legend>
-                <label>Edge indices (0 to {Math.max(0,working.corners.length-1)})
+                {advanced&&<label>Edge indices (0 to {Math.max(0,working.corners.length-1)})
                   <input value={side.edges.join(",")} onChange={e=>setSide(role,{edges:e.target.value.split(",")
-                    .map(x=>Number(x.trim())).filter(Number.isInteger),verified:false})}/></label>
+                    .map(x=>Number(x.trim())).filter(Number.isInteger),verified:false})}/></label>}
                 <label>Length<input type="number" step="any" min="0" value={side.length||""}
                   onChange={e=>setSide(role,{length:Number(e.target.value),verified:false})}/></label>
                 <label>Unit<select value={side.unit} onChange={e=>setSide(role,{unit:e.target.value as Side["unit"],verified:false})}>
                   <option value="ft">ft</option><option value="m">m</option></select></label>
-                <label>Survey Source<input value={side.source} onChange={e=>
-                  setSide(role,{source:e.target.value,verified:false})}/></label>
+                {advanced&&<label>Survey Source<input value={side.source} onChange={e=>
+                  setSide(role,{source:e.target.value,verified:false})}/></label>}
                 <label className="masterplan-check"><input type="checkbox" checked={side.roadFacing}
                   onChange={e=>setSide(role,{roadFacing:e.target.checked})}/> Road-facing</label>
-                <label className="masterplan-check"><input type="checkbox" checked={side.verified}
-                  onChange={e=>setSide(role,{verified:e.target.checked})}/> Measurement verified</label>
+                {advanced&&<label className="masterplan-check"><input type="checkbox" checked={side.verified}
+                  onChange={e=>setSide(role,{verified:e.target.checked})}/> Measurement verified</label>}
               </fieldset>;
             })}
-            <label>Notes<textarea rows={2} value={working.notes} onChange={e=>updatePlot("notes",e.target.value)}/></label>
+            {advanced&&<label>Notes<textarea rows={2} value={working.notes} onChange={e=>updatePlot("notes",e.target.value)}/></label>}
+            {!advanced&&<small>Source verification and edge details are in Advanced.</small>}
             <button disabled={working.corners.length<3} onClick={apply}>Apply Plot to Draft</button>
           </fieldset>:<p>Select a plot, or create a new polygon.</p>}
           <button disabled={!draft?.plots.length} onClick={()=>{
