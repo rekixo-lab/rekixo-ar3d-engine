@@ -27,6 +27,15 @@ export async function optionalCustomerDomain(req,env,url){
   return Response.json({projectSlug:entry.slug,projectKind:entry.kind});
  // Keep /admin in the browser address bar. The SPA loads its project scope above.
  if(url.pathname==="/admin"||url.pathname==="/admin/")return null;
+ // Keep project-password sign-in bound to the hostname, not a caller-supplied slug.
+ if(/^\/3Dprojects\/api\/client-portal\/(?:login|enroll)$/.test(url.pathname)&&req.method==="POST"){
+  const body=await req.clone().json().catch(()=>null);
+  if(!body||body.projectSlug!==entry.slug)return reply("Wrong project for this domain.",403);
+ }
+ if(url.pathname==="/3Dprojects/api/client-portal/session"){
+  const requested=url.searchParams.get("project");
+  if(requested&&requested!==entry.slug)return reply("Wrong project for this domain.",403);
+ }
  const scoped=url.pathname.match(/^\/3Dprojects\/api\/(?:projects|client-portal\/projects)\/([^/]+)/);
  if(scoped&&scoped[1]!==slug)return reply("Wrong project for this domain.");
  const page=url.pathname.match(/^\/3Dprojects\/([^/]+)/);

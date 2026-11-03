@@ -52,3 +52,11 @@ test("owner sign-in fails closed on D1 errors other than uninstalled table",asyn
  const env={DB:{prepare:()=>({first:async()=>{throw Error("D1 temporarily unavailable");}})}};
  await assert.rejects(()=>readOwnerCredentials(env,{email:"bootstrap@example.com"}),/temporarily unavailable/);
 });
+
+test("custom domain rejects cross-project client login before the password handler",async()=>{
+ const url="https://project.example.com/3Dprojects/api/client-portal/login";
+ const request=new Request(url,{method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({projectSlug:"another-project",loginId:"any@example.com",password:"invalid"})});
+ const result=await optionalCustomerDomain(request,database(entry),new URL(url));
+ assert.equal(result.status,403);
+});
