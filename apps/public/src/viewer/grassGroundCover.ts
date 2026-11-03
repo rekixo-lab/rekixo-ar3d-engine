@@ -25,6 +25,8 @@ export interface GrassGroundCoverOptions {
   excludedAreas: readonly GrassCoverArea[];
   /** Reviewed lawn rectangles get blades rooted at the lawn's actual top surface. */
   lawnAreas: readonly GrassCoverArea[];
+  /** A truly level, uniformly green surface instead of a curved sky-tinted horizon. */
+  flatSurface?: boolean;
 }
 
 interface GrassBladeInstance {
@@ -214,6 +216,7 @@ function createCurvedGroundGeometry(
   footprintHalfZ: number,
   footprintOutline: readonly FootprintPoint[],
   footprintCenter: FootprintPoint,
+  flatSurface = false,
 ) {
   const baseSegments = mobile ? 64 : 112;
   const rings = mobile ? 22 : 36;
@@ -260,11 +263,13 @@ function createCurvedGroundGeometry(
     const t = ring / rings;
     const bend = smooth01((t - 0.70) / 0.30);
     const lift = rise * bend * bend;
-    const tint = t < 0.70
-      ? turfNear.clone().lerp(turfFar, smooth01(t / 0.70) * 0.22)
-      : t < 0.84
-        ? turfFar.clone().lerp(horizonHaze, smooth01((t - 0.70) / 0.14))
-        : horizonHaze.clone().lerp(cloudEdge, smooth01((t - 0.84) / 0.16));
+    const tint = flatSurface
+      ? turfNear.clone()
+      : t < 0.70
+        ? turfNear.clone().lerp(turfFar, smooth01(t / 0.70) * 0.22)
+        : t < 0.84
+          ? turfFar.clone().lerp(horizonHaze, smooth01((t - 0.70) / 0.14))
+          : horizonHaze.clone().lerp(cloudEdge, smooth01((t - 0.84) / 0.16));
     for (const angle of uniqueAngles) {
       const innerRadius = innerRadiusAt(angle);
       const ringRadius = innerRadius + (radius - innerRadius) * t;
@@ -378,8 +383,9 @@ function createInstances(
 /** Presentation-only grass underlay with a low-cost curved, cloud-tinted horizon. */
 export function createUniversalGrassGroundCover(options: GrassGroundCoverOptions) {
   const { bounds, groundElevation, mobile, excludedAreas, lawnAreas } = options;
+  const flatSurface = options.flatSurface === true;
   const root = new THREE.Group();
-  root.name = "Universal grass ground cover and curved horizon";
+  root.name = flatSurface ? "Flat green grass site" : "Universal grass ground cover and curved horizon";
   root.userData.presentationOnly = true;
   root.userData.nonAuthoritative = true;
   root.userData.staticSiteContext = true;
@@ -409,7 +415,7 @@ export function createUniversalGrassGroundCover(options: GrassGroundCoverOptions
     farthestSiteCorner + Math.max(span * 0.12, 10),
     footprintSize.x / 2 + footprintSize.z / 2 + 5,
   );
-  const rise = Math.min(Math.max(span * 0.65, 5), 12);
+  const rise = flatSurface ? 0 : Math.min(Math.max(span * 0.65, 5), 12);
   const outline = normalizeFootprint(options.footprintOutline ?? []);
   const groundCenter = outline.length >= 3
     ? outline.reduce(
@@ -429,6 +435,7 @@ export function createUniversalGrassGroundCover(options: GrassGroundCoverOptions
     footprintSize.z / 2,
     localOutline,
     { x: 0, z: 0 },
+    flatSurface,
   );
   const terrainMaterial = new THREE.MeshStandardMaterial({
     name: "Procedural turf blending into a soft cloud horizon",
@@ -439,7 +446,7 @@ export function createUniversalGrassGroundCover(options: GrassGroundCoverOptions
     metalness: 0,
   });
   const ground = new THREE.Mesh(geometry, terrainMaterial);
-  ground.name = "Curved turf and horizon surface";
+  ground.name = flatSurface ? "Flat green grass surface" : "Curved turf and horizon surface";
   ground.castShadow = false;
   ground.receiveShadow = !mobile;
   root.add(ground);
@@ -488,9 +495,9 @@ export function createUniversalGrassGroundCover(options: GrassGroundCoverOptions
     instances[tier].push({
       // Blade instances are rooted relative to the building-centered ground
       // mesh, not the overall source-model/site center.
-      x: worldX - footprintCenter.x,
+      x: worldX - groundCenter.x,
       y: surfaceY - (groundElevation - 0.055) + 0.001,
-      z: worldZ - footprintCenter.z,
+      z: worldZ - groundCenter.z,
       rotation: random() * TAU,
       color,
       variation: 0.88 + random() * 0.24,
@@ -518,6 +525,7 @@ export function createUniversalGrassGroundCover(options: GrassGroundCoverOptions
   root.userData.grassBladeTierCounts = instances.map((tier) => tier.length);
   root.userData.horizonRadius = radius;
   root.userData.horizonRise = rise;
+  root.userData.flatGrassOnly = flatSurface;
 
   return {
     root,
