@@ -76,4 +76,3 @@ export async function handleOwnerAccount(request,env,actor,{current,verifyPasswo
     return json({error:"Account update conflicted. Sign in again."},{status:409});
   return json({ok:true,signInAgain:true},{headers:{"Set-Cookie":clearSessionCookie()}});
 }
-
