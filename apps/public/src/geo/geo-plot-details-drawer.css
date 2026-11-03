@@ -262,3 +262,9 @@
   .geo-plot-drawer__compass-preview{width:42px;height:42px;flex-basis:42px}
   .geo-plot-drawer__compass-preview .geo-compass-rose{width:42px;height:42px}
 }
+
+.geo-plot-drawer__updates{margin:12px 0;padding:12px;border:1px solid #416878;border-radius:11px;background:#0c2b38}
+.geo-plot-drawer__updates h3{margin:0 0 10px;font-size:14px;color:#e0fff2}
+.geo-plot-drawer__updates article{padding:9px 0;border-top:1px solid #355969}
+.geo-plot-drawer__updates strong{display:block;font-size:13px}
+.geo-plot-drawer__updates p{margin:6px 0 0;font-size:12px;line-height:1.6;color:#b4d0da;white-space:pre-wrap;overflow-wrap:anywhere}
