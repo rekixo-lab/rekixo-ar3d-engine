@@ -3,6 +3,7 @@ import { listAssets, uploadAsset, type CloudAssetSummary } from "../studio/cloud
 import type { Asset } from "../studio/domain";
 import {fitImageFrame,imageWorldAt,panImageFrame,pinchImageFrame,zoomImageFrame} from "../../../../shared/masterplan-image-gestures.js";
 import {assignFourCornerRoadFront} from "../../../../shared/geo-plot-source-operations.js";
+import {packMasterplanRecovery,unpackMasterplanRecovery} from "../../../../shared/masterplan-workflow.js";
 import "./masterplan-workspace.css";
 
 type Point=[number,number];type Role="front"|"back"|"depthA"|"depthB";
@@ -13,6 +14,7 @@ type Plot={id:string;corners:Point[];layout:"three"|"four";sides:Partial<Record<
 type Control={u:number;v:number;lat:number;lng:number;source:string;verified:boolean};
 type MasterplanDraft={revision:number;verifiedRevision:number|null;imageAssetId:string|null;
   width:number;height:number;controlPoints:Control[];plots:Plot[]};
+type LocalSnapshot={draft:MasterplanDraft;working:Plot|null;originalId:string|null;dirty:boolean;savedAt?:string};
 type MasterplanState={project:{slug:string;name:string;status:string};draft:MasterplanDraft;
   activeRelease:{id:string;version:number;draftRevision:number}|null;history:Array<{id:string;version:number}>};
 type Mode="source"|"plots"|"controls";
@@ -75,6 +77,9 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const [originalId,setOriginalId]=useState<string|null>(null);
   const [controlIndex,setControlIndex]=useState<number|null>(null);
   const [dirty,setDirty]=useState(false);const [busy,setBusy]=useState(false);
+  const [recovery,setRecovery]=useState<LocalSnapshot|null>(null);
+  const [recoveryConflict,setRecoveryConflict]=useState(false);
+  const recoveryKey=slug?"rekixo-masterplan-working-v1:"+slug:"";
   const [error,setError]=useState("");const [status,setStatus]=useState("");
   const [imageUrl,setImageUrl]=useState("");
   const [frame,setFrame]=useState({x:0,y:0,w:1,h:1});
@@ -90,16 +95,72 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     const next=await parseResponse<MasterplanState>(r);
     if(activeProject.current!==id)return;
     setState(next);setDraft(next.draft);setAssets(a.assets);setWorking(null);setDirty(false);
+    try{
+      const saved=window.localStorage.getItem(recoveryKey);
+      const matched=unpackMasterplanRecovery<LocalSnapshot>(saved,{
+        projectSlug:slug,revision:next.draft.revision,imageAssetId:next.draft.imageAssetId});
+      setRecovery(matched);setRecoveryConflict(Boolean(saved&&!matched));
+    }catch{setRecovery(null);setRecoveryConflict(false);}
     setPlotHistory({past:[],future:[]});setDraftHistory({past:[],future:[]});
     setFrame(fitImageFrame({width:next.draft.width||1,height:next.draft.height||1}));
     setError("");setStatus("");
-  },[slug,endpoint]);
+  },[slug,endpoint,recoveryKey]);
   useEffect(()=>{let on=true;void load().catch(e=>{if(on)setError(String(e));});
     return()=>{on=false;};},[load]);
   useEffect(()=>{
     const source=assets.find(a=>a.id===draft?.imageAssetId);
     setImageUrl(source?.contentUrl ? source.contentUrl+"?preview=1" : "");
   },[draft?.imageAssetId,assets]);
+  const flushRecoveryRef=useRef<()=>void>(()=>{});
+  flushRecoveryRef.current=()=>{
+    if(!state||!draft||!recoveryKey||(!dirty&&!hasPendingPlot()))return;
+    const body=packMasterplanRecovery({projectSlug:slug,revision:state.draft.revision,
+      imageAssetId:state.draft.imageAssetId,draft,working,originalId,dirty});
+    try{window.localStorage.setItem(recoveryKey,body);}catch{/* Storage may be unavailable. */}
+  };
+  useEffect(()=>{
+    if(!state||!draft)return;
+    const timeout=window.setTimeout(()=>flushRecoveryRef.current(),350);
+    const flush=()=>flushRecoveryRef.current();
+    const hidden=()=>{if(document.visibilityState==="hidden")flush();};
+    window.addEventListener("pagehide",flush);
+    document.addEventListener("visibilitychange",hidden);
+    return ()=>{window.clearTimeout(timeout);
+      window.removeEventListener("pagehide",flush);
+      document.removeEventListener("visibilitychange",hidden);};
+  },[state?.draft.revision,draft,working,originalId,dirty,recoveryKey]);
+  useEffect(()=>{
+    const onUnload=(event:BeforeUnloadEvent)=>{
+      if(!dirty&&!hasPendingPlot())return;
+      flushRecoveryRef.current();
+      event.preventDefault();event.returnValue="";
+    };
+    window.addEventListener("beforeunload",onUnload);
+    return ()=>window.removeEventListener("beforeunload",onUnload);
+  },[dirty,working,originalId,draft]);
+  function recoverLocal(){
+    if(!recovery||!state||dirty||hasPendingPlot())return;
+    if(!window.confirm("Restore local unapplied edits for this exact server revision? Nothing will publish automatically."))return;
+    setDraft(recovery.draft);setWorking(recovery.working);
+    setOriginalId(recovery.originalId);setDirty(recovery.dirty);
+    setPlotHistory({past:[],future:[]});setDraftHistory({past:[],future:[]});
+    setRecovery(null);setRecoveryConflict(false);
+    setStatus("Local draft restored. Review, Apply Plot and Save Draft before verification.");
+  }
+  function discardRecovery(){
+    if(!window.confirm("Discard the browser-only recovery snapshot for this project?"))return;
+    try{window.localStorage.removeItem(recoveryKey);}catch{}
+    setRecovery(null);setRecoveryConflict(false);
+  }
+  function downloadRecovery(){
+    try{
+      const raw=window.localStorage.getItem(recoveryKey);if(!raw)return;
+      const uri=URL.createObjectURL(new Blob([raw],{type:"application/json"}));
+      const link=document.createElement("a");link.href=uri;
+      link.download=slug+"-manual-recovery.json";link.click();
+      window.setTimeout(()=>URL.revokeObjectURL(uri),2000);
+    }catch{setError("Browser recovery export unavailable.");}
+  }
   function changeDraft(patch:Partial<MasterplanDraft>){
     if(!draft)return;
     setDraftHistory(h=>({past:[...h.past.slice(-29),structuredClone(draft)],future:[]}));
@@ -112,7 +173,10 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     return !original||JSON.stringify(original)!==JSON.stringify(working);
   }
   function confirmClosePlot(){
-    return !hasPendingPlot()||window.confirm("This plot has unapplied changes. Discard these local plot edits?");
+    if(!hasPendingPlot())return true;
+    if(!window.confirm("This plot has unapplied changes. Discard these local plot edits?"))return false;
+    if(!dirty)try{window.localStorage.removeItem(recoveryKey);}catch{}
+    return true;
   }
   function checkpointPlot(){
     if(working)setPlotHistory(h=>({past:[...h.past.slice(-39),structuredClone(working)],future:[]}));
@@ -189,6 +253,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       if(activeProject.current!==slug)return;
       setState(next);setDraft(next.draft);setDirty(false);setWorking(null);
       setPlotHistory({past:[],future:[]});setDraftHistory({past:[],future:[]});
+      try{window.localStorage.removeItem(recoveryKey);}catch{}
+      setRecovery(null);setRecoveryConflict(false);
       setStatus(action==="save"?"Masterplan draft saved and server read-back confirmed.":
         action==="verify"?"Source, GPS controls, source-backed plot measurements verified.":
         action==="publish"?"Immutable Geo Masterplan published to customer site.":"Previous immutable release activated.");
@@ -312,6 +378,14 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       <p>Project: <strong>{state?.project.name||slug}</strong> · Building model/release not required. Approved image and GPS controls remain separate from 3D Buildings.</p></header>
     {error&&<p role="alert" className="masterplan-error">{error}</p>}
     {status&&<p role="status" className="masterplan-ok">{status}</p>}
+    {(recovery||recoveryConflict)&&<section className="masterplan-recovery" role="status">
+      <strong>{recovery?"Recover unsaved Masterplan work":"Recovery from a different draft revision blocked"}</strong>
+      <p>{recovery?"Unapplied edits were found in this browser for the exact saved source and revision.":
+        "The browser has an older local snapshot. It was not applied. Export it for manual review or discard it."}</p>
+      {recovery&&<button type="button" disabled={dirty||hasPendingPlot()} onClick={recoverLocal}>Restore Local Draft</button>}
+      <button type="button" onClick={downloadRecovery}>Download Recovery JSON</button>
+      <button type="button" onClick={discardRecovery}>Discard Recovery</button>
+    </section>}
     {state&&<div className="masterplan-stats">
       <span>Draft <b>r{draft?.revision||0}</b></span><span>Plots <b>{draft?.plots.length||0}</b></span>
       <span>GPS Points <b>{draft?.controlPoints.length||0}</b></span>
