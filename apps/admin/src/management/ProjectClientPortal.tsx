@@ -433,10 +433,17 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
             {!filteredMasterplan.length&&<p>No matching plot records.</p>}
           </div><p>{masterplan?.notice}</p>
         </section>:
-        commercial?<ClientGeoPlotManagement slug={identity.projectSlug} commercial={commercial}
+        commercial?(identity.role==="client_admin"?<ClientGeoPlotManagement slug={identity.projectSlug} commercial={commercial}
           canEdit={Boolean(overview?.permissions.commercialPrepare)}
           canApprove={Boolean(overview?.permissions.commercialApprove)}
           onCommercialChange={setCommercial}/>:
+        <section className="engine-client-admin-card">
+          <h2>Published Plot Status</h2>
+          <div className="engine-client-admin-plot-list">
+            {commercial.rows.map(row=><div key={row.plotId} className="engine-client-admin-plot-row">
+              <strong>Plot {row.plotId}</strong><span>{row.status}</span></div>)}
+          </div>
+        </section>):
         <section className="engine-client-admin-card"><p>Loading published Geo plot mapping…</p></section>)}
 
       {panel==="contact"&&identity?.role==="client_admin"&&<section className="engine-client-admin-card">
