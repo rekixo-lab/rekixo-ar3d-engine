@@ -516,7 +516,7 @@ export function createArchitecturalSiteEnvironment(
   waterMotion = true,
   sourceSiteIncluded = false,
   landscapePreset: PresentationLandscapePreset = "auto",
-  universalGroundCover = false,
+  universalGroundCover = presentation,
   buildingBounds: THREE.Box3 = bounds,
   buildingOutline: readonly { x: number; z: number }[] = [],
 ) {

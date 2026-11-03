@@ -2,7 +2,9 @@
 
 ## Current customer-facing behavior (November 2026)
 
-The universal procedural turf mesh and distant green curved horizon are **disabled by default** in every customer-facing Building view. The legacy helper remains available for isolated experiments but is not instantiated from `Viewer3D`. This removes the artificial plain green base beneath the sourced masterplan/site while keeping the original GLB and reviewed Studio lawn/road/gate data untouched.
+The universal procedural turf mesh and green curved grass ground cover are **enabled again** for customer-facing Building presentations. `Viewer3D` passes `clientPresentation` to `createArchitecturalSiteEnvironment`, which keeps grass away from building footprints and reviewed roads, paths, parking and paving. This returns the surrounding grass in all public Building camera presets.
+
+The separate **flat presentation ground slabs remain disabled** via `includeGround: false` and `includeSurroundingGround: false`; the original GLB and reviewed Studio lawn/road/gate data are unchanged. The earlier attempt to disable the universal grass mesh removed the entire green lawn and was reverted.
 
 The four evenly spaced automatic front potted plants are also disabled. Existing source-backed garden strips remain in place; gaps in actual GLB/source geometry must be corrected in that reviewed source rather than covered by speculative filler over an entrance. Overview, Front, Corner, Entry and Aerial all use the same customer Building scene.
 
