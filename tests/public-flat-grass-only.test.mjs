@@ -7,7 +7,12 @@ test("public customer 3D scene selects flat grass-only mode across all camera vi
   const viewer=read("apps/public/src/viewer/Viewer3D.tsx");
   const site=read("apps/public/src/viewer/siteEnvironment.ts");
   assert.match(viewer,/siteEnvironmentModule\.createArchitecturalSiteEnvironment\(/);
-  assert.match(viewer,/buildingFootprintOutline,\s+clientPresentation, \/\/ Flat-grass-only/);
+  assert.match(viewer,/flatGrassOnly = true/);
+  assert.match(viewer,/buildingFootprintOutline,\s+flatGrassOnly, \/\/ Flat grass across standard/);
+  const main=read("apps/public/src/main.tsx");
+  assert.equal((main.match(/<Viewer3D/g)||[]).length,3,
+    "all standard, model-module and premium-twin public viewers use the same default");
+  assert.match(main,/<Viewer3D[\s\S]*clientPresentation/);
   assert.match(site,/grassOnlyPresentation = false/);
   assert.match(site,/if \(grassOnlyPresentation\) \{/);
   assert.match(site,/root\.userData\.environmentMode = "flat-grass-only"/);
