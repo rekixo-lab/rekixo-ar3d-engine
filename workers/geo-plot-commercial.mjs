@@ -32,7 +32,7 @@ export function normalizeGeoCommercialChange(body){
     expectedRevision:body.expectedRevision};
 }
 export async function activeMap(env,ctx){
-  const row=await env.DB.prepare(`SELECT r.id,r.sha256,r.plots_json,r.publication_mode
+  const row=await env.DB.prepare(`SELECT r.*
     FROM geo_plot_mapping_active_3d a
     JOIN geo_plot_mapping_releases_3d r ON r.id=a.mapping_release_id
       AND r.project_id=a.project_id AND r.experience_id=a.experience_id
@@ -43,7 +43,7 @@ export async function activeMap(env,ctx){
   if(!row)return null;
   if(await sha(row.plots_json)!==row.sha256)
     throw Error("Commercial source mapping checksum mismatch; data cannot be approved.");
-  return {releaseId:row.id,publicationMode:row.publication_mode,plots:validateGeoPlotCollection(JSON.parse(row.plots_json))};
+  return {releaseId:row.id,publicationMode:row.publication_mode||"verified",plots:validateGeoPlotCollection(JSON.parse(row.plots_json))};
 }
 export async function listGeoCommercialState(env,ctx,source){
   if(!source)return {mappingReleaseId:null,rows:[],notice:"Current verified published mapping required before commercial approval."};
