@@ -32,14 +32,14 @@ const close=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-8,
   "expected "+expected+", got "+actual);
 
 test("up/down swipes change the camera tilt immediately and never rotate heading",()=>{
-  const r=rig(110,60);
+  const r=rig(110,40);
   r.orbit.onTouchStart(event(touch(100,250)));
-  r.orbit.onTouchMove(event(touch(100,150)));
-  close(r.tilt,18);close(r.heading,110);
+  r.orbit.onTouchMove(event(touch(100,200)));
+  close(r.tilt,61);close(r.heading,110);
   assert.equal(r.writes.length,1);
   assert.equal(r.redraws.length,1,"WebGL redraw while finger moves");
-  r.orbit.onTouchMove(event(touch(100,200)));
-  close(r.tilt,39);close(r.heading,110);
+  r.orbit.onTouchMove(event(touch(100,225)));
+  close(r.tilt,50.5);close(r.heading,110);
   assert.equal(r.writes.length,2);
   r.orbit.onTouchEnd(event());
   assert.deepEqual(r.captures,[true,false]);
@@ -53,13 +53,13 @@ test("diagonal gestures change tilt and heading in one camera write per move",()
   r.orbit.onTouchStart(event(touch(100,120)));
   r.orbit.onTouchMove(event(touch(140,70)));
   close(r.heading,8.4);
-  close(r.tilt,24);
+  close(r.tilt,66);
   assert.deepEqual(r.writes,[{heading:r.heading,tilt:r.tilt}]);
   assert.equal(r.legacyHeading.length,0);
   assert.equal(r.legacyTilt.length,0);
   r.orbit.onTouchMove(event(touch(110,130)));
   close(r.heading,354.6);
-  close(r.tilt,49.2);
+  close(r.tilt,40.8);
   assert.equal(r.writes.length,2);
   r.orbit.onTouchEnd(event());
   assert.equal(r.redraws.length,2);
@@ -71,9 +71,9 @@ test("tilt is clamped at top-down and at the maximum low-angle view",()=>{
   const r=rig(90,40);
   r.orbit.onTouchStart(event(touch(100,200)));
   r.orbit.onTouchMove(event(touch(100,-200)));
-  close(r.tilt,0);
-  r.orbit.onTouchMove(event(touch(100,500)));
   close(r.tilt,67.5);
+  r.orbit.onTouchMove(event(touch(100,500)));
+  close(r.tilt,0);
   assert.equal(r.writes.length,2);
 });
 
@@ -103,7 +103,7 @@ test("second finger returns navigation to native Google pinch and never resumes 
   assert.equal(r.writes.length,before);
   r.orbit.onTouchEnd(event());
   r.orbit.onTouchStart(event(touch(90,90)));
-  r.orbit.onTouchMove(event(touch(90,45)));
+  r.orbit.onTouchMove(event(touch(90,135)));
   assert.equal(r.writes.length,before+1);
 });
 
@@ -116,7 +116,7 @@ test("Geo public integration uses tilt with atomic moveCamera, Re-enter and safe
   assert.match(source,/map\.moveCamera\(\{ center, \.\.\.preset \}\)/);
   assert.match(source,/setZoom\(preset\.zoom\)/);
   assert.match(source,/aria-label="Re-enter project map"/);
-  assert.doesNotMatch(source,/label: "Aerial"/);
+  assert.match(source,/label: "Aerial"/);
   assert.match(source,/if\(touchOrbit\?\.suppressClick\(\)\)return;/);
   assert.match(source,/gestureHandling:capturing\?"none":"greedy"/);
   assert.match(source,/onRotate:\(\)=>overlay\?\.requestRedraw\(\)/);

@@ -161,7 +161,7 @@ type GeoPayload = {
 
 type GeoMappedPlot = GeoPlotDrawerPlot;
 
-type GeoCameraView = "overview" | "front" | "corner" | "entry";
+type GeoCameraView = "overview" | "front" | "corner" | "entry" | "aerial";
 type MapsListener = { remove(): void };
 type MapCapabilities = { isWebGLOverlayViewAvailable?: boolean };
 type GoogleMap = {
@@ -237,6 +237,7 @@ const GEO_CAMERA_VIEWS: Array<{ id: GeoCameraView; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "front", label: "Front" },
   { id: "corner", label: "Corner" },
+  { id: "aerial", label: "Aerial" },
 ];
 let mapsPromise: Promise<GoogleRoot> | null = null;
 let mapsKeyLoaded = "";
@@ -372,6 +373,8 @@ function cameraPreset(view: GeoCameraView, buildingHeading: number) {
       return { zoom: closerGeoCameraZoom(19.85), tilt: 67.5, heading: normalizeHeading(heading + 35) };
     case "entry":
       return { zoom: closerGeoCameraZoom(21.25), tilt: 67.5, heading };
+    case "aerial":
+      return { zoom: closerGeoCameraZoom(19), tilt: 0, heading };
     default:
       return { zoom: closerGeoCameraZoom(19), tilt: 67.5, heading };
   }
@@ -1006,7 +1009,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref }: { data: G
             <button
               key={view.id}
               type="button"
-              className={cameraView === view.id ? "is-active" : ""}
+              className={`${view.id === "aerial" ? "geo-aerial-view " : ""}${cameraView === view.id ? "is-active" : ""}`.trim()}
               aria-pressed={cameraView === view.id}
               title={
                 view.id === "entry" && satelliteMaxZoom !== null

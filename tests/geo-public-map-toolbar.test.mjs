@@ -21,13 +21,13 @@ test("Geo customer header keeps project branding and icon-only quick actions", (
   assert.doesNotMatch(geoApp, /const mapsUrl\s*=/);
 });
 
-test("Geo toolbar keeps three camera presets, Re-enter, and project 3D Model link", () => {
+test("Geo toolbar adds Aerial for larger screens and keeps Re-enter and project 3D Model link", () => {
   const toolbarStart = geoApp.indexOf('<nav className="geo-camera-toolbar geo-camera-toolbar--normal-row"');
   const toolbarEnd = geoApp.indexOf("</nav>", toolbarStart);
   assert.ok(toolbarStart >= 0 && toolbarEnd > toolbarStart, "Geo map toolbar must exist");
   const toolbar = geoApp.slice(toolbarStart, toolbarEnd);
   const declaredViews = geoApp.slice(geoApp.indexOf("const GEO_CAMERA_VIEWS"), geoApp.indexOf("let mapsPromise"));
-  const labels = ["Overview", "Front", "Corner"];
+  const labels = ["Overview", "Front", "Corner", "Aerial"];
   let previous = -1;
   for (const label of labels) {
     const position = declaredViews.indexOf(`label: "${label}"`);
@@ -36,9 +36,11 @@ test("Geo toolbar keeps three camera presets, Re-enter, and project 3D Model lin
   }
 
   assert.match(toolbar, /\{GEO_CAMERA_VIEWS\.map/);
+  assert.match(toolbar, /geo-aerial-view/);
+  assert.match(geoStyles, /button\.geo-aerial-view\s*\{\s*display:\s*none !important/);
   assert.match(toolbar, /aria-label="Re-enter project map"/);
   assert.match(toolbar, /onClick=\{\(\) => reenterActionRef\.current\?\.\(\)\}/);
-  assert.doesNotMatch(declaredViews, /label: "Aerial"/);
+  assert.match(declaredViews, /label: "Aerial"/);
   assert.doesNotMatch(declaredViews, /label: "Entry view"/);
   assert.doesNotMatch(toolbar, /Entry view/);
   assert.doesNotMatch(toolbar, /geo-building-link|Building <span|building website/);
@@ -63,9 +65,9 @@ test("Geo camera controls are fixed to the viewport bottom with mobile safe-area
   assert.ok(geoStyles.includes("grid-template-columns: repeat(5, minmax(0, 1fr))"));
 });
 
-test("normal Geo camera row has five independent rounded actions and no outer panel", () => {
+test("normal Geo camera row has six desktop actions and no outer panel", () => {
   const transparentRow = geoStyles.slice(geoStyles.indexOf("/* Transparent, full-width camera controls:"));
-  assert.match(transparentRow, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
+  assert.match(transparentRow, /grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\)/);
   assert.match(transparentRow, /width:\s*100% !important/);
   assert.match(transparentRow, /border:\s*0 !important/);
   assert.match(transparentRow, /border-radius:\s*0 !important/);

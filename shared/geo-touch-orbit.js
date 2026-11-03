@@ -107,10 +107,10 @@ export function createGeoOneFingerOrbit({
     }
     const nextHeading=heading===null?null:
       normalizeGeoOrbitHeading(heading+deltaX*DEGREES_PER_PIXEL);
-    // Swiping up (negative Y) tilts toward the bird's-eye 0-degree view.
-    // Swiping down restores the low 3D camera angle.
+    // Swiping up (negative Y) increases tilt; swiping down reduces it.
+    // The horizontal heading direction remains unchanged.
     const nextTilt=tilt===null?null:
-      clampGeoOrbitTilt(tilt+deltaY*TILT_DEGREES_PER_PIXEL);
+      clampGeoOrbitTilt(tilt-deltaY*TILT_DEGREES_PER_PIXEL);
     const headingChanged=nextHeading!==null&&deltaX!==0&&nextHeading!==heading;
     const tiltChanged=nextTilt!==null&&deltaY!==0&&nextTilt!==tilt&&
       (typeof setTilt==="function"||typeof setCamera==="function");
