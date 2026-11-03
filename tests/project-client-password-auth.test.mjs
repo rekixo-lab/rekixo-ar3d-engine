@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {pbkdf2Sync} from "node:crypto";
 import {readFileSync} from "node:fs";
 import {DatabaseSync} from "node:sqlite";
 import {ownerProvisionClientPassword,ownerCreateClientPassword} from "../workers/project-client-passwords.mjs";
@@ -93,6 +94,11 @@ test("Owner provisions independent project-bound Mobile Login ID and temporary p
   assert.notEqual(row.password_hash,details.password);
   assert.equal(row.password_hash.length,64);
   assert.equal(row.password_salt.length,32);
+  // Cloudflare production rejects PBKDF2 iterations above 100,000.
+  // Verify the real provisioned digest, not just a source-code constant.
+  const expected=pbkdf2Sync(details.password,Buffer.from(row.password_salt,"hex"),
+   100000,32,"sha256").toString("hex");
+  assert.equal(row.password_hash,expected,"Client Admin hash must use the Workers-compatible 100k cost");
   const leaked=f.sqlite.prepare("SELECT details_json FROM engine_admin_audit LIMIT 1").get().details_json;
   assert.ok(!leaked.includes(details.password),"audit logs never store passwords");
   const b=f.sqlite.prepare("SELECT COUNT(*) AS n FROM project_client_passwords_3d WHERE project_id='demo-b'").get();
