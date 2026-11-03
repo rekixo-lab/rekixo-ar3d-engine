@@ -12,11 +12,11 @@ test("mobile true-north compass tracks every map heading and shares that heading
     <div id="scene" class="geo-integrated-scene" style="width:365px;height:590px;position:relative;--geo-map-north-rotation:0deg">
       <button id="map-compass" class="geo-map-compass" aria-label="Map compass. Tap to face north.">
         <svg class="geo-compass-rose" viewBox="0 0 72 72">
+          <circle class="geo-compass-rose__rim" cx="36" cy="36" r="34"/>
           <g id="map-dial" class="geo-compass-rose__dial">
             <path d="M36 21 42 38 36 35Z" class="geo-compass-rose__needle-north"/>
           </g>
         </svg>
-        <span class="geo-map-compass__bearing">0°</span>
       </button>
       <aside id="drawer" class="geo-plot-drawer">
         <svg class="geo-compass-rose" viewBox="0 0 72 72">
@@ -46,10 +46,16 @@ test("mobile true-north compass tracks every map heading and shares that heading
       return {heading,map:rotation(mapDial),plot:rotation(plotDial)};
     });
     const sceneRect=scene.getBoundingClientRect(),mapRect=compass.getBoundingClientRect();
+    const styling=getComputedStyle(compass);
+    const buttonShape={width:mapRect.width,height:mapRect.height,
+      radius:styling.borderRadius,borderWidth:styling.borderTopWidth,
+      background:styling.backgroundColor,
+      visualChildren:compass.children.length,
+      hasDegreeLabel:compass.textContent?.includes("°")??false};
     const before=getComputedStyle(compass).visibility;
     drawer.classList.add("is-open");
     const after=getComputedStyle(compass).visibility;
-    return {observed,before,after,offsetX:mapRect.left-sceneRect.left,offsetY:mapRect.top-sceneRect.top};
+    return {observed,before,after,buttonShape,offsetX:mapRect.left-sceneRect.left,offsetY:mapRect.top-sceneRect.top};
   });
   for(const item of outcome.observed){
     const normalized=((item.heading%360)+360)%360;
@@ -57,6 +63,12 @@ test("mobile true-north compass tracks every map heading and shares that heading
     expect(item.map,"north needle must counterrotate relative to Google bearing").toBeCloseTo(expected,3);
     expect(item.plot,"plot-facing compass must use exactly the same world north").toBeCloseTo(expected,3);
   }
+  expect(outcome.buttonShape.width).toBe(outcome.buttonShape.height);
+  expect(outcome.buttonShape.radius).toBe("50%");
+  expect(outcome.buttonShape.borderWidth).toBe("0px");
+  expect(outcome.buttonShape.background).toBe("rgba(0, 0, 0, 0)");
+  expect(outcome.buttonShape.visualChildren).toBe(1);
+  expect(outcome.buttonShape.hasDegreeLabel).toBe(false);
   expect(outcome.offsetX).toBeGreaterThan(0);
   expect(outcome.offsetX).toBeLessThan(22);
   expect(outcome.offsetY).toBeGreaterThan(0);
