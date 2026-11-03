@@ -150,6 +150,11 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
   const [buildingLive, setBuildingLive] = useState(false);
   const [geoLive, setGeoLive] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [authReady,setAuthReady] = useState(false);
+  const [projectSearch,setProjectSearch] = useState("");
+  const [projectNextOffset,setProjectNextOffset] = useState(0);
+  const [projectHasMore,setProjectHasMore] = useState(false);
+  const [loadingMore,setLoadingMore] = useState(false);
 
   const section = currentSection(window.location.pathname);
   const meta = sectionMeta[section];
@@ -159,41 +164,63 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
   );
   const projectKind=selectedProject?.projectKind||"legacy";
 
-  useEffect(() => {
-    let live = true;
-    void session()
-      .then((auth) => {
-        if (!auth.authenticated) {
-          window.location.replace(
-            `/3Dprojects/login?return=${encodeURIComponent(window.location.pathname + window.location.search)}`,
-          );
-          return null;
+  useEffect(()=>{
+    let live=true;
+    void session().then(auth=>{
+      if(!live)return;
+      if(!auth.authenticated){
+        window.location.replace(`/3Dprojects/login?return=${encodeURIComponent(window.location.pathname+window.location.search)}`);
+        return;
+      }
+      setEmail(auth.user?.email||"Engine Admin");
+      setAuthReady(true);
+    }).catch(()=>{if(live)setLoading(false);});
+    return ()=>{live=false;};
+  },[]);
+
+  useEffect(()=>{
+    if(!authReady)return;
+    let live=true;
+    const timer=window.setTimeout(()=>{
+      setLoading(true);
+      void (async()=>{
+        const result=await projects(projectSearch.trim(),"active",100,0);
+        let items=result.projects;
+        const requested=requestedProjectSlug();
+        if(requested&&!items.some(item=>item.slug===requested)){
+          const focused=await projects(requested,"active",20,0);
+          const exact=focused.projects.find(item=>item.slug===requested);
+          if(exact)items=[exact,...items];
         }
-        if (live) setEmail(auth.user?.email || "Engine Admin");
-        return projects("", "active", 100, 0);
-      })
-      .then((result) => {
-        if (!live || !result) return;
-        setProjectItems(result.projects);
-        const requested = requestedProjectSlug();
-        const next = result.projects.find((project) => project.slug === requested)?.slug || result.projects[0]?.slug || "";
+        if(!live)return;
+        setProjectItems(items);
+        setProjectNextOffset(result.nextOffset);
+        setProjectHasMore(result.hasMore);
+        const next=items.find(item=>item.slug===requested)?.slug||items[0]?.slug||"";
         setSelectedSlug(next);
-        if (!requested && next) {
-          const url = new URL(window.location.href);
-          url.searchParams.set("project", next);
-          window.history.replaceState({}, "", url);
+        if(!requested&&next){
+          const url=new URL(window.location.href);
+          url.searchParams.set("project",next);
+          window.history.replaceState({},"",url);
         }
-      })
-      .catch(() => {
-        if (live) setProjectItems([]);
-      })
-      .finally(() => {
-        if (live) setLoading(false);
+      })().catch(()=>{if(live)setProjectItems([]);})
+      .finally(()=>{if(live)setLoading(false);});
+    },projectSearch.trim()?250:0);
+    return ()=>{live=false;window.clearTimeout(timer);};
+  },[authReady,projectSearch]);
+
+  async function loadMoreShellProjects(){
+    if(loadingMore||!projectHasMore)return;
+    setLoadingMore(true);
+    try{
+      const result=await projects(projectSearch.trim(),"active",100,projectNextOffset);
+      setProjectItems(items=>{
+        const known=new Set(items.map(item=>item.slug));
+        return [...items,...result.projects.filter(item=>!known.has(item.slug))];
       });
-    return () => {
-      live = false;
-    };
-  }, []);
+      setProjectNextOffset(result.nextOffset);setProjectHasMore(result.hasMore);
+    }finally{setLoadingMore(false);}
+  }
 
   useEffect(() => {
     if (!selectedSlug) {
@@ -202,6 +229,10 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
       return;
     }
     let live = true;
+    if(projectKind==="masterplan_geo"){
+      setBuildingLive(false);setGeoLive(false);
+      return;
+    }
     void Promise.all([
       releases(selectedSlug),
       geoReleases(selectedSlug).catch(() => ({
@@ -262,6 +293,8 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
 
         <div className="engine-admin-project-picker">
           <label htmlFor="engine-project-switcher">ACTIVE PROJECT</label>
+          <input aria-label="Search Engine projects" type="search" value={projectSearch}
+            placeholder="Search projects…" onChange={event=>setProjectSearch(event.target.value)}/>
           <select
             id="engine-project-switcher"
             value={selectedSlug}
@@ -273,6 +306,10 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
               <option key={project.id} value={project.slug}>{project.name}</option>
             ))}
           </select>
+          {projectHasMore&&<button type="button" className="engine-admin-project-more"
+            disabled={loadingMore||loading} onClick={()=>void loadMoreShellProjects()}>
+            {loadingMore?"Loading…":"Load more projects"}
+          </button>}
           <small>{selectedProject ? PROJECT_KIND_LABELS[projectKind] : "Create a project from Overview"}</small>
         </div>
 
