@@ -46,7 +46,7 @@ test("Geo management migration isolates mapping identity and keeps private event
   db.exec(read("database/migrations/0055_geo_client_management.sql"));
   db.exec("INSERT INTO projects_3d VALUES('p1'),('p2');INSERT INTO geo_plot_mapping_releases_3d VALUES('r1','p1')");
   const sql="INSERT INTO geo_client_plot_details_3d(project_id,mapping_release_id,plot_id,revision,updated_by,updated_at) VALUES(?,?,'1',1,'admin','2026-11-03')";
-  assert.throws(()=>db.prepare(sql).run("p2","r1"),/belongs to project release/);
+  assert.throws(()=>db.prepare(sql).run("p2","r1"),/belong to project release/);
   db.prepare(sql).run("p1","r1");
   assert.throws(()=>db.prepare("UPDATE geo_client_plot_details_3d SET plot_id='2' WHERE project_id='p1'").run(),/identity immutable/);
   assert.ok(db.prepare("SELECT COUNT(*) AS total FROM geo_client_plot_details_3d").get().total===1);
