@@ -516,7 +516,7 @@ export function createArchitecturalSiteEnvironment(
   waterMotion = true,
   sourceSiteIncluded = false,
   landscapePreset: PresentationLandscapePreset = "auto",
-  universalGroundCover = presentation,
+  universalGroundCover = false,
   buildingBounds: THREE.Box3 = bounds,
   buildingOutline: readonly { x: number; z: number }[] = [],
 ) {
@@ -691,7 +691,7 @@ export function createArchitecturalSiteEnvironment(
           includeDriveway: !hasPath,
           includeLawn: landscapePreset !== "rural-farm" && !hasLawn,
           includeTrees: trees.length === 0,
-          includePlants: plants.length === 0,
+          includePlants: false, // Never add the four synthetic entrance-side pots.
           includeLamps: landscapePreset !== "rural-farm" && lights.length === 0,
           includeContextMassing: false,
         }
@@ -702,6 +702,7 @@ export function createArchitecturalSiteEnvironment(
           includeGround: false,
           includeSurroundingGround: false,
           includeCars: landscapePreset === "urban" && !mobile,
+          includePlants: false, // Keep the frontage clear across every camera preset.
           includeContextMassing: false,
         };
 

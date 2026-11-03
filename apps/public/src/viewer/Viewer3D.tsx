@@ -1055,7 +1055,7 @@ export function Viewer3D({
           environmentProfile?.preset === "cinematic-exterior" && environmentProfile.motion.water !== "off",
           includedSourceSite,
           environmentProfile?.landscape ?? "auto",
-          clientPresentation,
+          false, // No flat/curved artificial grass under the source masterplan, in any view.
           buildingFootprintBounds,
           buildingFootprintOutline,
         );

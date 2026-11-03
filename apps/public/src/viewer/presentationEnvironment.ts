@@ -448,7 +448,9 @@ export function addPresentationFallback(
   const includeDriveway = options.includeDriveway ?? true;
   const includeLawn = (options.includeLawn ?? true) && landscape !== "rural-farm";
   const includeTrees = options.includeTrees ?? true;
-  const includePlants = options.includePlants ?? true;
+  // Do not invent a row of four potted shrubs across the building frontage.
+  // Approved landscaping belongs to the source GLB or reviewed Studio site elements.
+  const includePlants = options.includePlants ?? false;
   const includeLamps = options.includeLamps ?? landscape !== "rural-farm";
   const includeContextMassing = options.includeContextMassing ?? false;
   const includeGround = options.includeGround ?? true;

@@ -31,17 +31,17 @@ test("grass instances avoid reviewed road, parking and path footprints", () => {
   assert.match(site, /footprintBounds: buildingBounds/);
   assert.match(viewer, /deriveBuildingFootprintBounds\(/);
   assert.match(viewer, /deriveBuildingFootprintOutline\(/);
-  assert.match(viewer, /clientPresentation,\s+buildingFootprintBounds,\s+buildingFootprintOutline,/);
+  assert.match(viewer, /false, \/\/ No flat\/curved artificial grass[\s\S]*buildingFootprintBounds,\s+buildingFootprintOutline,/);
   assert.match(site, /footprintOutline: buildingOutline/);
   assert.match(site, /width: modelSize\.x,[\s\S]*depth: modelSize\.z/);
   assert.match(grass, /excludedAreas\.some\(\(area\) => containsArea/);
   assert.match(grass, /surfaceYFor\(worldX, worldZ, groundElevation, lawnAreas\)/);
 });
 
-test("the customer viewer enables universal ground cover independently of optional dressing", () => {
-  assert.match(site, /universalGroundCover = presentation/);
+test("customer Building viewer does not generate a large artificial ground under any source model", () => {
+  assert.match(site, /universalGroundCover = false/);
   assert.match(site, /if \(universalGroundCover && !bounds\.isEmpty\(\) && safeGround\)/);
-  assert.match(viewer, /environmentProfile\?\.landscape \?\? "auto",\s+clientPresentation,/);
+  assert.match(viewer, /environmentProfile\?\.landscape \?\? "auto",\s+false, \/\/ No flat\/curved artificial grass/);
   assert.match(site, /includeGround: false,[\s\S]*includeSurroundingGround: false/);
 });
 
