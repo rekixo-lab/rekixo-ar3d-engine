@@ -899,40 +899,24 @@
   top:12px;
   left:12px;
   box-sizing:border-box;
-  width:77px;
-  height:84px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  gap:0;
-  padding:4px 7px 5px;
-  border:1px solid rgba(152,190,195,.57);
-  border-radius:17px;
-  background:rgba(5,26,36,.91);
+  display:grid;
+  place-items:center;
+  width:68px;
+  height:68px;
+  padding:0;
+  border:0;
+  border-radius:50%;
+  background:transparent;
   color:#e9fffd;
-  box-shadow:0 8px 22px rgba(0,10,18,.28),inset 0 1px 0 rgba(255,255,255,.09);
-  backdrop-filter:blur(9px);
+  box-shadow:none;
   -webkit-tap-highlight-color:transparent;
   touch-action:manipulation;
   cursor:pointer;
 }
 .geo-map-compass:hover,.geo-map-compass:focus-visible {
-  border-color:#70ebca;
+  border-radius:50%;
   outline:2px solid rgba(112,235,202,.85);
   outline-offset:2px;
-}
-.geo-map-compass__bearing {
-  display:block;
-  width:100%;
-  height:13px;
-  font-size:10px;
-  line-height:13px;
-  font-weight:800;
-  font-variant-numeric:tabular-nums;
-  letter-spacing:.05em;
-  text-align:center;
-  color:#a4e9d4;
 }
 .geo-compass-rose {
   display:block;
@@ -990,8 +974,8 @@
   pointer-events:none;
 }
 @media(max-width:640px){
-  .geo-map-compass{top:10px;left:10px;width:72px;height:79px;padding:3px 5px 4px;border-radius:15px}
-  .geo-map-compass .geo-compass-rose{width:61px;height:61px}
+  .geo-map-compass{top:10px;left:10px;width:62px;height:62px;padding:0;border-radius:50%}
+  .geo-map-compass .geo-compass-rose{width:62px;height:62px}
 }
 @media(prefers-reduced-motion:reduce){
   .geo-compass-rose__dial{transition:none}
