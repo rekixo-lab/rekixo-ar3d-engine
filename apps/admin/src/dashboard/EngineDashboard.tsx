@@ -136,13 +136,17 @@ export default function EngineDashboard() {
       return;
     }
 
+    const selectedEntry=projectItems.find(project=>project.slug===selectedSlug);
+    // Do not fire Building/Geo APIs until project kind is known from the registry.
+    if(!selectedEntry){setDetailLoading(false);return;}
     let live = true;
     setDetailLoading(true);
     setError("");
     setSourcePackError("");
+    setBuildingReleases([]);setExperienceItems([]);setGeoState(undefined);
     setGeoPlotState(null);
-    setMasterplanState(null);
-    const selectedKind=projectItems.find(project=>project.slug===selectedSlug)?.projectKind;
+    setSourcePack(null);setMasterplanState(null);
+    const selectedKind=selectedEntry.projectKind;
     if(selectedKind==="masterplan_geo"){
       void fetch(`${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(selectedSlug)}/masterplan-geo`,
         {headers:{Accept:"application/json"},cache:"no-store"})
