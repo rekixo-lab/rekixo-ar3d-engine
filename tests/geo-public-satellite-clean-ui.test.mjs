@@ -11,13 +11,17 @@ const mapOptions=viewer.slice(viewer.indexOf("new google.maps.Map(hostRef.curren
 const mapActions=viewer.slice(viewer.indexOf('<nav className="geo-map-quick-actions"'),
   viewer.indexOf('</nav>',viewer.indexOf('<nav className="geo-map-quick-actions"')));
 
-test("Public Geo defaults to vector satellite with only custom zoom/fullscreen controls",()=>{
-  assert.match(mapOptions,/mapTypeId:\s*"satellite"/);
+test("Public Geo defaults to vector hybrid satellite with native place and road labels",()=>{
+  assert.match(mapOptions,/mapTypeId:\s*"hybrid"/);
   assert.match(mapOptions,/renderingType:\s*google\.maps\.RenderingType\?\.VECTOR/);
   assert.match(mapOptions,/disableDefaultUI:\s*true/);
   assert.match(mapOptions,/keyboardShortcuts:\s*false/);
   assert.match(mapOptions,/mapTypeControl:\s*false/);
   assert.match(mapOptions,/gestureHandling:\s*"greedy"/);
+  // Disabling POI click cards must not hide Google's place and street names.
+  assert.match(mapOptions,/clickableIcons:\s*false/);
+  assert.doesNotMatch(mapOptions,/styles\s*:|featureType\s*:|elementType\s*:|labels\s*:/);
+  assert.match(viewer,/value\.includes\("satellite"\) \|\| value\.includes\("hybrid"\)/);
   assert.match(viewer,/touchHost\?\.addEventListener\("touchmove",touchOrbit\.onTouchMove/);
   assert.match(mapActions,/aria-label="Zoom out 2×"/);
   assert.match(mapActions,/aria-label="Zoom in 2×"/);

@@ -487,9 +487,11 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           isFractionalZoomEnabled: true,
           tiltInteractionEnabled: true,
           headingInteractionEnabled: true,
-          // Keep satellite imagery by default; remove Google's optional
-          // controls, NOT its mandatory map-logo/copyright attributions.
-          mapTypeId: "satellite",
+          // Keep satellite imagery with Google's native road, locality,
+          // landmark and place labels visible across the surrounding map.
+          // "satellite" omits basemap labels; "hybrid" overlays them without
+          // changing the vector/WebGL camera, plot mapping or attribution.
+          mapTypeId: "hybrid",
           disableDefaultUI: true,
           keyboardShortcuts: false,
           mapTypeControl: false,

@@ -50,7 +50,7 @@ test("manual zoom preserves native multi-finger navigation and avoids resetting 
 test("customer map has requested minimal controls without a separate model inspector", () => {
   assert.doesNotMatch(source, /function GeoModelInspector|<GeoModelInspector/);
   assert.doesNotMatch(source, /aria-label="Reset Geo camera"|3D Detail/);
-  assert.ok(source.includes('mapTypeId: "satellite"'));
+  assert.ok(source.includes('mapTypeId: "hybrid"'));
   assert.ok(source.includes("disableDefaultUI: true"));
   assert.ok(source.includes("keyboardShortcuts: false"));
 });
