@@ -53,6 +53,26 @@ type Panel="overview"|"plots"|"pricing"|"deals"|"contact";
 const nameOfRole=(value:string)=>value==="client_admin"?"Client Admin":
   value==="approver"?"Approver":value==="editor"?"Editor":"Viewer";
 
+function PasswordRevealField({name,value,update,completion}:{name:string;value:string;update:(text:string)=>void;completion:string}){
+  const [visible,setVisible]=useState(false);
+  return <span className="engine-client-admin-field engine-client-admin-password-field">
+    <input aria-label={name} type={visible?"text":"password"} autoComplete={completion}
+      value={value} required minLength={8} maxLength={128} onChange={e=>update(e.target.value)}/>
+    <button type="button" className="engine-client-admin-reveal"
+      aria-label={(visible?"Hide ":"Show ")+name} title={(visible?"Hide ":"Show ")+name}
+      aria-pressed={visible} onClick={()=>setVisible(v=>!v)}>
+      {visible?<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8"/>
+        <path d="M9.9 5.3A10.7 10.7 0 0 1 12 5c5.1 0 8.8 4.5 10 7-0.4 0.8-1.3 2.1-2.7 3.3M6.5 6.5C4.3 7.9 2.8 10.2 2 12c1.3 2.5 5 7 10 7 1.2 0 2.3-0.2 3.4-0.6"/>
+      </svg>:<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>
+      </svg>}
+    </button>
+  </span>;
+}
+
 function BuilderAdminBrand({projectName}:{projectName:string}){
   return <div className="engine-client-builder-brand">
     <span className="engine-client-builder-symbol" role="img" aria-label="Construction crane">🏗️</span>
@@ -360,25 +380,13 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
         e.preventDefault();void changePassword();
       }}>
         <label>Current password
-          <span className="engine-client-admin-field">
-            <input aria-label="Current Temporary Password" type="password"
-              autoComplete="current-password" value={oldPassword} required minLength={8}
-              maxLength={128} onChange={e=>setOldPassword(e.target.value)}/>
-          </span>
+          <PasswordRevealField name="Current password" value={oldPassword} update={setOldPassword} completion="current-password"/>
         </label>
         <label>New password
-          <span className="engine-client-admin-field">
-            <input aria-label="New Password" type="password" autoComplete="new-password"
-              value={newPassword} required minLength={8} maxLength={128}
-              onChange={e=>setNewPassword(e.target.value)}/>
-          </span>
+          <PasswordRevealField name="New password" value={newPassword} update={setNewPassword} completion="new-password"/>
         </label>
         <label>Confirm password
-          <span className="engine-client-admin-field">
-            <input aria-label="Confirm New Password" type="password" autoComplete="new-password"
-              value={confirmPassword} required minLength={8} maxLength={128}
-              onChange={e=>setConfirmPassword(e.target.value)}/>
-          </span>
+          <PasswordRevealField name="Confirm password" value={confirmPassword} update={setConfirmPassword} completion="new-password"/>
         </label>
         {confirmPassword&&newPassword!==confirmPassword&&
           <p role="alert">Passwords don't match.</p>}
