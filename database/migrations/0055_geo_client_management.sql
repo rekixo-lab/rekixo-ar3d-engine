@@ -60,8 +60,9 @@ CREATE TABLE IF NOT EXISTS geo_client_sales_3d(
  notes TEXT NOT NULL DEFAULT '',evidence_ref TEXT NOT NULL,
  created_by TEXT NOT NULL,created_at TEXT NOT NULL,
  confirmed_at TEXT,confirmed_by TEXT,
- UNIQUE(project_id,mapping_release_id,plot_id)
+ operation_id TEXT NOT NULL UNIQUE
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_geo_client_one_active_sale ON geo_client_sales_3d(project_id,mapping_release_id,plot_id) WHERE state<>'void';
 CREATE INDEX IF NOT EXISTS idx_geo_client_sales ON geo_client_sales_3d(project_id,state,created_at);
 CREATE TRIGGER IF NOT EXISTS trg_geo_client_sales_scope BEFORE INSERT ON geo_client_sales_3d
  WHEN NOT EXISTS(SELECT 1 FROM geo_plot_mapping_releases_3d WHERE id=NEW.mapping_release_id AND project_id=NEW.project_id)
