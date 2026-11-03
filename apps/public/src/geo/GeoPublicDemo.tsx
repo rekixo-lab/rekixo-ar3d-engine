@@ -837,8 +837,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           overlay?.requestRedraw();
         });
         mapIdle = map.addListener("idle", () => {
-          updateCompassHeading(map.getHeading?.());
           overlay?.requestRedraw();
+          updateCompassHeading(map.getHeading?.());
           refreshPlotPolygons?.(true);
         });
         mapTypeChanged = map.addListener("maptypeid_changed", () => {
