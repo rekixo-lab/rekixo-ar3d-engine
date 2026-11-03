@@ -891,6 +891,13 @@
 .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button.is-active::after{
   display:none;
 }
+/* Aerial is an additional desktop/tablet view. Preserve the five-action phone dock. */
+@media (max-width: 640px) {
+  .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button.geo-aerial-view {
+    display: none !important;
+  }
+}
+
 /* Only normal view is lowered. Fullscreen status placement remains unchanged.
    Keep clear of Google's required imagery credits and logo. */
 .geo-integrated-scene:not(:fullscreen) > .geo-plot-status{
@@ -1006,11 +1013,4 @@
 }
 @media(prefers-reduced-motion:reduce){
   .geo-compass-rose__dial{transition:none}
-}
-
-/* Aerial is an additional desktop/tablet view. Preserve the five-action phone dock. */
-@media (max-width: 640px) {
-  .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button.geo-aerial-view {
-    display: none !important;
-  }
 }
