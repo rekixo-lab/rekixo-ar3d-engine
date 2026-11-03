@@ -112,9 +112,12 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       setIdentity(s.user);setOverview(null);setCommercial(null);setMasterplan(null);setContact(null);
       return;
     }
+    setIdentity(s.user);
     const path="/projects/"+encodeURIComponent(s.user.projectSlug);
     const o=await api<Overview>(path+"/overview");
     if(o.project.slug!==s.user.projectSlug)throw Error("Project scope verification failed.");
+    setOverview(o);
+    try{
     if(o.project.kind==="masterplan_geo"){
       const inventory=await api<MasterplanInventory>(path+"/masterplan-inventory");
       setMasterplan(inventory);setCommercial(null);
@@ -124,10 +127,14 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       const rows=await api<CommercialState>(path+"/commercial");
       setMasterplan(null);setCommercial(rows);
     }
+    }catch(e){
+      setCommercial(null);setMasterplan(null);
+      setError(e instanceof Error?"Plot inventory: "+e.message:"Plot inventory unavailable.");
+    }
     if(s.user.role==="client_admin"){
-      setContact(await api<ContactState>(path+"/contact"));
+      try{setContact(await api<ContactState>(path+"/contact"));}
+      catch(e){setContact(null);setError(e instanceof Error?"Contact details: "+e.message:"Contact unavailable.");}
     }else setContact(null);
-    setOverview(o);setIdentity(s.user);
   };
   useEffect(()=>{
     const token=window.location.hash.match(/^#invite=([a-f0-9]{64})$/)?.[1]||"";
