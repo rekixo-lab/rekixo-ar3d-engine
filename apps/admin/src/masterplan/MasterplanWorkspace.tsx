@@ -3,7 +3,8 @@ import { listAssets, uploadAsset, type CloudAssetSummary } from "../studio/cloud
 import type { Asset } from "../studio/domain";
 import {fitImageFrame,imageWorldAt,panImageFrame,pinchImageFrame,zoomImageFrame} from "../../../../shared/masterplan-image-gestures.js";
 import {assignFourCornerRoadFront} from "../../../../shared/geo-plot-source-operations.js";
-import {packMasterplanRecovery,unpackMasterplanRecovery} from "../../../../shared/masterplan-workflow.js";
+import {packMasterplanRecovery,unpackMasterplanRecovery,reviewMasterplanCsv,
+  type MasterplanCsvReview} from "../../../../shared/masterplan-workflow.js";
 import "./masterplan-workspace.css";
 
 type Point=[number,number];type Role="front"|"back"|"depthA"|"depthB";
@@ -77,6 +78,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const [originalId,setOriginalId]=useState<string|null>(null);
   const [controlIndex,setControlIndex]=useState<number|null>(null);
   const [dirty,setDirty]=useState(false);const [busy,setBusy]=useState(false);
+  const [csvPreview,setCsvPreview]=useState<MasterplanCsvReview<Plot>|null>(null);
+  const [csvName,setCsvName]=useState("");
   const [recovery,setRecovery]=useState<LocalSnapshot|null>(null);
   const [recoveryConflict,setRecoveryConflict]=useState(false);
   const recoveryKey=slug?"rekixo-masterplan-working-v1:"+slug:"";
@@ -101,7 +104,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
         projectSlug:slug,revision:next.draft.revision,imageAssetId:next.draft.imageAssetId});
       setRecovery(matched);setRecoveryConflict(Boolean(saved&&!matched));
     }catch{setRecovery(null);setRecoveryConflict(false);}
-    setPlotHistory({past:[],future:[]});setDraftHistory({past:[],future:[]});
+    setPlotHistory({past:[],future:[]});setDraftHistory({past:[],future:[]});setCsvPreview(null);
     setFrame(fitImageFrame({width:next.draft.width||1,height:next.draft.height||1}));
     setError("");setStatus("");
   },[slug,endpoint,recoveryKey]);
@@ -160,6 +163,39 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       link.download=slug+"-manual-recovery.json";link.click();
       window.setTimeout(()=>URL.revokeObjectURL(uri),2000);
     }catch{setError("Browser recovery export unavailable.");}
+  }
+  async function previewCsv(file:File){
+    if(!draft||dirty||hasPendingPlot())throw Error("Apply and Save current mapping before importing a CSV.");
+    if(file.size>2000000)throw Error("CSV exceeds 2 MB.");
+    const review=reviewMasterplanCsv<Plot>(await file.text(),draft.plots);
+    setCsvPreview(review);setCsvName(file.name);
+    setStatus("CSV analysed; existing polygons and published releases have not changed.");
+  }
+  function applyCsvPreview(){
+    if(!csvPreview||(!csvPreview.changed.length&&!csvPreview.added.length))return;
+    if(!window.confirm("Apply CSV values to the LOCAL DRAFT only? Existing polygon positions are protected. Changed source approvals remain unverified until independently rechecked."))return;
+    changeDraft({plots:csvPreview.plots});
+    setCsvPreview(null);setStatus("CSV values staged in draft only. Review missing-data warnings, then Save Draft and Verify.");
+  }
+  function missingData(){
+    if(!draft)return [];
+    const issues:string[]=[];
+    if(draft.controlPoints.length<3)issues.push("At least 3 GPS control points required");
+    draft.controlPoints.forEach((p,i)=>{
+      if(!p.verified||!p.source)issues.push("GPS "+(i+1)+": unverified source");
+    });
+    for(const plot of draft.plots){
+      if(!plot.area.value||!plot.area.source||!plot.area.verified)issues.push("Plot "+plot.id+": area needs verification");
+      if(!plot.facingSource||!plot.facingVerified)issues.push("Plot "+plot.id+": facing needs verification");
+      for(const role of roles){
+        if(role==="depthB"&&plot.layout==="three")continue;
+        const side=plot.sides[role];
+        if(!side?.length||!side.verified||!side.source)
+          issues.push("Plot "+plot.id+": "+role+" source / length / approval missing");
+      }
+      if(plot.road&&!plot.sides.front?.roadFacing)issues.push("Plot "+plot.id+": road-facing front needs review");
+    }
+    return issues;
   }
   function changeDraft(patch:Partial<MasterplanDraft>){
     if(!draft)return;
@@ -482,6 +518,28 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
             controlPoints:[...draft.controlPoints,{u:.5,v:.5,lat:0,lng:0,source:"",verified:false}]})}>+ Add GPS Point</button>
         </>:<>
           <h2>Plot Inventory</h2>
+          <label>Import Plot Data CSV (preview first · draft only)
+            <input type="file" accept=".csv,text/csv" disabled={busy||dirty||Boolean(working)||!draft}
+              onChange={e=>{const file=e.target.files?.[0];e.target.value="";
+                if(file)void previewCsv(file).catch(error=>setError(error instanceof Error?error.message:String(error)));}}/>
+          </label>
+          {csvPreview&&<section className="masterplan-csv-preview" role="status">
+            <strong>CSV Review · {csvName}</strong>
+            <p>{csvPreview.rowCount} source IDs · {csvPreview.added.length} new polygons · {csvPreview.changed.length} metadata updates</p>
+            <p>{csvPreview.unmapped.length} plots need drawing · {csvPreview.missing.length} mapped IDs absent from CSV · {csvPreview.issues.length} measurement/review issues</p>
+            {csvPreview.unmapped.length>0&&<small>Unmapped: {csvPreview.unmapped.slice(0,12).join(", ")}</small>}
+            {csvPreview.missing.length>0&&<small>Existing plots not in CSV (preserved): {csvPreview.missing.slice(0,12).join(", ")}</small>}
+            {csvPreview.issues.slice(0,8).map((issue,i)=><small key={i}>{issue}</small>)}
+            <button type="button" disabled={!csvPreview.changed.length&&!csvPreview.added.length}
+              onClick={applyCsvPreview}>Apply CSV to Draft Only</button>
+            <button type="button" onClick={()=>setCsvPreview(null)}>Cancel Import</button>
+          </section>}
+          <details className="masterplan-missing-data">
+            <summary>Missing Data Checker · {missingData().length} issues</summary>
+            {missingData().length===0?<p>All mapped plot fields are source-reviewed.</p>:
+              <ul>{missingData().slice(0,35).map((issue,i)=><li key={i}>{issue}</li>)}</ul>}
+            {missingData().length>35&&<small>Showing first 35; download mapping CSV for a full source review.</small>}
+          </details>
           <div className="masterplan-inventory">{draft?.plots.map(p=><button key={p.id} type="button"
             className={working?.id===p.id?"active":""} onClick={()=>choose(p)}>{p.id}</button>)}</div>
           {working?<fieldset><legend>Plot {working.id}</legend>
