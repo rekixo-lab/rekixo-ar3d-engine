@@ -4,7 +4,7 @@ import {optionalCustomerDomain} from "../workers/engine-domain-public.mjs";
 import {readOwnerCredentials} from "../workers/engine-owner-account.mjs";
 
 function database(value){
- return {DB:{prepare:()=>({bind:()=>({first:async()=>value})})}};
+ return {DB:{prepare:()=>({first:async()=>value,bind:()=>({first:async()=>value})})}};
 }
 const entry={status:"active",projectStatus:"published",slug:"client-one",
  projectId:"project-one",kind:"masterplan_geo",challenge:"a".repeat(64)};
