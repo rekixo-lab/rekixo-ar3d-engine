@@ -14,7 +14,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  overflow: hidden;
+  /* Only the title/subtitle wrapper clips overflow; do not crop the scaled logo. */
+  overflow: visible;
 }
 .jio-public-branding > div { min-width: 0; overflow: hidden; }
 .jio-public-branding h1 {
@@ -68,6 +69,11 @@
   border: 0;
   border-radius: 50%;
   background: transparent;
+  /* Increase visible logo by 25% WITHOUT increasing header row height. */
+  transform: scale(1.25);
+  transform-origin: center;
+  /* Reserve just enough space to keep the logo clear of the project title. */
+  margin-right: 5px;
 }
 .jio-public-header {
   position: relative;
