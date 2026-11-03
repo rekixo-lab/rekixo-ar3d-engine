@@ -450,66 +450,26 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
         </div>
       </>}
 
-      {panel==="plots"&&<section className="engine-client-admin-card">
-        <div className="engine-client-admin-card-title">
-          <div><h2>{masterplanGeo?"Masterplan inventory":"Geo plot management"}</h2>
-            <p>{masterplanGeo?"Read-only, source-backed plot statuses":
-              "Reviewed status, listing price and approval records"}</p></div>
-          <label className="engine-client-admin-search">Search plot
-            <input value={plotSearch} placeholder="Plot number"
-              onChange={e=>setPlotSearch(e.target.value)}/></label>
-        </div>
-        {masterplanGeo?<div className="engine-client-admin-plot-list">
-          {filteredMasterplan.map(row=><div className="engine-client-admin-plot-row" key={row.id}>
-            <strong>Plot {row.id}</strong>
-            <span>{row.status==="confirmed"?"Confirmed":row.status==="booked"?"Booked":"Available"}</span>
-          </div>)}
-          {!filteredMasterplan.length&&<p>No matching plot records.</p>}
-          <p>{masterplan?.notice}</p>
-        </div>:<>
-          <div className="engine-client-admin-plot-list">
-            {filteredCommercial.map(row=><button key={row.plotId} type="button"
-              className={"engine-client-admin-plot-row"+(plotId===row.plotId?" is-selected":"")}
-              onClick={()=>choose(row.plotId)}>
-              <strong>Plot {row.plotId}</strong>
-              <span>{row.status} · {row.pricePaise===null?"Price not reviewed":
-                "₹"+(row.pricePaise/100).toLocaleString("en-IN")} ·
-                {row.publicApproved?" Public approved":" Private review"}</span>
-            </button>)}
-            {!filteredCommercial.length&&<p>No reviewed listings match the search.</p>}
+      {panel==="plots"&&(masterplanGeo?
+        <section className="engine-client-admin-card">
+          <div className="engine-client-admin-card-title">
+            <h2>Masterplan Inventory</h2>
+            <label className="engine-client-admin-search">Search plot
+              <input value={plotSearch} placeholder="Plot number" onChange={e=>setPlotSearch(e.target.value)}/></label>
           </div>
-          {overview?.permissions.commercialPrepare&&<>
-            <div className="engine-client-admin-editor">
-              <h3>Review listing details</h3>
-              <label>Canonical mapped Plot ID<input value={plotId} maxLength={48}
-                onChange={e=>choose(e.target.value)} placeholder="Exact plot ID"/></label>
-              <label>Listing status<select value={status} onChange={e=>setStatus(e.target.value)}>
-                <option value="">Choose status</option>
-                <option value="available">Available</option>
-                <option value="booked">Booked</option>
-                <option value="sold">Sold</option>
-              </select></label>
-              <label>INR listing price<input value={rupees} inputMode="decimal"
-                onChange={e=>setRupees(e.target.value)}/></label>
-              {currentQuote&&<p>Reviewed CSV quote: ₹{(currentQuote.pricePaise/100).toLocaleString("en-IN")}
-                <button type="button" onClick={()=>{
-                  if(window.confirm("Use reviewed CSV price? Public approval and status stay unchanged.")){
-                    setRupees(String(currentQuote.pricePaise/100));setEvidence(currentQuote.evidenceRef);
-                  }
-                }}>Use quote</button></p>}
-              <label>Evidence / signed agreement reference<input value={evidence}
-                maxLength={250} onChange={e=>setEvidence(e.target.value)}/></label>
-              {overview.permissions.commercialApprove&&<label className="engine-client-admin-inline-check">
-                <input type="checkbox" checked={publicApproved}
-                  onChange={e=>setPublicApproved(e.target.checked)}/>
-                Approve this listing for public display
-              </label>}
-              <button type="button" disabled={busy||!plotId||!status||evidence.trim().length<3}
-                onClick={()=>void save()}>Save scoped listing</button>
-            </div>
-          </>}
-        </>}
-      </section>}
+          <div className="engine-client-admin-plot-list">
+            {filteredMasterplan.map(row=><div className="engine-client-admin-plot-row" key={row.id}>
+              <strong>Plot {row.id}</strong>
+              <span>{row.status==="confirmed"?"Confirmed":row.status==="booked"?"Booked":"Available"}</span>
+            </div>)}
+            {!filteredMasterplan.length&&<p>No matching plot records.</p>}
+          </div><p>{masterplan?.notice}</p>
+        </section>:
+        commercial?<ClientGeoPlotManagement slug={identity.projectSlug} commercial={commercial}
+          canEdit={Boolean(overview?.permissions.commercialPrepare)}
+          canApprove={Boolean(overview?.permissions.commercialApprove)}
+          onCommercialChange={setCommercial}/>:
+        <section className="engine-client-admin-card"><p>Loading published Geo plot mapping…</p></section>)}
 
       {panel==="contact"&&identity?.role==="client_admin"&&<section className="engine-client-admin-card">
         <h2>Contact & Location</h2>
