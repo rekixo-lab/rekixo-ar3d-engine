@@ -33,7 +33,7 @@ test("compass tracks actual camera bearing on touch, presets, Google-native rota
   assert.match(scene,/updateCompassHeading\(preset\.heading\)/);
   assert.match(scene,/sceneRef\.current\?\.style\.setProperty\("--geo-map-north-rotation"/);
   assert.match(scene,/mapHeadingChanged\?\.remove\(\)/);
-  assert.match(scene,/compassResetRef\.current=null/);
+  assert.match(scene,/compassResetRef\.current\s*=\s*null/);
   assert.match(scene,/compassResetRef\.current=\(\)=>/);
   assert.match(scene,/map\.moveCamera\(\{heading:0\}\)/);
   assert.match(scene,/onClick=\{\(\)=>compassResetRef\.current\?\.\(\)\}/);
