@@ -1,5 +1,5 @@
 import {useEffect,useState} from "react";
-import GeoBulkPricingPanel,{type GeoPriceQuote} from "../geo/GeoBulkPricingPanel";
+import GeoBulkPricingPanel from "../geo/GeoBulkPricingPanel";
 import GeoDealRecordsPanel from "../geo/GeoDealRecordsPanel";
 import ClientGeoPlotManagement from "./ClientGeoPlotManagement";
 import {ClientGeoGallery,ClientGeoNotices} from "./ClientGeoGalleryNotices";
@@ -27,16 +27,6 @@ async function api<T>(path:string,method="GET",data?:unknown):Promise<T>{
   catch{throw Error("Project client session service returned invalid JSON.");}
   if(!response.ok)throw Error(parsed.error||"Project client request failed.");
   return parsed;
-}
-function moneyToPaise(value:string){
-  const clean=value.trim();
-  if(!clean)return null;
-  if(!/^\d{1,10}(?:\.\d{1,2})?$/.test(clean))
-    throw Error("Enter INR rupees with at most 2 decimal places.");
-  const [a,b=""]=clean.split(".");
-  const n=BigInt(a)*100n+BigInt(b.padEnd(2,"0"));
-  if(n>1000000000000n)throw Error("INR amount exceeds listing safety limit.");
-  return Number(n);
 }
 type MasterplanInventory={releaseId:string|null;plotCount:number;
   counts:{available:number;booked:number;confirmed:number};
@@ -104,12 +94,6 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
   const [contact,setContact]=useState<ContactState|null>(null);
   const [panel,setPanel]=useState<Panel>("overview");
   const [plotSearch,setPlotSearch]=useState("");
-  const [plotId,setPlotId]=useState("");
-  const [status,setStatus]=useState("");
-  const [rupees,setRupees]=useState("");
-  const [evidence,setEvidence]=useState("");
-  const [publicApproved,setPublicApproved]=useState(false);
-  const [priceQuotes,setPriceQuotes]=useState<GeoPriceQuote[]>([]);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
@@ -160,15 +144,6 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
 
     void load().catch(e=>setError(e instanceof Error?e.message:"Client session unavailable."));
   },[scopedSlug]);
-  const selected=commercial?.rows.find(r=>r.plotId.toLowerCase()===plotId.toLowerCase());
-  const currentQuote=priceQuotes.find(r=>r.plotId.toLowerCase()===plotId.toLowerCase());
-  const choose=(id:string)=>{
-    setPlotId(id);
-    const row=commercial?.rows.find(r=>r.plotId.toLowerCase()===id.toLowerCase());
-    setStatus(row?.status||"");
-    setRupees(row?.pricePaise===null||row?.pricePaise===undefined?"":String(row.pricePaise/100));
-    setEvidence(row?.evidenceRef||"");setPublicApproved(Boolean(row?.publicApproved));
-  };
   const passwordLogin=async()=>{
     if(!scopedSlug||!loginId.trim()||!password)return;
     setBusy(true);setError("");setMessage("");
@@ -211,23 +186,6 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   };
-  const save=async()=>{
-    if(!identity||!overview?.permissions.commercialPrepare||!plotId||!status)return;
-    if(!window.confirm("Save reviewed commercial record for Plot "+plotId+
-      "? Public changes require explicit approval and supporting evidence."))return;
-    setBusy(true);setError("");setMessage("");
-    try{
-      const publicFlag=Boolean(overview.permissions.commercialApprove&&publicApproved);
-      const payload={plotId,status,pricePaise:moneyToPaise(rupees),currency:"INR",
-        evidenceRef:evidence.trim(),publicApproved:publicFlag,
-        expectedRevision:selected?.revision||0};
-      const next=await api<CommercialState>("/projects/"+
-        encodeURIComponent(identity.projectSlug)+"/commercial","PUT",payload);
-      setCommercial(next);setMessage("Project commercial record saved and audited.");
-    }catch(e){setError(e instanceof Error?e.message:String(e));}
-    finally{setBusy(false);}
-  };
-
   const saveContact=async()=>{
     if(!identity||identity.role!=="client_admin"||!contact||contact.revision<1)return;
     if(!window.confirm("Save customer-facing contact changes for this project?"))return;
@@ -267,8 +225,6 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     (masterplanGeo?"/masterplan":kind==="building"?"":"/geo"):"";
   const filteredMasterplan=(masterplan?.plots||[]).filter(row=>
     row.id.toLowerCase().includes(plotSearch.trim().toLowerCase()));
-  const filteredCommercial=(commercial?.rows||[]).filter(row=>
-    row.plotId.toLowerCase().includes(plotSearch.trim().toLowerCase()));
   const projectLabel=identity?.projectName||projectTitle||"Project";
   const authGate=!identity||Boolean(identity.mustChangePassword);
   const backProjectHref=scopedSlug?"/3Dprojects/"+encodeURIComponent(scopedSlug)+
@@ -502,7 +458,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
           endpoint={ROOT+"/projects/"+encodeURIComponent(identity.projectSlug)+"/pricing"}
           mappingReleaseId={commercial?.mappingReleaseId||null}
           canEdit={Boolean(overview?.permissions.commercialPrepare)}
-          onQuotes={setPriceQuotes}/>
+          />
       </section>}
 
       {panel==="deals"&&overview?.permissions.dealsRead&&!masterplanGeo&&identity&&
