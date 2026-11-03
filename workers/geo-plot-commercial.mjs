@@ -52,9 +52,10 @@ async function listState(env,ctx,source){
     FROM geo_plot_commercial_3d WHERE project_id=? AND mapping_release_id=?
     ORDER BY plot_id COLLATE NOCASE LIMIT 2500`)
     .bind(ctx.project.id,source.releaseId).all();
+  const reviewed=new Map((rows.results||[]).map(r=>[String(r.plotId).toLowerCase(),r]));
   return {mappingReleaseId:source.releaseId,plotCount:source.plots.length,
     plotIds:source.plots.map(p=>p.id),
-    rows:(rows.results||[]).map(r=>({...r,publicApproved:r.publicApproved===1})),
+    rows:source.plots.map(p=>{const r=reviewed.get(p.id.toLowerCase());return {plotId:p.id,status:r?.publicApproved===1?r.status:'available',draftStatus:r?.status||null,pricePaise:r?.pricePaise??null,revision:r?.revision||0,publicApproved:r?.publicApproved===1,evidenceRef:r?.evidenceRef||'',area:p.area||null,sides:p.sides||null,hasReview:Boolean(r)};}),
     notice:"Owner-reviewed commercial facts only. No buyer/payment ledger equivalence is implied."};
 }
 export async function handleGeoPlotCommercial(request,env,ctx,actor,{allowApprove=true}={}){
