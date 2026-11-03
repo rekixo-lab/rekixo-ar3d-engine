@@ -385,30 +385,28 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
           <article><span>Available</span><strong>{statusCounts.available}</strong></article>
           <article><span>Booked</span><strong>{statusCounts.booked}</strong></article>
           <article><span>{masterplanGeo?"Confirmed":"Sold"}</span><strong>{statusCounts.sold}</strong></article>
-          {!masterplanGeo&&<article><span>Not reviewed</span><strong>{statusCounts.unreviewed}</strong></article>}
         </section>
         <div className="engine-client-admin-grid">
           <section className="engine-client-admin-card">
-            <h2>Project overview</h2>
-            <p>Published project: <strong>{overview?.project.name}</strong></p>
-            <p>Status: {overview?.project.status}</p>
-            <p>{masterplanGeo?"Masterplan source and private inventory are read-only here.":
-              "Commercial facts are separate from immutable 3D geometry and require explicit public approval."}</p>
+            <h2>Project masterplan / Geo preview</h2>
+            <p>View the actual published customer site, without changing mapping.</p>
             <div className="engine-client-admin-actions">
-              <button type="button" disabled={busy} onClick={()=>void load()
-                .catch(e=>setError(e instanceof Error?e.message:String(e)))}>Refresh</button>
-              <button type="button" onClick={()=>setPanel("plots")}>View plots</button>
+              <button type="button" onClick={()=>setShowLivePreview(v=>!v)}>
+                {showLivePreview?"Hide live preview":"Show live preview"}</button>
+              <a href={customerSite} target="_blank" rel="noopener noreferrer">Open customer site</a>
             </div>
+            {showLivePreview&&<iframe className="engine-client-admin-live-preview"
+              title={projectLabel+" live project preview"} src={customerSite} loading="lazy"/>}
           </section>
           <section className="engine-client-admin-card">
-            <h2>Access & responsibilities</h2>
-            <p>{overview?.permissions.commercialApprove&&!masterplanGeo?
-              "Can approve source-backed listing status and prices for public display.":
-              overview?.permissions.commercialPrepare&&!masterplanGeo?
-              "Can prepare private commercial facts for review.":
-              "Can inspect permitted project facts and inventory."}</p>
-            <p>Owner controls 3D mapping, publishing, project access and immutable releases.</p>
-            <p>Client sessions are separately authenticated and checked on every request.</p>
+            <h2>Quick actions</h2>
+            <div className="engine-client-admin-quick">
+              <button type="button" onClick={()=>setPanel("plots")}>Manage plot status & booking</button>
+              {availablePanels.includes("sales")&&<button type="button" onClick={()=>setPanel("sales")}>Sales & Accounts</button>}
+              {availablePanels.includes("gallery")&&<button type="button" onClick={()=>setPanel("gallery")}>Gallery images</button>}
+              <button type="button" onClick={()=>setPanel("contact")}>Contact details</button>
+              <button type="button" disabled={busy} onClick={()=>void load().catch(e=>setError(String(e)))}>Refresh counts</button>
+            </div>
           </section>
         </div>
       </>}
