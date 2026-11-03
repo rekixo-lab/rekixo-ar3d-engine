@@ -21,7 +21,7 @@ test("Geo customer header keeps project branding and icon-only quick actions", (
   assert.doesNotMatch(geoApp, /const mapsUrl\s*=/);
 });
 
-test("Geo map toolbar shows four views and omits Entry view and Building", () => {
+test("Geo map toolbar keeps four camera views and adds the project 3D Model website link", () => {
   const toolbarStart = geoApp.indexOf('<nav className="geo-camera-toolbar geo-camera-toolbar--normal-row"');
   const toolbarEnd = geoApp.indexOf("</nav>", toolbarStart);
   assert.ok(toolbarStart >= 0 && toolbarEnd > toolbarStart, "Geo map toolbar must exist");
@@ -38,7 +38,13 @@ test("Geo map toolbar shows four views and omits Entry view and Building", () =>
   assert.match(toolbar, /\{GEO_CAMERA_VIEWS\.map/);
   assert.doesNotMatch(declaredViews, /label: "Entry view"/);
   assert.doesNotMatch(toolbar, /Entry view/);
-  assert.doesNotMatch(toolbar, /geo-building-link|Building <span|building website|<a[\s>]/);
+  assert.doesNotMatch(toolbar, /geo-building-link|Building <span|building website/);
+  assert.match(toolbar, /<a className="geo-model-site-link"/);
+  assert.match(toolbar, /href=\{modelSiteHref\}/);
+  assert.match(toolbar, /target="_blank" rel="noopener noreferrer"/);
+  assert.match(toolbar, />3D Model<\/a>/);
+  assert.match(geoApp, /modelSiteHref=\{`\/3Dprojects\/\$\{encodeURIComponent\(slug\)\}`\}/,
+    "3D website must use this project's own slug, never a hardcoded or external URL");
   assert.doesNotMatch(geoApp.slice(geoApp.indexOf('{toolbarContainer ? createPortal(<nav className="geo-camera-toolbar') - 35, geoApp.indexOf('{toolbarContainer ? createPortal(<nav className="geo-camera-toolbar')), /!failure/);
   assert.doesNotMatch(toolbar, /Open location|Google Maps/);
 });
@@ -51,12 +57,12 @@ test("Geo camera controls are fixed to the viewport bottom with mobile safe-area
   assert.ok(dock.includes("safe-area-inset-bottom"));
   assert.ok(dock.includes("touch-action: none;"));
   assert.ok(dock.includes(".geo-map-quick-actions"));
-  assert.ok(geoStyles.includes("grid-template-columns: repeat(4, minmax(0, 1fr))"));
+  assert.ok(geoStyles.includes("grid-template-columns: repeat(5, minmax(0, 1fr))"));
 });
 
-test("normal Geo camera row has four independent rounded buttons and no outer panel", () => {
+test("normal Geo camera row has five independent rounded actions and no outer panel", () => {
   const transparentRow = geoStyles.slice(geoStyles.indexOf("/* Transparent, full-width camera controls:"));
-  assert.match(transparentRow, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(transparentRow, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
   assert.match(transparentRow, /width:\s*100% !important/);
   assert.match(transparentRow, /border:\s*0 !important/);
   assert.match(transparentRow, /border-radius:\s*0 !important/);
@@ -67,7 +73,8 @@ test("normal Geo camera row has four independent rounded buttons and no outer pa
   assert.ok(polished.length > 300);
   assert.match(polished, /\.geo-public-toolbar-slot\{[\s\S]*background:transparent !important/);
   assert.match(polished, /\.geo-public-toolbar-slot > \.geo-camera-toolbar--normal-row\{[\s\S]*background:transparent !important/);
-  assert.match(polished, /\.geo-camera-toolbar--normal-row button\{[\s\S]*border-radius:10px !important/);
+  assert.match(polished, /\.geo-camera-toolbar--normal-row button,[\s\S]*\.geo-model-site-link\{[\s\S]*border-radius:10px !important/);
+  assert.match(polished, /\.geo-model-site-link\{[\s\S]*background:rgba\(13,61,50,.85\) !important/);
   assert.match(polished, /\.geo-camera-toolbar--normal-row button\.is-active\{[\s\S]*border-radius:10px !important/);
   assert.match(polished, /\.geo-camera-toolbar--normal-row button\.is-active::after\{[\s\S]*display:none/);
   assert.doesNotMatch(polished, /\.geo-camera-toolbar--fullscreen-clone/);
