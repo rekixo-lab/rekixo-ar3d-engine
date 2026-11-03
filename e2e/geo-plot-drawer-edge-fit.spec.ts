@@ -92,21 +92,45 @@ test("plot details drawer ends above Google legal footer and outside map strip c
     await page.evaluate(()=>{
       (window as unknown as {__geoCloseTaps:number;__geoLegalTaps:number}).__geoCloseTaps=0;
       (window as unknown as {__geoCloseTaps:number;__geoLegalTaps:number}).__geoLegalTaps=0;
-      document.querySelector(".geo-plot-drawer__outside-dismiss")?.addEventListener("click",()=>{
+      const dismiss=document.querySelector(".geo-plot-drawer__outside-dismiss");
+      // Mirror the React handler: only a NEW pointerdown dismisses the drawer.
+      // Its mounting on plot pointerup must not make the same gesture's click
+      // immediately close it. Keyboard activation still dispatches detail=0.
+      dismiss?.addEventListener("pointerdown",event=>{
+        if(!event.isPrimary||event.button!==0)return;
+        event.preventDefault();
+        event.stopPropagation();
         (window as unknown as {__geoCloseTaps:number}).__geoCloseTaps++;
+      });
+      dismiss?.addEventListener("click",event=>{
+        if((event as MouseEvent).detail===0)
+          (window as unknown as {__geoCloseTaps:number}).__geoCloseTaps++;
       });
       document.querySelector('.gm-style a[href*="google.com/maps"]')?.addEventListener("click",event=>{
         event.preventDefault();
         (window as unknown as {__geoLegalTaps:number}).__geoLegalTaps++;
       });
     });
-    // Click only the uncovered right-hand map strip; clicks inside drawer
-    // stay in the drawer, and legal attribution below remains link-accessible.
+    // Simulate the click delivered after the map pointerup opens the drawer.
+    // It is not a new pointerdown and must leave the panel open.
+    await page.evaluate(()=>{
+      document.querySelector(".geo-plot-drawer__outside-dismiss")?.dispatchEvent(
+        new MouseEvent("click",{bubbles:true,detail:1})
+      );
+    });
+    expect(await page.evaluate(()=>(window as unknown as {__geoCloseTaps:number}).__geoCloseTaps),
+      tag+" opening click must not dismiss plot").toBe(0);
+    // A subsequent real tap in the right map strip must dismiss once.
     await page.locator(".geo-plot-drawer__outside-dismiss").click({
       position:{x:actual.outside.right-actual.outside.left-15,y:85},
     });
     expect(await page.evaluate(()=>(window as unknown as {__geoCloseTaps:number}).__geoCloseTaps),
       tag+" tapping the map beside drawer closes it").toBe(1);
+    // Keyboard and accessibility activation should also be supported.
+    await page.locator(".geo-plot-drawer__outside-dismiss").focus();
+    await page.keyboard.press("Enter");
+    expect(await page.evaluate(()=>(window as unknown as {__geoCloseTaps:number}).__geoCloseTaps),
+      tag+" keyboard dismiss").toBe(2);
     await page.locator('.gm-style a[href*="google.com/maps"]').click();
     expect(await page.evaluate(()=>(window as unknown as {__geoLegalTaps:number}).__geoLegalTaps),
       tag+" Google logo remains clickable").toBe(1);
