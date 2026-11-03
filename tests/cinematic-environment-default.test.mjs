@@ -42,7 +42,7 @@ test("baseline environment layers are additive when reviewed site data is sparse
   assert.match(site, /includeSidewalk: landscapePreset !== "rural-farm" && landscapePreset !== "hillside" && !hasPath/);
   assert.match(site, /includeLawn: landscapePreset !== "rural-farm" && !hasLawn/);
   assert.match(site, /includeTrees: trees\.length === 0/);
-  assert.match(site, /includePlants: plants\.length === 0/);
+  assert.match(site, /includePlants: false/);
   assert.match(site, /root\.userData\.presentationOnly = true/);
   assert.match(site, /createProceduralSurfaceMaterial/);
 });
