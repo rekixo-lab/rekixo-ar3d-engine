@@ -84,6 +84,19 @@ function config(env) {
   };
 }
 
+// Password changes live in D1; Cloudflare secrets remain bootstrap credentials only.
+async function ownerCredentials(env) {
+  const fallback=config(env);
+  try {
+    const stored=await env.DB.prepare(`SELECT email,password_salt AS passwordSalt,
+      password_hash AS passwordHash,version FROM engine_admin_owner_credentials_3d
+      WHERE id='owner'`).first();
+    if(stored?.email && stored.passwordSalt && stored.passwordHash)
+      return {...fallback,...stored,version:Number(stored.version)};
+  }catch { /* New table not provisioned yet: preserve original owner login. */ }
+  return {...fallback,version:0};
+}
+
 export function authConfigured(env) {
   const value = config(env);
   return Boolean(
@@ -229,6 +242,68 @@ async function verifyPassword(password, saltB64, hashB64) {
   return diff === 0;
 }
 
+async function newOwnerPasswordDigest(password) {
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const key=await crypto.subtle.importKey("raw",encoder.encode(password),"PBKDF2",false,["deriveBits"]);
+  const hash=new Uint8Array(await crypto.subtle.deriveBits({
+    name:"PBKDF2",salt,iterations:PASSWORD_PBKDF2_ITERATIONS,hash:"SHA-256"
+  },key,256));
+  return {salt:btoa(String.fromCharCode(...salt)),hash:btoa(String.fromCharCode(...hash))};
+}
+
+async function ownerAccount(request,env,actor){
+  const current=await ownerCredentials(env);
+  if(request.method==="GET")return json({email:current.email,version:current.version,
+    canChange:true});
+  if(request.method!=="PATCH")return json({error:"Method not allowed."},{status:405});
+  if(!sameOrigin(request))return json({error:"Same-origin request required."},{status:403});
+  const raw=await request.text();
+  if(raw.length>1800)return json({error:"Account update too large."},{status:413});
+  let data;try{data=JSON.parse(raw);}catch{return json({error:"Malformed request."},{status:400});}
+  const nextEmail=String(data?.newEmail||"").trim().toLowerCase();
+  const currentPassword=data?.currentPassword;
+  const nextPassword=data?.newPassword;
+  if(!Number.isInteger(data?.expectedVersion)||data.expectedVersion!==current.version)
+    return json({error:"Account changed. Sign in again and reload."},{status:409});
+  if(!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(nextEmail)||nextEmail.length>254||
+     typeof currentPassword!=="string"||currentPassword.length>128||
+     (nextPassword!=="" && (typeof nextPassword!=="string"||nextPassword.length<12||nextPassword.length>128)))
+    return json({error:"Enter a valid email and a new password of at least 12 characters, or leave new password empty."},{status:400});
+  if(!await verifyPassword(currentPassword,current.passwordSalt,current.passwordHash))
+    return json({error:"Current Super Admin password is incorrect."},{status:401});
+  if(nextEmail===current.email&&!nextPassword)
+    return json({error:"Change email or password before saving."},{status:400});
+  if(nextPassword && nextPassword===currentPassword)
+    return json({error:"New password must be different from current password."},{status:400});
+  const nextDigest=nextPassword?await newOwnerPasswordDigest(nextPassword):
+    {salt:current.passwordSalt,hash:current.passwordHash};
+  const now=new Date().toISOString();
+  const expected=current.version;
+  const write=expected===0?
+    env.DB.prepare(`INSERT INTO engine_admin_owner_credentials_3d
+      (id,email,password_salt,password_hash,version,updated_at)
+      VALUES ('owner',?,?,?,?,?) ON CONFLICT(id) DO NOTHING`)
+      .bind(nextEmail,nextDigest.salt,nextDigest.hash,1,now):
+    env.DB.prepare(`UPDATE engine_admin_owner_credentials_3d
+      SET email=?,password_salt=?,password_hash=?,version=version+1,updated_at=?
+      WHERE id='owner' AND version=?`)
+      .bind(nextEmail,nextDigest.salt,nextDigest.hash,now,expected);
+  const results=await env.DB.batch([
+    write,
+    env.DB.prepare(`UPDATE engine_admin_security SET session_version=session_version+1,
+      updated_at=? WHERE id='owner'`).bind(now),
+    env.DB.prepare(`INSERT INTO engine_admin_audit
+      (id,actor_email,action,project_id,target_id,details_json,created_at)
+      VALUES (?,?,?,NULL,'owner',?,?)`)
+      .bind(crypto.randomUUID(),actor.email,"auth.owner_account_updated",
+        JSON.stringify({emailChanged:nextEmail!==current.email,passwordChanged:Boolean(nextPassword),
+        allSessionsRevoked:true}),now)
+  ]);
+  if(results[0]?.meta?.changes!==1||results[1]?.meta?.changes!==1)
+    return json({error:"Account update conflicted. Sign in again."},{status:409});
+  return json({ok:true,signInAgain:true},{headers:{"Set-Cookie":clearSessionCookie()}});
+}
+
 async function digestHex(value) {
   const digest = new Uint8Array(
     await crypto.subtle.digest("SHA-256", encoder.encode(value)),
@@ -241,7 +316,7 @@ async function sessionFor(request, env) {
   const token = cookieValue(request, COOKIE);
   const [body, signature] = token.split(".");
   if (!body || !signature) return null;
-  const cfg = config(env);
+  const cfg = await ownerCredentials(env);
   if (!(await verifySessionSignature(body, signature, cfg.sessionSecret)))
     return null;
 
@@ -393,7 +468,7 @@ async function login(request, env) {
     const body = await request.json().catch(() => ({}));
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
-    const cfg = config(env);
+    const cfg = await ownerCredentials(env);
     const now = Date.now();
 
     stage = "prune-rate-limit";
@@ -2412,6 +2487,8 @@ export async function handleCloudAdminRequest(request, env, url = new URL(reques
   const actor = await sessionFor(request, env);
   if (!actor)
     return json({ error: "Engine Admin sign-in required." }, { status: 401 });
+
+  if (url.pathname === `${CLOUD_PATH}/account`) return ownerAccount(request,env,actor);
 
   if (url.pathname === `${CLOUD_PATH}/deletion-status`)
     return deletionStatus(request, env);

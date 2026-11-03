@@ -13,7 +13,7 @@ import { projectModuleVisible, PROJECT_KIND_LABELS } from "../../../../shared/en
 
 type ShellSection = "overview" | "profile" | "clients" | "assets" |
   "source" | "building" | "geo" | "geo-plots" | "masterplan" | "masterplan-plots" |
-  "mapping-controls" | "sales" | "releases" | "branding" | "advanced";
+  "mapping-controls" | "sales" | "releases" | "branding" | "advanced" | "account";
 
 type NavItem = {
   id: ShellSection;
@@ -62,6 +62,10 @@ const navItems: NavItem[] = [
     description: "3D polygon mapping and measurements",
   },
   {
+    id: "account", label: "Account Security", short: "AC",
+    href: () => "/3Dprojects/account", description: "Super Admin email and password",
+  },
+  {
     id: "branding", label: "Share & Branding", short: "BR",
     href: (slug) => `/3Dprojects/share${slug ? `?project=${encodeURIComponent(slug)}` : ""}`,
     description: "Logo, poster and share links",
@@ -81,6 +85,7 @@ function currentSection(pathname: string): ShellSection {
   if (pathname.includes("/releases")) return "releases";
   if (pathname.includes("/share") || pathname.includes("/branding")) return "branding";
   if (pathname.includes("/advanced")) return "advanced";
+  if (pathname.includes("/account")) return "account";
   if (pathname.includes("/building") || pathname.includes("/studio")) return "building";
   return "overview";
 }
@@ -135,6 +140,8 @@ const sectionMeta: Record<ShellSection, { eyebrow: string; title: string; help: 
     title: "Share & Branding",
     help: "Manage one project logo/favicon and separate immutable Building and Geo share previews.",
   },
+  account: {eyebrow: "OWNER ACCESS", title: "Account Security",
+    help: "Manage the Engine Super Admin sign-in and session security."},
   advanced: {
     eyebrow: "ENGINE ADMINISTRATION",
     title: "Advanced",
