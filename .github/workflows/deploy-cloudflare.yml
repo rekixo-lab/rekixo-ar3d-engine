@@ -170,6 +170,12 @@ jobs:
         if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui'
         run: npm test
 
+      # Skipping duplicate full tests must not skip the build required for
+      # fresh public/admin CSS assets. Wrangler must deploy newly built bytes.
+      - name: Build validated fast-UI assets for production
+        if: github.event_name == 'push' && steps.scope.outputs.lane == 'ui'
+        run: npm run build
+
       - name: Restore cached Chromium
         if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui'
         uses: actions/cache@v4
