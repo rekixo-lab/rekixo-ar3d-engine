@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ADMIN_BASE_PATH, type EngineExperienceSummary } from "@rekixo/3d-contracts";
 import { geoPublicProjectPath, publicProjectPath } from "@rekixo/3d-engine-core";
 import {
@@ -45,6 +45,11 @@ export default function EngineDashboard() {
   const [projectItems, setProjectItems] = useState<CloudProjectSummary[]>([]);
   const [selectedSlug, setSelectedSlug] = useState(requestedProjectSlug());
   const [search, setSearch] = useState("");
+  const [projectTotal,setProjectTotal] = useState(0);
+  const [projectNextOffset,setProjectNextOffset] = useState(0);
+  const [projectHasMore,setProjectHasMore] = useState(false);
+  const [projectPageBusy,setProjectPageBusy] = useState(false);
+  const searchRequestId=useRef(0);
   const [buildingReleases, setBuildingReleases] = useState<CloudReleaseSummary[]>([]);
   const [geoState, setGeoState] = useState<CloudGeoReleaseState>();
   const [masterplanState,setMasterplanState] = useState<MasterplanOverviewState|null>(null);
@@ -65,30 +70,59 @@ export default function EngineDashboard() {
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  async function loadProjects() {
+  async function loadProjects(query="") {
+    const requestId=++searchRequestId.current;
     setLoading(true);
     setError("");
     try {
-      const result = await projects("", "active", 100, 0);
-      setProjectItems(result.projects);
-      const requested = requestedProjectSlug();
-      const next = result.projects.find((item) => item.slug === requested)?.slug || result.projects[0]?.slug || "";
-      setSelectedSlug(next);
-      if (!requested && next) {
-        const url = new URL(window.location.href);
-        url.searchParams.set("project", next);
-        window.history.replaceState({}, "", url);
+      const result=await projects(query,"active",100,0);
+      const current=selectedSlug||requestedProjectSlug();
+      let items=result.projects;
+      if(current&&!items.some(item=>item.slug===current)){
+        const focused=await projects(current,"active",20,0);
+        const match=focused.projects.find(item=>item.slug===current);
+        if(match)items=[match,...items];
       }
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Engine projects load nahi hue.");
-    } finally {
-      setLoading(false);
-    }
+      if(requestId!==searchRequestId.current)return;
+      setProjectItems(items);
+      setProjectTotal(result.total);
+      setProjectNextOffset(result.nextOffset);
+      setProjectHasMore(result.hasMore);
+      const next=items.find(item=>item.slug===current)?.slug||items[0]?.slug||"";
+      setSelectedSlug(next);
+      if(!requestedProjectSlug()&&next){
+        const url=new URL(window.location.href);
+        url.searchParams.set("project",next);
+        window.history.replaceState({},"",url);
+      }
+    }catch(reason){
+      if(requestId===searchRequestId.current)
+        setError(reason instanceof Error?reason.message:"Engine projects load nahi hue.");
+    }finally{if(requestId===searchRequestId.current)setLoading(false);}
   }
 
-  useEffect(() => {
-    void loadProjects();
-  }, []);
+  async function loadMoreProjects(){
+    if(projectPageBusy||!projectHasMore)return;
+    const requestId=searchRequestId.current;
+    setProjectPageBusy(true);
+    try{
+      const result=await projects(search,"active",100,projectNextOffset);
+      if(requestId!==searchRequestId.current)return;
+      setProjectItems(current=>{
+        const known=new Set(current.map(item=>item.slug));
+        return [...current,...result.projects.filter(item=>!known.has(item.slug))];
+      });
+      setProjectNextOffset(result.nextOffset);
+      setProjectHasMore(result.hasMore);
+    }catch(reason){if(requestId===searchRequestId.current)
+      setError(reason instanceof Error?reason.message:"More projects could not load.");
+    }finally{setProjectPageBusy(false);}
+  }
+
+  useEffect(()=>{
+    const timer=window.setTimeout(()=>{void loadProjects(search.trim());},search.trim()?250:0);
+    return ()=>window.clearTimeout(timer);
+  },[search]);
 
   useEffect(() => {
     if (!selectedSlug) {
@@ -185,15 +219,9 @@ export default function EngineDashboard() {
     [projectItems, selectedSlug],
   );
 
-  const visibleProjects = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return projectItems;
-    return projectItems.filter((project) =>
-      [project.name, project.slug, project.location]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query)),
-    );
-  }, [projectItems, search]);
+  const visibleProjects = projectItems.filter(project=>
+    !search.trim() || [project.name,project.slug,project.location].some(value=>
+      String(value||"").toLowerCase().includes(search.trim().toLowerCase())));
 
   const activeBuilding = buildingReleases.find((release) => release.active);
   const activeGeo = geoState?.activeRelease || null;
@@ -337,14 +365,14 @@ export default function EngineDashboard() {
           <div className="engine-overview-projects__head">
             <div>
               <p>YOUR PROJECTS</p>
-              <h2>{projectItems.length} project{projectItems.length === 1 ? "" : "s"}</h2>
+              <h2>{projectTotal} project{projectTotal === 1 ? "" : "s"}</h2>
             </div>
             <button className="engine-overview-add" type="button" onClick={() => setShowCreate(true)}>+</button>
           </div>
 
           <label className="engine-overview-search">
             <span>Search project</span>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name / location" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name / slug / location" />
           </label>
 
           <div className="engine-overview-project-list">
@@ -367,6 +395,10 @@ export default function EngineDashboard() {
               <div className="engine-overview-empty-list">No matching project</div>
             ) : null}
           </div>
+          {projectHasMore && <button className="engine-control-button" type="button"
+            disabled={projectPageBusy||loading} onClick={()=>void loadMoreProjects()}>
+            {projectPageBusy?"Loading…":"Load More Projects"}
+          </button>}
 
           <button className="engine-control-button engine-control-button--primary engine-overview-create-wide" type="button" onClick={() => setShowCreate(true)}>
             + Create New Project
