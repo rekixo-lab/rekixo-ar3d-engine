@@ -79,6 +79,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const [originalId,setOriginalId]=useState<string|null>(null);
   const [controlIndex,setControlIndex]=useState<number|null>(null);
   const [dirty,setDirty]=useState(false);const [busy,setBusy]=useState(false);
+  const [advanced,setAdvanced]=useState(false);
   const [csvPreview,setCsvPreview]=useState<MasterplanCsvReview<Plot>|null>(null);
   const [csvName,setCsvName]=useState("");
   const [imageComparison,setImageComparison]=useState<ImageComparison|null>(null);
@@ -477,6 +478,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       <button onClick={()=>draft&&setFrame(fitImageFrame({width:draft.width,height:draft.height}))}>Fit</button>
       <button disabled={busy||!(working?plotHistory.past.length:draftHistory.past.length)} onClick={undo}>Undo</button>
       <button disabled={busy||!(working?plotHistory.future.length:draftHistory.future.length)} onClick={redo}>Redo</button>
+      <button type="button" aria-pressed={advanced} className={advanced?"active":""}
+        onClick={()=>setAdvanced(value=>!value)}>{advanced?"Advanced ✓":"Advanced"}</button>
       {panel==="plots"&&<button onClick={newBoundary} disabled={!imageUrl}>+ New Polygon</button>}
       <button disabled={!dirty||busy||!draft?.imageAssetId} onClick={()=>void operation("save")}>Save Draft</button>
       <button disabled={dirty||busy||!state?.draft.revision||Boolean(working)} onClick={()=>void operation("verify")}>Verify</button>
@@ -525,7 +528,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       <aside className="masterplan-dock">
         {panel==="source"?<>
           <h2>Original Masterplan</h2>
-          {draft?.imageAssetId&&<button type="button" disabled={!draft}
+          {advanced&&draft?.imageAssetId&&<button type="button" disabled={!draft}
             onClick={()=>draft&&exportMasterplanDraftReview(slug,draft)}>
             Download source-change review snapshot (JSON · not a full backup)
           </button>}
@@ -552,7 +555,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
           <p>Use 3–24 surveyed control points. Select Position and tap matching location on the image; then enter exact Latitude/Longitude and source.</p>
           {draft?.controlPoints.map((cp,i)=><fieldset key={i}><legend>Control Point {i+1}</legend>
             <button onClick={()=>{setTool("point");setControlIndex(i);}}>Set Image Position</button>
-            <small>U {cp.u.toFixed(6)}, V {cp.v.toFixed(6)}</small>
+            {advanced&&<small>U {cp.u.toFixed(6)}, V {cp.v.toFixed(6)}</small>}
             <label>Latitude <input type="number" step="any" value={cp.lat}
               onChange={e=>changeDraft({controlPoints:draft.controlPoints.map((v,j)=>
                 j===i?{...v,lat:Number(e.target.value),verified:false}:v)})}/></label>
@@ -563,7 +566,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               draft.controlPoints.map((v,j)=>j===i?{...v,source:e.target.value,verified:false}:v)})}/></label>
             <label className="masterplan-check"><input type="checkbox" checked={cp.verified} onChange={e=>changeDraft({
               controlPoints:draft.controlPoints.map((v,j)=>j===i?{...v,verified:e.target.checked}:v)})}/> Source verified</label>
-            <button onClick={()=>changeDraft({controlPoints:draft.controlPoints.filter((_,j)=>j!==i)})}>Remove Point</button>
+            {advanced&&<button onClick={()=>changeDraft({controlPoints:draft.controlPoints.filter((_,j)=>j!==i)})}>Remove Point</button>}
           </fieldset>)}
           <button disabled={!draft||draft.controlPoints.length>=24} onClick={()=>draft&&changeDraft({
             controlPoints:[...draft.controlPoints,{u:.5,v:.5,lat:0,lng:0,source:"",verified:false}]})}>+ Add GPS Point</button>
@@ -596,7 +599,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
           {working?<fieldset><legend>Plot {working.id}</legend>
             <label>Plot Number <input value={working.id} readOnly={originalId!==null}
               onChange={e=>updatePlot("id",e.target.value)}/></label>
-            <small>{working.corners.length} polygon corners</small>
+            {advanced&&<small>{working.corners.length} polygon corners</small>}
             <button disabled={!working.corners.length} onClick={()=>editWorking(p=>({...p,
               corners:p.corners.slice(0,-1),sides:assignSides(p.corners.slice(0,-1)),
                area:{...p.area,verified:false},facingVerified:false}))}>Undo Corner</button>
@@ -607,17 +610,17 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               {...working.area,unit:e.target.value as Plot["area"]["unit"],verified:false})}>
                 <option value="sqft">sqft</option><option value="sqm">sqm</option><option value="sqyd">sqyd</option>
               </select></label>
-            <label>Approved Area Source<input value={working.area.source} onChange={e=>
-              updatePlot("area",{...working.area,source:e.target.value,verified:false})}/></label>
-            <label className="masterplan-check"><input type="checkbox" checked={working.area.verified}
-              onChange={e=>updatePlot("area",{...working.area,verified:e.target.checked})}/> Area verified</label>
+            {advanced&&<label>Approved Area Source<input value={working.area.source} onChange={e=>
+              updatePlot("area",{...working.area,source:e.target.value,verified:false})}/></label>}
+            {advanced&&<label className="masterplan-check"><input type="checkbox" checked={working.area.verified}
+              onChange={e=>updatePlot("area",{...working.area,verified:e.target.checked})}/> Area verified</label>}
             <label>Facing<select value={working.facing} onChange={e=>editWorking(p=>({...p,
               facing:e.target.value,facingVerified:false}))}>
               {directions.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
-            <label>Facing Source<input value={working.facingSource} onChange={e=>
-              editWorking(p=>({...p,facingSource:e.target.value,facingVerified:false}))}/></label>
-            <label className="masterplan-check"><input type="checkbox" checked={working.facingVerified}
-              onChange={e=>updatePlot("facingVerified",e.target.checked)}/> Facing reviewed</label>
+            {advanced&&<label>Facing Source<input value={working.facingSource} onChange={e=>
+              editWorking(p=>({...p,facingSource:e.target.value,facingVerified:false}))}/></label>}
+            {advanced&&<label className="masterplan-check"><input type="checkbox" checked={working.facingVerified}
+              onChange={e=>updatePlot("facingVerified",e.target.checked)}/> Facing reviewed</label>}
             <label>Road<input value={working.road} onChange={e=>editWorking(p=>({...p,road:e.target.value,facingVerified:false}))}/></label>
             {working.corners.length===4&&working.layout==="four"&&<label>Road-facing FRONT edge
               <select value={working.sides.front?.edges[0]??0} onChange={e=>setRoadFront(Number(e.target.value))}>
@@ -627,22 +630,23 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               <p className="masterplan-guidance">Review the Front boundary against the road on the approved image. Mark its Road-facing checkbox.</p>}
             {roles.filter(role=>working.layout!=="three"||role!=="depthB").map(role=>{
               const side=working.sides[role]||blankSide();return <fieldset key={role}><legend>{role}</legend>
-                <label>Edge indices (0 to {Math.max(0,working.corners.length-1)})
+                {advanced&&<label>Edge indices (0 to {Math.max(0,working.corners.length-1)})
                   <input value={side.edges.join(",")} onChange={e=>setSide(role,{edges:e.target.value.split(",")
-                    .map(x=>Number(x.trim())).filter(Number.isInteger),verified:false})}/></label>
+                    .map(x=>Number(x.trim())).filter(Number.isInteger),verified:false})}/></label>}
                 <label>Length<input type="number" step="any" min="0" value={side.length||""}
                   onChange={e=>setSide(role,{length:Number(e.target.value),verified:false})}/></label>
                 <label>Unit<select value={side.unit} onChange={e=>setSide(role,{unit:e.target.value as Side["unit"],verified:false})}>
                   <option value="ft">ft</option><option value="m">m</option></select></label>
-                <label>Survey Source<input value={side.source} onChange={e=>
-                  setSide(role,{source:e.target.value,verified:false})}/></label>
+                {advanced&&<label>Survey Source<input value={side.source} onChange={e=>
+                  setSide(role,{source:e.target.value,verified:false})}/></label>}
                 <label className="masterplan-check"><input type="checkbox" checked={side.roadFacing}
                   onChange={e=>setSide(role,{roadFacing:e.target.checked})}/> Road-facing</label>
-                <label className="masterplan-check"><input type="checkbox" checked={side.verified}
-                  onChange={e=>setSide(role,{verified:e.target.checked})}/> Measurement verified</label>
+                {advanced&&<label className="masterplan-check"><input type="checkbox" checked={side.verified}
+                  onChange={e=>setSide(role,{verified:e.target.checked})}/> Measurement verified</label>}
               </fieldset>;
             })}
-            <label>Notes<textarea rows={2} value={working.notes} onChange={e=>updatePlot("notes",e.target.value)}/></label>
+            {advanced&&<label>Notes<textarea rows={2} value={working.notes} onChange={e=>updatePlot("notes",e.target.value)}/></label>}
+            {!advanced&&<small>Source verification and edge details are in Advanced.</small>}
             <button disabled={working.corners.length<3} onClick={apply}>Apply Plot to Draft</button>
           </fieldset>:<p>Select a plot, or create a new polygon.</p>}
           <button disabled={!draft?.plots.length} onClick={()=>{
