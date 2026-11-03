@@ -23,8 +23,10 @@ export async function optionalCustomerDomain(req,env,url){
   const suffix=entry.kind==="masterplan_geo"?"/masterplan":entry.kind==="building_geo"?"/geo":"";
   return Response.redirect("https://"+host+"/3Dprojects/"+slug+suffix,302);
  }
- if(url.pathname==="/admin"||url.pathname==="/admin/")
-  return Response.redirect("https://"+host+"/3Dprojects/"+slug+"/client-admin",302);
+ if(url.pathname==="/3Dprojects/api/domain-context"&&req.method==="GET")
+  return Response.json({projectSlug:entry.slug,projectKind:entry.kind});
+ // Keep /admin in the browser address bar. The SPA loads its project scope above.
+ if(url.pathname==="/admin"||url.pathname==="/admin/")return null;
  const scoped=url.pathname.match(/^\/3Dprojects\/api\/(?:projects|client-portal\/projects)\/([^/]+)/);
  if(scoped&&scoped[1]!==slug)return reply("Wrong project for this domain.");
  const page=url.pathname.match(/^\/3Dprojects\/([^/]+)/);
