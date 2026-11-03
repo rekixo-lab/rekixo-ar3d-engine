@@ -140,12 +140,12 @@ test("tap outside the active plot drawer closes it without picking or editing an
   assert.match(dismiss,/aria-label="Close plot details by tapping outside"/);
   // Opening a plot happens at pointerup; a following synthesized click
   // must NOT close the newly rendered sidebar.
-  assert.match(dismiss,/onPointerDown=\\{event=>\\{/);
-  assert.match(dismiss,/if\\(!event\\.isPrimary\\|\\|event\\.button!==0\\)return/);
-  assert.match(dismiss,/event\\.preventDefault\\(\\)/);
-  assert.match(dismiss,/event\\.stopPropagation\\(\\)/);
-  assert.match(dismiss,/if\\(event\\.detail===0\\)setSelectedPlot\\(null\\)/);
-  assert.doesNotMatch(dismiss,/onClick=\\{\\(\\)=>setSelectedPlot\\(null\\)\\}/);
+  assert.ok(dismiss.includes("onPointerDown={event=>{"));
+  assert.ok(dismiss.includes("if(!event.isPrimary||event.button!==0)return"));
+  assert.ok(dismiss.includes("event.preventDefault()"));
+  assert.ok(dismiss.includes("event.stopPropagation()"));
+  assert.ok(dismiss.includes("if(event.detail===0)setSelectedPlot(null)"));
+  assert.ok(!dismiss.includes("onClick={()=>setSelectedPlot(null)}"));
   assert.doesNotMatch(dismiss,/pickModelGeoPlot|selectAtScreenPoint/);
   assert.match(parent,/onClose=\{\(\)=>setSelectedPlot\(null\)\}/);
   assert.match(drawer,/event\.key==="Escape"/);
