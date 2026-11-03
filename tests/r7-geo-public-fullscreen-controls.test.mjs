@@ -50,7 +50,7 @@ test("fullscreen Geo dock has five independent actions including the 3D website 
   assert.match(fullscreenStyles, /button:hover,[\s\S]*button:focus-visible[\s\S]*border-radius:\s*10px !important/);
   assert.match(fullscreenStyles, /button\.is-active\s*\{[\s\S]*border-radius:\s*10px !important/);
   assert.match(fullscreenStyles, /button\.is-active::after\s*\{[\s\S]*display:\s*none !important/);
-  assert.match(fullscreenStyles, /button:focus-visible\s*\{[\s\S]*box-shadow:\s*0 0 0 2px/);
+  assert.match(fullscreenStyles, /button:focus-visible,[\s\S]*\.geo-model-site-link:focus-visible\s*\{[\s\S]*box-shadow:\s*0 0 0 2px/);
   assert.match(fullscreenStyles, /@media \(max-width: 640px\)[\s\S]*gap:\s*5px !important/);
 });
 
