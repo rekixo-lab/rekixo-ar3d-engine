@@ -13,6 +13,7 @@ const audit=(env,actor,projectId,id,action)=>env.DB.prepare(
  "INSERT INTO engine_admin_audit(id,actor_email,action,project_id,target_id,details_json,created_at) VALUES(?,?,?,?,?,?,?)"
 ).bind(crypto.randomUUID(),actor.email,action,projectId,id,"{}",new Date().toISOString());
 export async function clientGeoGallery(request,env,project,actor,section){
+ if(actor.role!=="client_admin")return json({error:"Client Admin required for private gallery."},403);
  if(section==="gallery-image"){
   if(request.method!=="GET")return json({error:"Method not allowed."},405);
   const id=new URL(request.url).searchParams.get("id");
