@@ -49,11 +49,13 @@ const nameOfRole=(value:string)=>value==="client_admin"?"Client Admin":
 
 function PasswordRevealField({name,value,update,completion}:{name:string;value:string;update:(text:string)=>void;completion:string}){
   const [visible,setVisible]=useState(false);
+  const revealLabel=name==="Current Temporary Password"?"temporary entry":
+    name==="Confirm New Password"?"confirmation entry":"new entry";
   return <span className="engine-client-admin-field engine-client-admin-password-field">
     <input aria-label={name} type={visible?"text":"password"} autoComplete={completion}
       value={value} required minLength={8} maxLength={128} onChange={e=>update(e.target.value)}/>
     <button type="button" className="engine-client-admin-reveal"
-      aria-label={(visible?"Hide ":"Show ")+name} title={(visible?"Hide ":"Show ")+name}
+      aria-label={(visible?"Hide ":"Show ")+revealLabel} title={(visible?"Hide ":"Show ")+revealLabel}
       aria-pressed={visible} onClick={()=>setVisible(v=>!v)}>
       {visible?<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
          strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
