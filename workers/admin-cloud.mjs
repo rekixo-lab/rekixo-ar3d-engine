@@ -20,6 +20,7 @@ import {
 import { processDwgArchitecture } from "./dwg-processor-route.mjs";
 import { handleProjectBrandingAdmin } from "./project-branding.mjs";
 import { handleProjectManagementAdmin } from "./project-management.mjs";
+import { handleEngineDomainsAdmin } from "./engine-domains.mjs";
 import { handleMasterplanGeoAdmin } from "./masterplan-geo-admin.mjs";
 import { handleMasterplanSalesAdmin } from "./masterplan-sales.mjs";
 import { handleMasterplanShareAdmin } from "./masterplan-share-admin.mjs";
@@ -2405,6 +2406,8 @@ async function routeProjects(request, env, actor, url) {
   if (parts.length === 1)
     return patchProject(request, env, actor, project);
 
+  if (parts[1] === "domains" && parts.length === 2)
+    return handleEngineDomainsAdmin(request,env,actor,project);
   if (parts[1] === "manage") {
     const response=await handleProjectManagementAdmin(request,env,actor,project,parts);
     if(response)return response;
