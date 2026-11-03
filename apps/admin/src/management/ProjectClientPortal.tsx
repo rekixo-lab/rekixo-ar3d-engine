@@ -349,13 +349,13 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
         e.preventDefault();void changePassword();
       }}>
         <label>Current password
-          <PasswordRevealField name="Current password" value={oldPassword} update={setOldPassword} completion="current-password"/>
+          <PasswordRevealField name="Current Temporary Password" value={oldPassword} update={setOldPassword} completion="current-password"/>
         </label>
         <label>New password
-          <PasswordRevealField name="New password" value={newPassword} update={setNewPassword} completion="new-password"/>
+          <PasswordRevealField name="New Password" value={newPassword} update={setNewPassword} completion="new-password"/>
         </label>
         <label>Confirm password
-          <PasswordRevealField name="Confirm password" value={confirmPassword} update={setConfirmPassword} completion="new-password"/>
+          <PasswordRevealField name="Confirm New Password" value={confirmPassword} update={setConfirmPassword} completion="new-password"/>
         </label>
         {confirmPassword&&newPassword!==confirmPassword&&
           <p role="alert">Passwords don't match.</p>}
