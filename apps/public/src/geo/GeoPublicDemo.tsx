@@ -398,7 +398,7 @@ function geoPlotWorldPath(plot:GeoMappedPlot,data:GeoPayload,groundY:number) {
   });
 }
 
-function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; toolbarContainer?: HTMLElement | null }) {
+function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref }: { data: GeoPayload; toolbarContainer?: HTMLElement | null; modelSiteHref: string }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const cameraActionRef = useRef<((view: GeoCameraView) => void) | null>(null);
@@ -978,6 +978,11 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
               {view.label}
             </button>
           ))}
+          <a className="geo-model-site-link"
+            href={modelSiteHref}
+            target="_blank" rel="noopener noreferrer"
+            aria-label="Open this project's 3D Model website in a new tab"
+            title="Open 3D Model website">3D Model</a>
       </nav>, toolbarContainer) : null}
       {failure && (
         <div className="geo-integrated-fallback">
@@ -1143,7 +1148,7 @@ export default function GeoPublicDemo() {
 
       {data.maps.configured && data.maps.apiKey && data.maps.mapId ? (
         <div className="geo-public-map-layout">
-          <IntegratedGeoScene data={data} toolbarContainer={toolbarContainer} />
+          <IntegratedGeoScene data={data} toolbarContainer={toolbarContainer} modelSiteHref={`/3Dprojects/${encodeURIComponent(slug)}`} />
           <div ref={setToolbarContainer} className="geo-public-toolbar-slot" aria-label="Map camera controls" />
         </div>
       ) : (
