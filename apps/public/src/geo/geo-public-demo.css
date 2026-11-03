@@ -911,7 +911,7 @@
   box-shadow:none;
   -webkit-tap-highlight-color:transparent;
   touch-action:manipulation;
-  cursor:pointer;
+  cursor: pointer;
 }
 .geo-map-compass:hover,.geo-map-compass:focus-visible {
   border-radius:50%;
