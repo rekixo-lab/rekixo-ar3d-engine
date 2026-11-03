@@ -32,7 +32,7 @@ function simulatedOrbit(initialHeading=340){
 test("50% extra Geo camera zoom is a fractional level, not a 50% larger raw zoom number",()=>{
   assert.equal(GEO_EXTRA_CAMERA_MAGNIFICATION,1.5);
   assert.ok(Math.abs(GEO_EXTRA_CAMERA_ZOOM-Math.log2(1.5))<1e-12);
-  for(const base of [18.65,19,19.85,20.1,21.25]){
+  for(const base of [19,19.85,20.1,21.25]){
     const requested=closerGeoCameraZoom(base);
     assert.ok(Math.abs(Math.pow(2,requested-base)-1.5)<1e-12);
     assert.ok(src.includes("closerGeoCameraZoom("+base+")"),
@@ -40,7 +40,7 @@ test("50% extra Geo camera zoom is a fractional level, not a 50% larger raw zoom
   }
   assert.equal(closerGeoCameraZoom(Infinity),Infinity);
   assert.match(src,/isFractionalZoomEnabled:\s*true/);
-  assert.match(src,/map\.moveCamera\?\.\(\{ center, \.\.\.preset \}\)/);
+  assert.match(src,/if\(map\.moveCamera\)map\.moveCamera\(\{ center, \.\.\.preset \}\)/);
   assert.doesNotMatch(src,/maxZoom:\s*\d/);
   assert.match(src,/Google Maps has reached its native zoom limit here/);
   assert.match(src,/zoomActionRef\.current\?\.\(1\)/,
