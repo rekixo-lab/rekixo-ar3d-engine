@@ -40,5 +40,5 @@ test("post-deploy QA runs only after successful production deployment or explici
   assert.match(workflow, /github\.event\.workflow_run\.conclusion == 'success'/);
   assert.match(workflow, /node scripts\/verify-production-building-demo\.mjs/);
   assert.match(workflow, /REKIXO_DEMO_PROJECT_SLUG/);
-  assert.match(workflow, /ref: main/);
+  assert.match(workflow, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \|\| 'main' \}\}/);
 });
