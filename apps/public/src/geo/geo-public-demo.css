@@ -495,7 +495,7 @@
 .geo-public-toolbar-slot > .geo-camera-toolbar--normal-row {
   position: static !important;
   display: grid !important;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: stretch; justify-content: stretch !important;
   gap: clamp(1px, .35vw, 6px);
   width: 100% !important; max-width: 100% !important; min-height: 0; margin: 0;
@@ -504,7 +504,8 @@
   box-shadow: none !important; backdrop-filter: none !important;
 }
 .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button,
-.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link {
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link,
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-model-site-link {
   position: relative; width: 100%; min-width: 0 !important; min-height: 34px;
   padding: 7px 1px; display: inline-flex; align-items: center; justify-content: center;
   gap: 2px; flex: 1 1 0; border: 0 !important; border-radius: 0 !important;
@@ -517,12 +518,16 @@
 .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button:hover,
 .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button:focus-visible,
 .geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link:hover,
-.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link:focus-visible {
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link:focus-visible,
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-model-site-link:hover,
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-model-site-link:focus-visible {
   border: 0 !important; background: transparent !important; box-shadow: none !important;
   color: #8df2c7; transform: none !important;
 }
 .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button:focus-visible,
-.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link:focus-visible {
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link:focus-visible,
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-model-site-link:hover,
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-model-site-link:focus-visible {
   outline: 2px solid rgba(89, 222, 181, .86); outline-offset: -2px;
 }
 .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button.is-active {
@@ -533,7 +538,8 @@
   content: ""; position: absolute; left: 18%; right: 18%; bottom: 1px;
   height: 2px; border-radius: 2px; background: #51ebbe;
 }
-.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link { color: #8df2c7; }
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link,
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-model-site-link { color: #8df2c7; }
 .geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link > span { font-size: 11px; }
 .jio-public-project-logo { width: 38px; height: 38px; }
 .jio-public-header { margin-bottom: 8px; }
@@ -541,10 +547,11 @@
 @media (max-width: 640px) {
   .geo-public-toolbar-slot { margin-top: 6px; }
   .geo-public-toolbar-slot > .geo-camera-toolbar--normal-row {
-    grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0;
+    grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0;
   }
   .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button,
-  .geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link {
+  .geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link,
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-model-site-link {
     min-height: 34px; padding: 7px 0 8px; gap: 1px;
     font-size: clamp(8px, 2.45vw, 10px); letter-spacing: -.035em;
   }
@@ -653,7 +660,8 @@
     padding: 6px max(6px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(6px, env(safe-area-inset-left, 0px));
   }
   .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button,
-  .geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link {
+  .geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-building-link,
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-model-site-link {
     min-height: 42px;
   }
   .geo-map-quick-actions { top: 8px; right: 8px; gap: 3px; }
@@ -848,7 +856,8 @@
   box-shadow:none !important;
   backdrop-filter:none !important;
 }
-.geo-public-toolbar-slot .geo-camera-toolbar--normal-row button{
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row button,
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-model-site-link{
   border:1px solid rgba(124,166,180,.43) !important;
   border-radius:10px !important;
   background:rgba(9,29,41,.90) !important;
@@ -857,11 +866,20 @@
   transition:background .17s ease,color .17s ease,border-color .17s ease,box-shadow .17s ease !important;
 }
 .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button:hover,
-.geo-public-toolbar-slot .geo-camera-toolbar--normal-row button:focus-visible{
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row button:focus-visible,
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-model-site-link:hover,
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-model-site-link:focus-visible{
   border-color:rgba(104,235,183,.77) !important;
   border-radius:10px !important;
   background:rgba(19,76,64,.92) !important;
   color:#f0fff8 !important;
+}
+/* Fifth action: direct link to the same project's 3D model website.
+   Share camera buttons' layout, with a small green differentiation. */
+.geo-public-toolbar-slot .geo-camera-toolbar--normal-row .geo-model-site-link{
+  border-color:rgba(88,190,155,.57) !important;
+  background:rgba(13,61,50,.85) !important;
+  color:#eafff6 !important;
 }
 .geo-public-toolbar-slot .geo-camera-toolbar--normal-row button.is-active{
   border:1px solid rgba(83,235,177,.95) !important;
