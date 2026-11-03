@@ -11,6 +11,9 @@ const shouldDeploy=new RegExp(matcher[1]);
 test("Public deploy follows AR3D Client Admin JSX, CSS and imported Geo modules",()=>{
  for(const file of [
   "apps/admin/src/management/ProjectClientPortal.tsx",
+  "apps/admin/src/management/ClientGeoPlotManagement.tsx",
+  "apps/admin/src/management/ClientGeoGalleryNotices.tsx",
+  "apps/admin/src/management/ClientGeoSales.tsx",
   "apps/admin/src/management/project-client-admin.css",
   "apps/admin/src/management/project-management.css",
   "apps/admin/src/geo/GeoBulkPricingPanel.tsx",
@@ -18,6 +21,10 @@ test("Public deploy follows AR3D Client Admin JSX, CSS and imported Geo modules"
   "apps/public/src/main.tsx",
   "workers/project-client-portal.mjs",
   "workers/project-client-passwords.mjs",
+  "workers/project-client-geo-details.mjs",
+  "workers/project-client-geo-gallery.mjs",
+  "workers/project-client-geo-notices.mjs",
+  "workers/project-client-geo-sales.mjs",
   "workers/project-client-contact.mjs",
   "workers/project-client-masterplan-inventory.mjs",
   "shared/project-client-admin-url.js"

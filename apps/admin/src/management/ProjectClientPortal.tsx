@@ -1,6 +1,9 @@
 import {useEffect,useState} from "react";
-import GeoBulkPricingPanel,{type GeoPriceQuote} from "../geo/GeoBulkPricingPanel";
+import GeoBulkPricingPanel from "../geo/GeoBulkPricingPanel";
 import GeoDealRecordsPanel from "../geo/GeoDealRecordsPanel";
+import ClientGeoPlotManagement from "./ClientGeoPlotManagement";
+import {ClientGeoGallery,ClientGeoNotices} from "./ClientGeoGalleryNotices";
+import ClientGeoSales from "./ClientGeoSales";
 import "./project-management.css";
 import "./project-client-admin.css";
 type Identity={displayName:string;email:string;role:string;projectSlug:string;projectName:string;projectKind?:string;mustChangePassword?:boolean;loginId?:string|null};
@@ -8,7 +11,8 @@ type Session={authenticated:boolean;user:Identity|null};
 type Commercial={plotId:string;status:"available"|"booked"|"sold";
   pricePaise:number|null;revision:number;publicApproved:boolean;evidenceRef:string};
 type CommercialState={mappingReleaseId:string|null;rows:Commercial[];
-  plotCount?:number;plotIds?:string[];notice?:string};
+  plotCount?:number;plotIds?:string[];notice?:string;publicationMode?:string;
+  counts?:{available:number;booked:number;sold:number;unreviewed:number}};
 type Overview={project:{slug:string;name:string;status:string;kind?:string};role:string;
   permissions:{commercialRead:boolean;commercialPrepare:boolean;commercialApprove:boolean;
     dealsRead?:boolean;dealsWrite?:boolean}};
@@ -23,16 +27,6 @@ async function api<T>(path:string,method="GET",data?:unknown):Promise<T>{
   catch{throw Error("Project client session service returned invalid JSON.");}
   if(!response.ok)throw Error(parsed.error||"Project client request failed.");
   return parsed;
-}
-function moneyToPaise(value:string){
-  const clean=value.trim();
-  if(!clean)return null;
-  if(!/^\d{1,10}(?:\.\d{1,2})?$/.test(clean))
-    throw Error("Enter INR rupees with at most 2 decimal places.");
-  const [a,b=""]=clean.split(".");
-  const n=BigInt(a)*100n+BigInt(b.padEnd(2,"0"));
-  if(n>1000000000000n)throw Error("INR amount exceeds listing safety limit.");
-  return Number(n);
 }
 type MasterplanInventory={releaseId:string|null;plotCount:number;
   counts:{available:number;booked:number;confirmed:number};
@@ -49,9 +43,31 @@ const contactLabels:ReadonlyArray<[keyof ContactFields,string]>= [
   ["websiteUrl","Website URL"],["mapsUrl","Google Maps URL"],
   ["brochureUrl","Brochure URL"]
 ];
-type Panel="overview"|"plots"|"pricing"|"deals"|"contact";
+type Panel="overview"|"plots"|"pricing"|"deals"|"contact"|"gallery"|"sales"|"notices";
 const nameOfRole=(value:string)=>value==="client_admin"?"Client Admin":
   value==="approver"?"Approver":value==="editor"?"Editor":"Viewer";
+
+function PasswordRevealField({name,value,update,completion}:{name:string;value:string;update:(text:string)=>void;completion:string}){
+  const [visible,setVisible]=useState(false);
+  const revealLabel=name==="Current Temporary Password"?"temporary entry":
+    name==="Confirm New Password"?"confirmation entry":"new entry";
+  return <span className="engine-client-admin-field engine-client-admin-password-field">
+    <input aria-label={name} type={visible?"text":"password"} autoComplete={completion}
+      value={value} required minLength={8} maxLength={128} onChange={e=>update(e.target.value)}/>
+    <button type="button" className="engine-client-admin-reveal"
+      aria-label={(visible?"Hide ":"Show ")+revealLabel} title={(visible?"Hide ":"Show ")+revealLabel}
+      aria-pressed={visible} onClick={()=>setVisible(v=>!v)}>
+      {visible?<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8"/>
+        <path d="M9.9 5.3A10.7 10.7 0 0 1 12 5c5.1 0 8.8 4.5 10 7-0.4 0.8-1.3 2.1-2.7 3.3M6.5 6.5C4.3 7.9 2.8 10.2 2 12c1.3 2.5 5 7 10 7 1.2 0 2.3-0.2 3.4-0.6"/>
+      </svg>:<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>
+      </svg>}
+    </button>
+  </span>;
+}
 
 function BuilderAdminBrand({projectName}:{projectName:string}){
   return <div className="engine-client-builder-brand">
@@ -79,13 +95,8 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
   const [masterplan,setMasterplan]=useState<MasterplanInventory|null>(null);
   const [contact,setContact]=useState<ContactState|null>(null);
   const [panel,setPanel]=useState<Panel>("overview");
+  const [showLivePreview,setShowLivePreview]=useState(false);
   const [plotSearch,setPlotSearch]=useState("");
-  const [plotId,setPlotId]=useState("");
-  const [status,setStatus]=useState("");
-  const [rupees,setRupees]=useState("");
-  const [evidence,setEvidence]=useState("");
-  const [publicApproved,setPublicApproved]=useState(false);
-  const [priceQuotes,setPriceQuotes]=useState<GeoPriceQuote[]>([]);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
@@ -103,9 +114,12 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       setIdentity(s.user);setOverview(null);setCommercial(null);setMasterplan(null);setContact(null);
       return;
     }
+    setIdentity(s.user);
     const path="/projects/"+encodeURIComponent(s.user.projectSlug);
     const o=await api<Overview>(path+"/overview");
     if(o.project.slug!==s.user.projectSlug)throw Error("Project scope verification failed.");
+    setOverview(o);
+    try{
     if(o.project.kind==="masterplan_geo"){
       const inventory=await api<MasterplanInventory>(path+"/masterplan-inventory");
       setMasterplan(inventory);setCommercial(null);
@@ -115,10 +129,14 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       const rows=await api<CommercialState>(path+"/commercial");
       setMasterplan(null);setCommercial(rows);
     }
+    }catch(e){
+      setCommercial(null);setMasterplan(null);
+      setError(e instanceof Error?"Plot inventory: "+e.message:"Plot inventory unavailable.");
+    }
     if(s.user.role==="client_admin"){
-      setContact(await api<ContactState>(path+"/contact"));
+      try{setContact(await api<ContactState>(path+"/contact"));}
+      catch(e){setContact(null);setError(e instanceof Error?"Contact details: "+e.message:"Contact unavailable.");}
     }else setContact(null);
-    setOverview(o);setIdentity(s.user);
   };
   useEffect(()=>{
     const token=window.location.hash.match(/^#invite=([a-f0-9]{64})$/)?.[1]||"";
@@ -136,15 +154,6 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
 
     void load().catch(e=>setError(e instanceof Error?e.message:"Client session unavailable."));
   },[scopedSlug]);
-  const selected=commercial?.rows.find(r=>r.plotId.toLowerCase()===plotId.toLowerCase());
-  const currentQuote=priceQuotes.find(r=>r.plotId.toLowerCase()===plotId.toLowerCase());
-  const choose=(id:string)=>{
-    setPlotId(id);
-    const row=commercial?.rows.find(r=>r.plotId.toLowerCase()===id.toLowerCase());
-    setStatus(row?.status||"");
-    setRupees(row?.pricePaise===null||row?.pricePaise===undefined?"":String(row.pricePaise/100));
-    setEvidence(row?.evidenceRef||"");setPublicApproved(Boolean(row?.publicApproved));
-  };
   const passwordLogin=async()=>{
     if(!scopedSlug||!loginId.trim()||!password)return;
     setBusy(true);setError("");setMessage("");
@@ -187,23 +196,6 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   };
-  const save=async()=>{
-    if(!identity||!overview?.permissions.commercialPrepare||!plotId||!status)return;
-    if(!window.confirm("Save reviewed commercial record for Plot "+plotId+
-      "? Public changes require explicit approval and supporting evidence."))return;
-    setBusy(true);setError("");setMessage("");
-    try{
-      const publicFlag=Boolean(overview.permissions.commercialApprove&&publicApproved);
-      const payload={plotId,status,pricePaise:moneyToPaise(rupees),currency:"INR",
-        evidenceRef:evidence.trim(),publicApproved:publicFlag,
-        expectedRevision:selected?.revision||0};
-      const next=await api<CommercialState>("/projects/"+
-        encodeURIComponent(identity.projectSlug)+"/commercial","PUT",payload);
-      setCommercial(next);setMessage("Project commercial record saved and audited.");
-    }catch(e){setError(e instanceof Error?e.message:String(e));}
-    finally{setBusy(false);}
-  };
-
   const saveContact=async()=>{
     if(!identity||identity.role!=="client_admin"||!contact||contact.revision<1)return;
     if(!window.confirm("Save customer-facing contact changes for this project?"))return;
@@ -223,7 +215,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
   const availablePanels:Panel[]=kind==="building"?["overview"]:
     masterplanGeo?["overview","plots"]:
     ["overview","plots","pricing",...(overview?.permissions.dealsRead?["deals" as const]:[])];
-  if(identity?.role==="client_admin")availablePanels.push("contact");
+  if(identity?.role==="client_admin"){if(!masterplanGeo&&kind!=="building")availablePanels.push("gallery","sales","notices");availablePanels.push("contact");}
   const mappingCount=masterplanGeo?masterplan?.plotCount||0:commercial?.plotCount||0;
   const countFor=(kind:"available"|"booked"|"sold")=>
     (commercial?.rows||[]).filter(x=>x.status===kind).length;
@@ -233,17 +225,16 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     sold:masterplan?.counts.confirmed||0,
     unreviewed:0
   }:{
-    available:countFor("available"),booked:countFor("booked"),
-    sold:countFor("sold"),
-    unreviewed:Math.max(0,mappingCount-(commercial?.rows.length||0))
+    available:commercial?.counts?.available??countFor("available"),
+    booked:commercial?.counts?.booked??countFor("booked"),
+    sold:commercial?.counts?.sold??countFor("sold"),
+    unreviewed:commercial?.counts?.unreviewed??Math.max(0,mappingCount-(commercial?.rows.filter(x=>x.revision>0).length||0))
   };
   const customerSite=identity?"https://ar3dstudio.in/3Dprojects/"+
     encodeURIComponent(identity.projectSlug)+
     (masterplanGeo?"/masterplan":kind==="building"?"":"/geo"):"";
   const filteredMasterplan=(masterplan?.plots||[]).filter(row=>
     row.id.toLowerCase().includes(plotSearch.trim().toLowerCase()));
-  const filteredCommercial=(commercial?.rows||[]).filter(row=>
-    row.plotId.toLowerCase().includes(plotSearch.trim().toLowerCase()));
   const projectLabel=identity?.projectName||projectTitle||"Project";
   const authGate=!identity||Boolean(identity.mustChangePassword);
   const backProjectHref=scopedSlug?"/3Dprojects/"+encodeURIComponent(scopedSlug)+
@@ -360,25 +351,13 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
         e.preventDefault();void changePassword();
       }}>
         <label>Current password
-          <span className="engine-client-admin-field">
-            <input aria-label="Current Temporary Password" type="password"
-              autoComplete="current-password" value={oldPassword} required minLength={8}
-              maxLength={128} onChange={e=>setOldPassword(e.target.value)}/>
-          </span>
+          <PasswordRevealField name="Current Temporary Password" value={oldPassword} update={setOldPassword} completion="current-password"/>
         </label>
         <label>New password
-          <span className="engine-client-admin-field">
-            <input aria-label="New Password" type="password" autoComplete="new-password"
-              value={newPassword} required minLength={8} maxLength={128}
-              onChange={e=>setNewPassword(e.target.value)}/>
-          </span>
+          <PasswordRevealField name="New Password" value={newPassword} update={setNewPassword} completion="new-password"/>
         </label>
         <label>Confirm password
-          <span className="engine-client-admin-field">
-            <input aria-label="Confirm New Password" type="password" autoComplete="new-password"
-              value={confirmPassword} required minLength={8} maxLength={128}
-              onChange={e=>setConfirmPassword(e.target.value)}/>
-          </span>
+          <PasswordRevealField name="Confirm New Password" value={confirmPassword} update={setConfirmPassword} completion="new-password"/>
         </label>
         {confirmPassword&&newPassword!==confirmPassword&&
           <p role="alert">Passwords don't match.</p>}
@@ -392,12 +371,18 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       {scopedSlug&&<a className="engine-client-admin-back-project"
         href={backProjectHref}>← Back to Project</a>}
     </section>:<>
+      <div className="engine-client-admin-workspace">
+      <aside className="engine-client-admin-sidebar">
+        <div className="engine-client-admin-sidebar-brand"><strong>Builder Admin</strong><small>{projectLabel}</small></div>
       <nav className="engine-client-admin-tabs" aria-label="Client admin sections">
         {availablePanels.map(item=><button key={item} type="button"
           aria-current={panel===item?"page":undefined} className={panel===item?"is-active":""}
           onClick={()=>setPanel(item)}>{item==="overview"?"Overview":
-          item==="plots"?"Plots":item==="pricing"?"Pricing":item==="contact"?"Contact":"Deals"}</button>)}
+          item==="plots"?"Plots":item==="pricing"?"Pricing":item==="contact"?"Contact":
+          item==="gallery"?"Gallery":item==="sales"?"Sales & Accounts":item==="notices"?"Plot Updates":"Deal Progress"}</button>)}
       </nav>
+      <p className="engine-client-admin-sidebar-hint">Project-scoped management · Your maps and releases are protected</p>
+      </aside><div className="engine-client-admin-main">
       <section className="engine-client-admin-meta">
         <span>{identity.displayName} · {identity.email}</span>
         <span>Role: {nameOfRole(identity.role)} · {identity.projectSlug}</span>
@@ -409,94 +394,64 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
           <article><span>Available</span><strong>{statusCounts.available}</strong></article>
           <article><span>Booked</span><strong>{statusCounts.booked}</strong></article>
           <article><span>{masterplanGeo?"Confirmed":"Sold"}</span><strong>{statusCounts.sold}</strong></article>
-          {!masterplanGeo&&<article><span>Not reviewed</span><strong>{statusCounts.unreviewed}</strong></article>}
         </section>
         <div className="engine-client-admin-grid">
           <section className="engine-client-admin-card">
             <h2>Project overview</h2>
-            <p>Published project: <strong>{overview?.project.name}</strong></p>
-            <p>Status: {overview?.project.status}</p>
-            <p>{masterplanGeo?"Masterplan source and private inventory are read-only here.":
-              "Commercial facts are separate from immutable 3D geometry and require explicit public approval."}</p>
+            <h3>Live masterplan / Geo preview</h3>
+            <p>View the actual published customer site, without changing mapping.</p>
             <div className="engine-client-admin-actions">
-              <button type="button" disabled={busy} onClick={()=>void load()
-                .catch(e=>setError(e instanceof Error?e.message:String(e)))}>Refresh</button>
-              <button type="button" onClick={()=>setPanel("plots")}>View plots</button>
+              <button type="button" onClick={()=>setShowLivePreview(v=>!v)}>
+                {showLivePreview?"Hide live preview":"Show live preview"}</button>
+              <a href={customerSite} target="_blank" rel="noopener noreferrer">Open customer site</a>
             </div>
+            {showLivePreview&&<iframe className="engine-client-admin-live-preview"
+              title={projectLabel+" live project preview"} src={customerSite} loading="lazy"/>}
           </section>
           <section className="engine-client-admin-card">
-            <h2>Access & responsibilities</h2>
-            <p>{overview?.permissions.commercialApprove&&!masterplanGeo?
-              "Can approve source-backed listing status and prices for public display.":
-              overview?.permissions.commercialPrepare&&!masterplanGeo?
-              "Can prepare private commercial facts for review.":
-              "Can inspect permitted project facts and inventory."}</p>
-            <p>Owner controls 3D mapping, publishing, project access and immutable releases.</p>
-            <p>Client sessions are separately authenticated and checked on every request.</p>
+            <h2>Quick actions</h2>
+            <div className="engine-client-admin-quick">
+              <button type="button" onClick={()=>setPanel("plots")}>Manage plot status & booking</button>
+              {availablePanels.includes("sales")&&<button type="button" onClick={()=>setPanel("sales")}>Sales & Accounts</button>}
+              {availablePanels.includes("gallery")&&<button type="button" onClick={()=>setPanel("gallery")}>Gallery images</button>}
+              <button type="button" onClick={()=>setPanel("contact")}>Contact details</button>
+              <button type="button" disabled={busy} onClick={()=>void load().catch(e=>setError(String(e)))}>Refresh counts</button>
+            </div>
           </section>
         </div>
       </>}
 
-      {panel==="plots"&&<section className="engine-client-admin-card">
-        <div className="engine-client-admin-card-title">
-          <div><h2>{masterplanGeo?"Masterplan inventory":"Geo plot management"}</h2>
-            <p>{masterplanGeo?"Read-only, source-backed plot statuses":
-              "Reviewed status, listing price and approval records"}</p></div>
-          <label className="engine-client-admin-search">Search plot
-            <input value={plotSearch} placeholder="Plot number"
-              onChange={e=>setPlotSearch(e.target.value)}/></label>
-        </div>
-        {masterplanGeo?<div className="engine-client-admin-plot-list">
-          {filteredMasterplan.map(row=><div className="engine-client-admin-plot-row" key={row.id}>
-            <strong>Plot {row.id}</strong>
-            <span>{row.status==="confirmed"?"Confirmed":row.status==="booked"?"Booked":"Available"}</span>
-          </div>)}
-          {!filteredMasterplan.length&&<p>No matching plot records.</p>}
-          <p>{masterplan?.notice}</p>
-        </div>:<>
-          <div className="engine-client-admin-plot-list">
-            {filteredCommercial.map(row=><button key={row.plotId} type="button"
-              className={"engine-client-admin-plot-row"+(plotId===row.plotId?" is-selected":"")}
-              onClick={()=>choose(row.plotId)}>
-              <strong>Plot {row.plotId}</strong>
-              <span>{row.status} · {row.pricePaise===null?"Price not reviewed":
-                "₹"+(row.pricePaise/100).toLocaleString("en-IN")} ·
-                {row.publicApproved?" Public approved":" Private review"}</span>
-            </button>)}
-            {!filteredCommercial.length&&<p>No reviewed listings match the search.</p>}
+      {panel==="plots"&&(masterplanGeo?
+        <section className="engine-client-admin-card">
+          <div className="engine-client-admin-card-title">
+            <h2>Masterplan Inventory</h2>
+            <label className="engine-client-admin-search">Search plot
+              <input value={plotSearch} placeholder="Plot number" onChange={e=>setPlotSearch(e.target.value)}/></label>
           </div>
-          {overview?.permissions.commercialPrepare&&<>
-            <div className="engine-client-admin-editor">
-              <h3>Review listing details</h3>
-              <label>Canonical mapped Plot ID<input value={plotId} maxLength={48}
-                onChange={e=>choose(e.target.value)} placeholder="Exact plot ID"/></label>
-              <label>Listing status<select value={status} onChange={e=>setStatus(e.target.value)}>
-                <option value="">Choose status</option>
-                <option value="available">Available</option>
-                <option value="booked">Booked</option>
-                <option value="sold">Sold</option>
-              </select></label>
-              <label>INR listing price<input value={rupees} inputMode="decimal"
-                onChange={e=>setRupees(e.target.value)}/></label>
-              {currentQuote&&<p>Reviewed CSV quote: ₹{(currentQuote.pricePaise/100).toLocaleString("en-IN")}
-                <button type="button" onClick={()=>{
-                  if(window.confirm("Use reviewed CSV price? Public approval and status stay unchanged.")){
-                    setRupees(String(currentQuote.pricePaise/100));setEvidence(currentQuote.evidenceRef);
-                  }
-                }}>Use quote</button></p>}
-              <label>Evidence / signed agreement reference<input value={evidence}
-                maxLength={250} onChange={e=>setEvidence(e.target.value)}/></label>
-              {overview.permissions.commercialApprove&&<label className="engine-client-admin-inline-check">
-                <input type="checkbox" checked={publicApproved}
-                  onChange={e=>setPublicApproved(e.target.checked)}/>
-                Approve this listing for public display
-              </label>}
-              <button type="button" disabled={busy||!plotId||!status||evidence.trim().length<3}
-                onClick={()=>void save()}>Save scoped listing</button>
-            </div>
-          </>}
-        </>}
-      </section>}
+          <div className="engine-client-admin-plot-list">
+            {filteredMasterplan.map(row=><div className="engine-client-admin-plot-row" key={row.id}>
+              <strong>Plot {row.id}</strong>
+              <span>{row.status==="confirmed"?"Confirmed":row.status==="booked"?"Booked":"Available"}</span>
+            </div>)}
+            {!filteredMasterplan.length&&<p>No matching plot records.</p>}
+          </div><p>{masterplan?.notice}</p>
+        </section>:
+        commercial?(identity.role==="client_admin"?<ClientGeoPlotManagement slug={identity.projectSlug} commercial={commercial}
+          canEdit={Boolean(overview?.permissions.commercialPrepare)}
+          canApprove={Boolean(overview?.permissions.commercialApprove)}
+          onCommercialChange={setCommercial}/>:
+        <section className="engine-client-admin-card">
+          <h2>Geo plot management</h2>
+          <p>Published Plot Status — read only</p>
+          <div className="engine-client-admin-plot-list">
+            {commercial.rows.map(row=><button key={row.plotId} type="button" aria-pressed={plotSearch===row.plotId}
+              className="engine-client-admin-plot-row" onClick={()=>setPlotSearch(row.plotId)}>
+              <strong>Plot {row.plotId}</strong><span>{row.status}</span></button>)}
+          </div>
+          {plotSearch&&<p role="status">Selected Plot {plotSearch} ·
+            {" "}{commercial.rows.find(row=>row.plotId===plotSearch)?.status||"Not found"}</p>}
+        </section>):
+        <section className="engine-client-admin-card"><p>Loading published Geo plot mapping…</p></section>)}
 
       {panel==="contact"&&identity?.role==="client_admin"&&<section className="engine-client-admin-card">
         <h2>Contact & Location</h2>
@@ -529,8 +484,14 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
           endpoint={ROOT+"/projects/"+encodeURIComponent(identity.projectSlug)+"/pricing"}
           mappingReleaseId={commercial?.mappingReleaseId||null}
           canEdit={Boolean(overview?.permissions.commercialPrepare)}
-          onQuotes={setPriceQuotes}/>
+          />
       </section>}
+
+      {panel==="gallery"&&identity&&!masterplanGeo&&<ClientGeoGallery slug={identity.projectSlug}/>}
+      {panel==="notices"&&identity&&!masterplanGeo&&<ClientGeoNotices slug={identity.projectSlug}
+        plotIds={commercial?.plotIds||[]}/>}
+      {panel==="sales"&&identity&&!masterplanGeo&&<ClientGeoSales slug={identity.projectSlug}
+        plotIds={commercial?.plotIds||[]}/>}
 
       {panel==="deals"&&overview?.permissions.dealsRead&&!masterplanGeo&&identity&&
         <section className="engine-client-admin-card">
@@ -541,6 +502,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
             plotIds={commercial?.plotIds||[]}
             canEdit={Boolean(overview.permissions.dealsWrite)}/>
         </section>}
+      </div></div>
     </>}
   </main>;
 }

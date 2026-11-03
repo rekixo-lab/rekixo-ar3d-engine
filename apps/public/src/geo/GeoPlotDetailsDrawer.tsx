@@ -25,6 +25,7 @@ type Props = {
   geoHeadingDeg: number;
   publicPhone?: string;
   publicWhatsappHref?: string;
+  notices?:{plotId:string;title:string;body:string;publishedAt:string}[];
   onClose: () => void;
 };
 const sideNames: Record<string,string> = {
@@ -54,7 +55,7 @@ function GeoPlotContactIcon({kind}:{kind:"whatsapp"|"call"}) {
 }
 
 export function GeoPlotDetailsDrawer({
-  plot, commercial, projectName, geoHeadingDeg, publicPhone, publicWhatsappHref, onClose,
+  plot, commercial, projectName, geoHeadingDeg, publicPhone, publicWhatsappHref, notices=[], onClose,
 }: Props) {
   const [previousPlot,setPreviousPlot] = useState<GeoPlotDrawerPlot | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -242,6 +243,12 @@ export function GeoPlotDetailsDrawer({
             </div>:null}
             {shown.notes?<p className="geo-plot-drawer__notes">{shown.notes}</p>:null}
           </section>
+          {notices.some(n=>n.plotId.toLowerCase()===shown.id.toLowerCase())&&
+            <section className="geo-plot-drawer__updates" aria-label="Published plot updates">
+              <h3>Plot Updates</h3>
+              {notices.filter(n=>n.plotId.toLowerCase()===shown.id.toLowerCase()).map((n,i)=>
+                <article key={i}><strong>{n.title}</strong><p>{n.body}</p></article>)}
+            </section>}
           <nav className="geo-plot-drawer__contact" aria-label={"Contact about Plot "+shown.id}>
             {whatsappHref
               ?<a href={whatsappHref} target="_blank" rel="noopener noreferrer"

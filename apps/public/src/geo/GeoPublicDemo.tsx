@@ -400,7 +400,7 @@ function geoPlotWorldPath(plot:GeoMappedPlot,data:GeoPayload,groundY:number) {
   });
 }
 
-function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref }: { data: GeoPayload; toolbarContainer?: HTMLElement | null; modelSiteHref: string }) {
+function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: { data: GeoPayload; toolbarContainer?: HTMLElement | null; modelSiteHref: string; notices:{plotId:string;title:string;body:string;publishedAt:string}[] }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const cameraActionRef = useRef<((view: GeoCameraView) => void) | null>(null);
@@ -1001,6 +1001,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref }: { data: G
         geoHeadingDeg={data.placement.headingDeg}
         publicPhone={data.publicContacts?.phone}
         publicWhatsappHref={geoWhatsAppHref(data.publicContacts?.whatsapp||"")}
+        notices={notices}
         onClose={()=>setSelectedPlot(null)}
       />
       {zoomNotice ? <div className="geo-zoom-notice" role="status">{zoomNotice}</div> : null}
@@ -1062,6 +1063,7 @@ export default function GeoPublicDemo() {
   const slug = useMemo(() => slugFromGeoPathname(window.location.pathname), []);
   const [data, setData] = useState<GeoPayload>();
   const [branding, setBranding] = useState<PublicProjectBranding | null>(null);
+  const [notices,setNotices]=useState<{plotId:string;title:string;body:string;publishedAt:string}[]>([]);
   const [toolbarContainer, setToolbarContainer] = useState<HTMLDivElement | null>(null);
   const [error, setError] = useState("");
 
@@ -1073,6 +1075,11 @@ export default function GeoPublicDemo() {
     const controller = new AbortController();
     setBranding(null);
     void loadPublicBranding(slug, "geo", controller.signal).then(setBranding);
+    void fetch("/3Dprojects/api/projects/"+encodeURIComponent(slug)+"/plot-notices",{
+      cache:"no-store",signal:controller.signal
+    }).then(async r=>r.ok?await r.json() as {notices:{plotId:string;title:string;body:string;publishedAt:string}[]}:null)
+      .then(d=>{if(!controller.signal.aborted)setNotices(d?.notices||[]);})
+      .catch(()=>{if(!controller.signal.aborted)setNotices([]);});
     fetch(`/3Dprojects/api/projects/${encodeURIComponent(slug)}/geo-placement`, {
       headers: { Accept: "application/json" },
       cache: "no-store",
@@ -1197,7 +1204,7 @@ export default function GeoPublicDemo() {
 
       {data.maps.configured && data.maps.apiKey && data.maps.mapId ? (
         <div className="geo-public-map-layout">
-          <IntegratedGeoScene data={data} toolbarContainer={toolbarContainer} modelSiteHref={`/3Dprojects/${encodeURIComponent(slug)}`} />
+          <IntegratedGeoScene data={data} toolbarContainer={toolbarContainer} modelSiteHref={`/3Dprojects/${encodeURIComponent(slug)}`} notices={notices}/>
           <div ref={setToolbarContainer} className="geo-public-toolbar-slot" aria-label="Map camera controls" />
         </div>
       ) : (
