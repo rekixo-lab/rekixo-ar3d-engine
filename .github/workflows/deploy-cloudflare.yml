@@ -76,7 +76,7 @@ jobs:
             console.error("::error::Production deploy blocked: no merged PR to main matches this exact commit SHA.");
             process.exit(1);
           }
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, "pr_head_sha=" + matchingPr.head.sha + "\\n");
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, "pr_head_sha=" + matchingPr.head.sha + "\n");
           console.log("Production commit is associated with a merged PR to main.");
           NODE
           rm -f "$BODY"
@@ -126,9 +126,9 @@ jobs:
           set -euo pipefail
           test -n "$PR_HEAD_SHA"
           BODY="$(mktemp)"
-          STATUS="$(curl --silent --show-error --output "$BODY" --write-out '%{http_code}' \\
-            --header "Authorization: Bearer $GH_TOKEN" \\
-            --header "Accept: application/vnd.github+json" \\
+          STATUS="$(curl --silent --show-error --output "$BODY" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/validate.yml/runs?head_sha=$PR_HEAD_SHA&event=pull_request&per_page=20")"
           if [ "$STATUS" != "200" ]; then
             echo "::error::Could not confirm successful PR CI (HTTP $STATUS)."
