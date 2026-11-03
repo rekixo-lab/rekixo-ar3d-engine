@@ -1058,6 +1058,7 @@ export function Viewer3D({
           clientPresentation, // Restore grass cover in all customer camera views.
           buildingFootprintBounds,
           buildingFootprintOutline,
+          clientPresentation, // Flat-grass-only for every customer Building camera view.
         );
         scene.add(siteEnvironment.root);
         if (
