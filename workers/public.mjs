@@ -13,6 +13,7 @@ import { servePublicMasterplanShareCard } from "./masterplan-share-public.mjs";
 import { serveR2Object } from "./http-range.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
 import {handleProjectClientPortal} from "./project-client-portal.mjs";
+import {publishedGeoPlotNotices} from "./project-client-geo-notices.mjs";
 import {optionalCustomerDomain} from "./engine-domain-public.mjs";
 import {
   activeGeoReleaseState,
@@ -446,6 +447,12 @@ export default {
 
       if ((parts[1]==="masterplan"||parts[1]==="masterplan-image")&&parts.length===2)
         return addSecurityHeaders(await publicMasterplanResponse(request,env,slug,parts[1]));
+
+      if (parts[1] === "plot-notices" && parts.length === 2) {
+        if(request.method!=="GET")return json({error:"Method not allowed."},{status:405});
+        if(!validProjectSlug(slug))return json({error:"Invalid project."},{status:400});
+        return addSecurityHeaders(await publishedGeoPlotNotices(env,slug));
+      }
 
       if (parts[1] === "branding") {
         return addSecurityHeaders(
