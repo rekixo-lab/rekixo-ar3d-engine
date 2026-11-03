@@ -1,6 +1,9 @@
 import {useEffect,useState} from "react";
 import GeoBulkPricingPanel,{type GeoPriceQuote} from "../geo/GeoBulkPricingPanel";
 import GeoDealRecordsPanel from "../geo/GeoDealRecordsPanel";
+import ClientGeoPlotManagement from "./ClientGeoPlotManagement";
+import {ClientGeoGallery,ClientGeoNotices} from "./ClientGeoGalleryNotices";
+import ClientGeoSales from "./ClientGeoSales";
 import "./project-management.css";
 import "./project-client-admin.css";
 type Identity={displayName:string;email:string;role:string;projectSlug:string;projectName:string;projectKind?:string;mustChangePassword?:boolean;loginId?:string|null};
@@ -8,7 +11,8 @@ type Session={authenticated:boolean;user:Identity|null};
 type Commercial={plotId:string;status:"available"|"booked"|"sold";
   pricePaise:number|null;revision:number;publicApproved:boolean;evidenceRef:string};
 type CommercialState={mappingReleaseId:string|null;rows:Commercial[];
-  plotCount?:number;plotIds?:string[];notice?:string};
+  plotCount?:number;plotIds?:string[];notice?:string;publicationMode?:string;
+  counts?:{available:number;booked:number;sold:number;unreviewed:number}};
 type Overview={project:{slug:string;name:string;status:string;kind?:string};role:string;
   permissions:{commercialRead:boolean;commercialPrepare:boolean;commercialApprove:boolean;
     dealsRead?:boolean;dealsWrite?:boolean}};
@@ -49,7 +53,7 @@ const contactLabels:ReadonlyArray<[keyof ContactFields,string]>= [
   ["websiteUrl","Website URL"],["mapsUrl","Google Maps URL"],
   ["brochureUrl","Brochure URL"]
 ];
-type Panel="overview"|"plots"|"pricing"|"deals"|"contact";
+type Panel="overview"|"plots"|"pricing"|"deals"|"contact"|"gallery"|"sales"|"notices";
 const nameOfRole=(value:string)=>value==="client_admin"?"Client Admin":
   value==="approver"?"Approver":value==="editor"?"Editor":"Viewer";
 
@@ -243,7 +247,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
   const availablePanels:Panel[]=kind==="building"?["overview"]:
     masterplanGeo?["overview","plots"]:
     ["overview","plots","pricing",...(overview?.permissions.dealsRead?["deals" as const]:[])];
-  if(identity?.role==="client_admin")availablePanels.push("contact");
+  if(identity?.role==="client_admin"){if(!masterplanGeo&&kind!=="building")availablePanels.push("gallery","sales","notices");availablePanels.push("contact");}
   const mappingCount=masterplanGeo?masterplan?.plotCount||0:commercial?.plotCount||0;
   const countFor=(kind:"available"|"booked"|"sold")=>
     (commercial?.rows||[]).filter(x=>x.status===kind).length;
@@ -253,9 +257,10 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     sold:masterplan?.counts.confirmed||0,
     unreviewed:0
   }:{
-    available:countFor("available"),booked:countFor("booked"),
-    sold:countFor("sold"),
-    unreviewed:Math.max(0,mappingCount-(commercial?.rows.length||0))
+    available:commercial?.counts?.available??countFor("available"),
+    booked:commercial?.counts?.booked??countFor("booked"),
+    sold:commercial?.counts?.sold??countFor("sold"),
+    unreviewed:commercial?.counts?.unreviewed??Math.max(0,mappingCount-(commercial?.rows.filter(x=>x.revision>0).length||0))
   };
   const customerSite=identity?"https://ar3dstudio.in/3Dprojects/"+
     encodeURIComponent(identity.projectSlug)+
