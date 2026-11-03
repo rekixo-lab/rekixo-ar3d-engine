@@ -11,7 +11,7 @@ type MP={draft:{revision:number;verifiedRevision:number|null;imageAssetId:string
     facingVerified?:boolean;facingSource?:string;sides?:Record<string,{length:number;verified:boolean;source:string}>;road?:string}>};
   activeRelease:{id:string;version:number;draftRevision:number}|null};
 type MPShare={active:{cardAssetId:string;version:number}|null;shareUrl:string};
-type Manage={clients:Array<{proposedRole:string;grantActive?:boolean;credentialLoginId?:string|null}>};
+type Manage={clients:Array<{proposedRole:string;grantActive?:boolean;credentialLoginId?:string|null;accessState?:string}>};
 async function json<T>(url:string):Promise<T>{
   const response=await fetch(url,{cache:"no-store",headers:{Accept:"application/json"}});
   const data=await response.json() as T&{error?:string};
@@ -81,7 +81,7 @@ export default function ProjectHandoffCheck({slug,kind,buildingLive,geoLive,geoM
     try{
       const manage=await json<Manage>(origin+"/manage");
       const clientAdmins=manage.clients.filter(c=>c.proposedRole==="client_admin"&&
-        (c.grantActive||c.credentialLoginId)).length;
+        c.accessState!=="disabled"&&(c.grantActive||c.credentialLoginId)).length;
       results.push({label:"Project Client Admin",state:clientAdmins?"ok":"review",
         detail:clientAdmins?clientAdmins+" provisioned Client Admin account(s); login still needs a manual test":
           "No provisioned Client Admin account",href:projectClientAdminUrl(slug)});
