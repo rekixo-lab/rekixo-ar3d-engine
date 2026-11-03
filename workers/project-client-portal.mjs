@@ -9,6 +9,10 @@ import {validProjectSlug} from "../shared/project-slug-policy.js";
 import {clientMasterplanInventory} from "./project-client-masterplan-inventory.mjs";
 import {clientProjectContact} from "./project-client-contact.mjs";
 import {passwordClientLogin,passwordClientChange} from "./project-client-passwords.mjs";
+import {clientGeoPlotDetails} from "./project-client-geo-details.mjs";
+import {clientGeoGallery} from "./project-client-geo-gallery.mjs";
+import {clientGeoNotices} from "./project-client-geo-notices.mjs";
+import {clientGeoSales} from "./project-client-geo-sales.mjs";
 const PREFIX="/3Dprojects/api/client-portal";
 const COOKIE="rekixo_3d_project_client";
 const SESSION_MS=8*60*60*1000;
@@ -141,7 +145,7 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
    ).bind(Date.now(),await clientTokenHash(value)).run();
    return response({ok:true},200,{"Set-Cookie":clear()});
   }
-  const match=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/(overview|commercial|pricing|deals|masterplan-inventory|contact)$/);
+  const match=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/(overview|commercial|pricing|deals|masterplan-inventory|contact|plot-details|gallery|gallery-image|notices|sales)$/);
   if(!match)return response({error:"Unknown project client route."},404);
   const s=await projectClientSession(request,env);
   if(!s)return response({error:"Client sign-in required."},401);
@@ -178,12 +182,18 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
     return response({error:"Only image masterplan Geo projects use this inventory."},404);
    return response(await clientMasterplanInventory(env,s.projectId));
   }
-  if(section==="commercial"||section==="pricing"||section==="deals"){
-   if(!(section==="pricing"?["GET","POST"]:["GET","PUT"]).includes(request.method))
-    return response({error:"Method not allowed."},405);
-   const permission=section==="deals"
-     ?(request.method==="GET"?"deals.read":"deals.write")
-     :(request.method==="GET"?"commercial.read":"commercial.prepare");
+  if(["commercial","pricing","deals","plot-details","gallery","gallery-image","notices","sales"].includes(section)){
+   const allowed=section==="pricing"?["GET","POST"]:
+     section==="deals"||section==="commercial"||section==="plot-details"?["GET","PUT"]:
+     section==="gallery"?["GET","POST","DELETE"]:
+     section==="gallery-image"?["GET"]:
+     section==="notices"?["GET","POST","PUT","DELETE"]:
+     ["GET","POST","PUT"];
+   if(!allowed.includes(request.method))return response({error:"Method not allowed."},405);
+   const permission=["plot-details","gallery","gallery-image","notices","sales"].includes(section)
+     ?"project.read":section==="deals"
+       ?(request.method==="GET"?"deals.read":"deals.write")
+       :(request.method==="GET"?"commercial.read":"commercial.prepare");
    if(!canProjectClient(s.role,permission))
     return response({error:"Role is not authorized for commercial changes."},403);
    if(request.method!=="GET"&&!sameOrigin(request))
@@ -203,6 +213,10 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
       source_building_release_id:ctx.source_building_release_id}
    };
    const actor={email:s.email,role:s.role};
+   if(section==="plot-details")return clientGeoPlotDetails(request,env,context,actor);
+   if(section==="gallery"||section==="gallery-image")return clientGeoGallery(request,env,context.project,actor,section);
+   if(section==="notices")return clientGeoNotices(request,env,context,actor);
+   if(section==="sales")return clientGeoSales(request,env,context,actor);
    return section==="deals"
      ?handleGeoPlotDeals(request,env,context,actor,{allowWrite:canProjectClient(s.role,"deals.write")})
      :section==="pricing"
