@@ -93,6 +93,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
   const [masterplan,setMasterplan]=useState<MasterplanInventory|null>(null);
   const [contact,setContact]=useState<ContactState|null>(null);
   const [panel,setPanel]=useState<Panel>("overview");
+  const [showLivePreview,setShowLivePreview]=useState(false);
   const [plotSearch,setPlotSearch]=useState("");
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
@@ -361,12 +362,18 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       {scopedSlug&&<a className="engine-client-admin-back-project"
         href={backProjectHref}>← Back to Project</a>}
     </section>:<>
+      <div className="engine-client-admin-workspace">
+      <aside className="engine-client-admin-sidebar">
+        <div className="engine-client-admin-sidebar-brand"><strong>Builder Admin</strong><small>{projectLabel}</small></div>
       <nav className="engine-client-admin-tabs" aria-label="Client admin sections">
         {availablePanels.map(item=><button key={item} type="button"
           aria-current={panel===item?"page":undefined} className={panel===item?"is-active":""}
           onClick={()=>setPanel(item)}>{item==="overview"?"Overview":
-          item==="plots"?"Plots":item==="pricing"?"Pricing":item==="contact"?"Contact":"Deals"}</button>)}
+          item==="plots"?"Plot Management":item==="pricing"?"Pricing":item==="contact"?"Contact":
+          item==="gallery"?"Gallery":item==="sales"?"Sales & Accounts":item==="notices"?"Plot Updates":"Deal Progress"}</button>)}
       </nav>
+      <p className="engine-client-admin-sidebar-hint">Project-scoped management · Your maps and releases are protected</p>
+      </aside><div className="engine-client-admin-main">
       <section className="engine-client-admin-meta">
         <span>{identity.displayName} · {identity.email}</span>
         <span>Role: {nameOfRole(identity.role)} · {identity.projectSlug}</span>
@@ -461,6 +468,12 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
           />
       </section>}
 
+      {panel==="gallery"&&identity&&!masterplanGeo&&<ClientGeoGallery slug={identity.projectSlug}/>}
+      {panel==="notices"&&identity&&!masterplanGeo&&<ClientGeoNotices slug={identity.projectSlug}
+        plotIds={commercial?.plotIds||[]}/>}
+      {panel==="sales"&&identity&&!masterplanGeo&&<ClientGeoSales slug={identity.projectSlug}
+        plotIds={commercial?.plotIds||[]}/>}
+
       {panel==="deals"&&overview?.permissions.dealsRead&&!masterplanGeo&&identity&&
         <section className="engine-client-admin-card">
           <h2>Private deal progress</h2>
@@ -470,6 +483,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
             plotIds={commercial?.plotIds||[]}
             canEdit={Boolean(overview.permissions.dealsWrite)}/>
         </section>}
+      </div></div>
     </>}
   </main>;
 }
