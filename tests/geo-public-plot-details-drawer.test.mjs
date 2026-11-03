@@ -130,6 +130,27 @@ test("plot drawer fills left map area and ends above required attribution footer
 });
 
 
+test("tap outside the active plot drawer closes it without picking or editing another plot",()=>{
+  const start=parent.indexOf("{selectedPlot&&<button");
+  const end=parent.indexOf("<GeoPlotDetailsDrawer",start);
+  assert.ok(start>=0&&end>start);
+  const dismiss=parent.slice(start,end);
+  assert.match(dismiss,/type="button"/);
+  assert.match(dismiss,/className="geo-plot-drawer__outside-dismiss"/);
+  assert.match(dismiss,/aria-label="Close plot details by tapping outside"/);
+  assert.match(dismiss,/onClick=\{\(\)=>setSelectedPlot\(null\)\}/);
+  assert.doesNotMatch(dismiss,/pickModelGeoPlot|selectAtScreenPoint/);
+  assert.match(parent,/onClose=\{\(\)=>setSelectedPlot\(null\)\}/);
+  assert.match(drawer,/event\.key==="Escape"/);
+  assert.match(css,/\.geo-plot-drawer__outside-dismiss \{[\s\S]*z-index:14;/);
+  assert.match(css,/\.geo-plot-drawer__outside-dismiss \{[\s\S]*inset:0 0 30px;/);
+  assert.match(css,/\.geo-plot-drawer \{[\s\S]*z-index:15;/);
+  assert.match(css,/\.geo-plot-drawer__outside-dismiss:focus-visible/);
+  // Google logo/copyright remain accessible in the map footer while open.
+  assert.match(css,/\.gm-style-cc,/);
+  assert.match(css,/\.gm-style a\[href\*="google\.com\/maps"\]/);
+});
+
 test("customer shows entered fields only, without nil or approval banners",()=>{
   assert.doesNotMatch(drawer,/Awaiting source approval|Not published|Preliminary boundary/);
   assert.doesNotMatch(drawer,/not independently approved|approval is needed|commercial status and price are/);
