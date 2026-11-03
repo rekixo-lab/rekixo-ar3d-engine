@@ -109,16 +109,16 @@ test("drawer only changes presentation, preserving click hit testing and camera 
   assert.match(drawer,/event\.key==="Escape"/);
 });
 
-test("plot drawer fills map from left/top/bottom while retaining the right strip and required attribution",()=>{
+test("plot drawer fills left map area and ends above required attribution footer",()=>{
   assert.match(css,/\.geo-plot-drawer \{[\s\S]*position:absolute;/);
-  assert.match(css,/top:0;\s*bottom:0;\s*left:0;/);
+  assert.match(css,/top:0;\s*bottom:30px;[\s\S]*left:0;/);
   assert.match(css,/width:min\(430px,calc\(100% - 56px\)\)/);
-  assert.match(css,/@media\(max-width:640px\)[\s\S]*\.geo-plot-drawer\{top:0;bottom:0;left:0;width:calc\(100% - 55px\);max-height:none/);
-  assert.match(css,/border-left:0;[\s\S]*border-top:0;[\s\S]*border-bottom:0;/);
+  assert.match(css,/@media\(max-width:640px\)[\s\S]*\.geo-plot-drawer\{top:0;bottom:30px;left:0;width:calc\(100% - 55px\);max-height:none/);
+  assert.match(css,/border-left:0;[\s\S]*border-top:0;[\s\S]*border-bottom:1px solid/);
   assert.match(css,/border-radius:0 17px 0 0/);
-  assert.match(css,/-webkit-mask-image:linear-gradient\(to bottom,#000 0,#000 calc\(100% - 30px\),transparent/);
-  assert.match(css,/mask-image:linear-gradient\(to bottom,#000 0,#000 calc\(100% - 30px\),transparent/);
-  assert.match(css,/\.geo-integrated-scene:fullscreen > \.geo-plot-drawer \{[\s\S]*top:0;[\s\S]*bottom:0;[\s\S]*left:0;/);
+  assert.doesNotMatch(css,/-webkit-mask-image:|mask-image:/);
+  assert.match(css,/\.geo-plot-drawer__outside-dismiss \{[\s\S]*inset:0 0 30px/);
+  assert.match(css,/\.geo-integrated-scene:fullscreen > \.geo-plot-drawer \{[\s\S]*top:0;[\s\S]*bottom:30px;[\s\S]*left:0;/);
   assert.match(css,/\.geo-integrated-scene:fullscreen > \.geo-plot-drawer \.geo-plot-drawer__scroll \{[\s\S]*padding-bottom:calc\(94px \+ env\(safe-area-inset-bottom,0px\)\)/);
   assert.doesNotMatch(css,/\.geo-integrated-scene:has\(> \.geo-plot-drawer\.is-open\) > \.geo-map-quick-actions \{/);
   assert.match(css,/\.geo-plot-drawer__head\{padding:12px 12px 10px\}/);
