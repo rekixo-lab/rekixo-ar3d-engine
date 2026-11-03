@@ -19,9 +19,13 @@ export interface GeoOrbitController {
   destroy():void;
 }
 export function normalizeGeoOrbitHeading(value:number):number;
+export function clampGeoOrbitTilt(value:number):number;
 export function createGeoOneFingerOrbit(options:{
   getHeading:()=>number;
   setHeading:(heading:number)=>void;
+  getTilt?:()=>number|undefined;
+  setTilt?:(tilt:number)=>void;
+  setCamera?:(camera:{heading:number;tilt:number})=>void;
   onRotate?:()=>void;
   onCaptureChange?:(capturing:boolean)=>void;
   shouldIgnoreTarget?:(target:EventTarget|null)=>boolean;

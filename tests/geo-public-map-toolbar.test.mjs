@@ -21,13 +21,13 @@ test("Geo customer header keeps project branding and icon-only quick actions", (
   assert.doesNotMatch(geoApp, /const mapsUrl\s*=/);
 });
 
-test("Geo map toolbar keeps four camera views and adds the project 3D Model website link", () => {
+test("Geo toolbar keeps three camera presets, Re-enter, and project 3D Model link", () => {
   const toolbarStart = geoApp.indexOf('<nav className="geo-camera-toolbar geo-camera-toolbar--normal-row"');
   const toolbarEnd = geoApp.indexOf("</nav>", toolbarStart);
   assert.ok(toolbarStart >= 0 && toolbarEnd > toolbarStart, "Geo map toolbar must exist");
   const toolbar = geoApp.slice(toolbarStart, toolbarEnd);
   const declaredViews = geoApp.slice(geoApp.indexOf("const GEO_CAMERA_VIEWS"), geoApp.indexOf("let mapsPromise"));
-  const labels = ["Overview", "Front", "Corner", "Aerial"];
+  const labels = ["Overview", "Front", "Corner"];
   let previous = -1;
   for (const label of labels) {
     const position = declaredViews.indexOf(`label: "${label}"`);
@@ -36,6 +36,9 @@ test("Geo map toolbar keeps four camera views and adds the project 3D Model webs
   }
 
   assert.match(toolbar, /\{GEO_CAMERA_VIEWS\.map/);
+  assert.match(toolbar, /aria-label="Re-enter project map"/);
+  assert.match(toolbar, /onClick=\{\(\) => reenterActionRef\.current\?\.\(\)\}/);
+  assert.doesNotMatch(declaredViews, /label: "Aerial"/);
   assert.doesNotMatch(declaredViews, /label: "Entry view"/);
   assert.doesNotMatch(toolbar, /Entry view/);
   assert.doesNotMatch(toolbar, /geo-building-link|Building <span|building website/);
