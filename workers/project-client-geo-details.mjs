@@ -4,7 +4,7 @@ const respond=(data,status=200)=>Response.json(data,{status,headers:{"Cache-Cont
 const safe=(s,max)=>typeof s==="string"&&s.length<=max&&!/[\x00-\x1f\x7f]/.test(s);
 export async function clientGeoPlotDetails(request,env,ctx,actor){
  if(!["GET","PUT"].includes(request.method))return respond({error:"Method not allowed."},405);
- if(request.method==="PUT"&&actor.role!=="client_admin")return respond({error:"Client Admin required."},403);
+ if(actor.role!=="client_admin")return respond({error:"Client Admin required for private plot details."},403);
  try{
   const source=await activeMap(env,ctx);
   if(!source)return respond({mappingReleaseId:null,rows:[],notice:"Verified published mapping unavailable."},request.method==="GET"?200:409);
