@@ -201,7 +201,7 @@
 
 
 /* Geo fullscreen: five independent, rounded actions, like the normal board.
-   Only the buttons receive backgrounds; the shared dock remains invisible. */
+   Only the five actions receive backgrounds; the shared dock remains invisible. */
 .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone {
   position: absolute !important;
   z-index: 2147483646 !important;
