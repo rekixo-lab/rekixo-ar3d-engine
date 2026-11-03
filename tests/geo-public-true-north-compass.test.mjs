@@ -47,6 +47,10 @@ test("map compass occupies marked top-left, remains accessible and clears for pl
   assert.match(css,/\.geo-compass-rose__dial \{[\s\S]*transform:rotate\(var\(--geo-map-north-rotation,0deg\)\)/);
   assert.match(css,/\.geo-integrated-scene:has\(> \.geo-plot-drawer\.is-open\) > \.geo-map-compass/);
   assert.match(css,/@media\(max-width:640px\)/);
+  assert.doesNotMatch(scene,/geo-map-compass__bearing|compassBearingRef/);
+  assert.match(css,/\.geo-map-compass \{[\s\S]*width:68px;[\s\S]*height:68px;[\s\S]*border:0;[\s\S]*border-radius:50%;[\s\S]*background:transparent;/);
+  assert.doesNotMatch(css,/\.geo-map-compass__bearing\s*\{/);
+  assert.match(css,/\.geo-compass-rose__rim\s*\{/);
   assert.match(rose,/GEO_COMPASS_DIRECTIONS\.map/);
 });
 
@@ -73,7 +77,9 @@ test("mapped plot front and multiple geographical facings use the SAME rotating 
   assert.match(drawer,/geoPlotFacingEntries\(shown,geoHeadingDeg\)/);
   assert.match(drawer,/GeoCompassRose facingDirections=\{facings\.map\(face=>face\.direction\)\}/);
   assert.match(drawer,/facings\.length>0/);
-  assert.match(drawer,/TRUE NORTH/);
+  assert.doesNotMatch(drawer,/geo-plot-drawer__compass-caption|TRUE NORTH/);
+  assert.doesNotMatch(drawerCss,/\.geo-plot-drawer__compass-caption/);
+  assert.match(drawerCss,/\.geo-plot-drawer__compass-preview\{[\s\S]*border-radius:50%/);
   assert.match(drawer,/geo-plot-drawer__facing-arrow/);
   assert.match(drawerCss,/\.geo-plot-drawer__compass-preview/);
   assert.match(rose,/facings\.has\(direction\.id\)/);

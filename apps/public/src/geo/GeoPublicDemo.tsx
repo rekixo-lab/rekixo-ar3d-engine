@@ -404,7 +404,6 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
   const cameraActionRef = useRef<((view: GeoCameraView) => void) | null>(null);
   const zoomActionRef = useRef<((step: number) => void) | null>(null);
   const compassResetRef = useRef<(() => void) | null>(null);
-  const compassBearingRef = useRef<HTMLSpanElement | null>(null);
   // Published plot boundaries are always interactive. Public chrome can be
   // minimal without removing the canonical GLB plot picker or detail panel.
   const [selectedPlot, setSelectedPlot] = useState<GeoMappedPlot|null>(null);
@@ -514,8 +513,6 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           const northRotation=geoMapNorthRotation(rawHeading);
           if(northRotation===null)return;
           sceneRef.current?.style.setProperty("--geo-map-north-rotation",northRotation+"deg");
-          if(compassBearingRef.current)
-            compassBearingRef.current.textContent=Math.round(normalizeHeading(rawHeading!))+"°";
         };
         updateCompassHeading(map.getHeading?.()??initialCamera.heading);
         mapHeadingChanged=map.addListener("heading_changed",()=>{
@@ -908,9 +905,6 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         title="Geographic true north · tap to reset map bearing"
         onClick={()=>compassResetRef.current?.()}>
         <GeoCompassRose/>
-        <span ref={compassBearingRef} className="geo-map-compass__bearing">
-          {Math.round(normalizeHeading(cameraPreset("overview",data.placement.headingDeg).heading))}°
-        </span>
       </button>
       <nav className="geo-map-quick-actions" aria-label="Geo zoom and fullscreen controls">
         <button type="button" aria-label="Zoom out 2×" title="Zoom out 2×" onClick={() => zoomActionRef.current?.(-1)}>−</button>

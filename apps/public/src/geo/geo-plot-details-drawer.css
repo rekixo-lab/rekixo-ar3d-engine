@@ -177,43 +177,26 @@
   stroke-linecap:round;opacity:.92;pointer-events:none}
 .geo-plot-drawer__facing-tip{fill:var(--geo-plot-shape-stroke)}
 
-/* Plot facing is geographical, not a camera-relative guess. Reuse the exact
-   compass dial of the live map, with operator-mapped road sides in green. */
-.geo-plot-drawer__section-top { justify-content:space-between; }
-.geo-plot-drawer__compass-preview {
-  display:flex;
-  align-items:center;
-  gap:5px;
-  min-width:0;
-  max-width:68%;
-  flex:0 1 auto;
-}
-.geo-plot-drawer__compass-preview .geo-compass-rose {
+/* Plot facing remains geographic. The same single circular dial highlights
+   road-facing sides without any surrounding caption, square or degree badge. */
+.geo-plot-drawer__section-top{justify-content:space-between}
+.geo-plot-drawer__compass-preview{
+  display:grid;
+  place-items:center;
   width:48px;
   height:48px;
   flex:0 0 48px;
+  border:0;
+  border-radius:50%;
+  background:transparent;
+  padding:0;
 }
-.geo-plot-drawer__compass-caption {
-  display:grid;
-  align-content:center;
-  gap:2px;
-  min-width:0;
-}
-.geo-plot-drawer__compass-caption small {
-  color:#7fc8b8;
-  font-size:8px;
-  font-weight:850;
-  letter-spacing:.11em;
-}
-.geo-plot-drawer__compass-caption strong {
-  color:#f2fffa;
-  font-size:10px;
-  line-height:1.25;
-  font-weight:850;
-  overflow-wrap:anywhere;
+.geo-plot-drawer__compass-preview .geo-compass-rose{
+  display:block;
+  width:48px;
+  height:48px;
 }
 @media(max-width:640px){
-  .geo-plot-drawer__compass-preview{max-width:65%}
-  .geo-plot-drawer__compass-preview .geo-compass-rose{width:42px;height:42px;flex-basis:42px}
-  .geo-plot-drawer__compass-caption strong{font-size:9px}
+  .geo-plot-drawer__compass-preview{width:42px;height:42px;flex-basis:42px}
+  .geo-plot-drawer__compass-preview .geo-compass-rose{width:42px;height:42px}
 }

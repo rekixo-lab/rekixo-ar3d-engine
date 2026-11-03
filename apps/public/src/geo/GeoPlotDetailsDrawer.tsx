@@ -112,10 +112,6 @@ export function GeoPlotDetailsDrawer({
                   role="img"
                   aria-label={"Geographic facing of Plot "+shown.id+": "+facings.map(face=>face.label).join(", ")}>
                   <GeoCompassRose facingDirections={facings.map(face=>face.direction)}/>
-                  <span className="geo-plot-drawer__compass-caption">
-                    <small>TRUE NORTH</small>
-                    <strong>{facings.map(face=>face.label).join(" / ")}</strong>
-                  </span>
                 </div>
               )}
             </div>
