@@ -70,6 +70,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const [tool,setTool]=useState<Tool>("pan");
   const [panel,setPanel]=useState<"source"|"plots">(() => new URLSearchParams(location.search).get("tab")==="source" || mode==="source" ? "source" : "plots");
   const [working,setWorking]=useState<Plot|null>(null);
+  const [plotHistory,setPlotHistory]=useState<{past:Plot[];future:Plot[]}>({past:[],future:[]});
+  const [draftHistory,setDraftHistory]=useState<{past:MasterplanDraft[];future:MasterplanDraft[]}>({past:[],future:[]});
   const [originalId,setOriginalId]=useState<string|null>(null);
   const [controlIndex,setControlIndex]=useState<number|null>(null);
   const [dirty,setDirty]=useState(false);const [busy,setBusy]=useState(false);
@@ -88,6 +90,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     const next=await parseResponse<MasterplanState>(r);
     if(activeProject.current!==id)return;
     setState(next);setDraft(next.draft);setAssets(a.assets);setWorking(null);setDirty(false);
+    setPlotHistory({past:[],future:[]});setDraftHistory({past:[],future:[]});
     setFrame(fitImageFrame({width:next.draft.width||1,height:next.draft.height||1}));
     setError("");setStatus("");
   },[slug,endpoint]);
@@ -98,7 +101,51 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     setImageUrl(source?.contentUrl ? source.contentUrl+"?preview=1" : "");
   },[draft?.imageAssetId,assets]);
   function changeDraft(patch:Partial<MasterplanDraft>){
-    setDraft(d=>d?{...d,...patch}:d);setDirty(true);
+    if(!draft)return;
+    setDraftHistory(h=>({past:[...h.past.slice(-29),structuredClone(draft)],future:[]}));
+    setDraft({...draft,...patch});setDirty(true);
+  }
+  function hasPendingPlot(){
+    if(!working)return false;
+    if(!originalId)return true;
+    const original=draft?.plots.find(p=>p.id===originalId);
+    return !original||JSON.stringify(original)!==JSON.stringify(working);
+  }
+  function confirmClosePlot(){
+    return !hasPendingPlot()||window.confirm("This plot has unapplied changes. Discard these local plot edits?");
+  }
+  function checkpointPlot(){
+    if(working)setPlotHistory(h=>({past:[...h.past.slice(-39),structuredClone(working)],future:[]}));
+  }
+  function editWorking(update:(plot:Plot)=>Plot){
+    if(!working)return;
+    const next=update(working);
+    if(JSON.stringify(next)===JSON.stringify(working))return;
+    checkpointPlot();setWorking(next);
+  }
+  function undo(){
+    if(working&&plotHistory.past.length){
+      const previous=plotHistory.past.at(-1)!;
+      setPlotHistory(h=>({past:h.past.slice(0,-1),future:[...h.future,structuredClone(working)]}));
+      setWorking(previous);return;
+    }
+    if(!working&&draft&&draftHistory.past.length){
+      const previous=draftHistory.past.at(-1)!;
+      setDraftHistory(h=>({past:h.past.slice(0,-1),future:[...h.future,structuredClone(draft)]}));
+      setDraft(previous);setDirty(true);
+    }
+  }
+  function redo(){
+    if(working&&plotHistory.future.length){
+      const next=plotHistory.future.at(-1)!;
+      setPlotHistory(h=>({past:[...h.past,structuredClone(working)],future:h.future.slice(0,-1)}));
+      setWorking(next);return;
+    }
+    if(!working&&draft&&draftHistory.future.length){
+      const next=draftHistory.future.at(-1)!;
+      setDraftHistory(h=>({past:[...h.past,structuredClone(draft)],future:h.future.slice(0,-1)}));
+      setDraft(next);setDirty(true);
+    }
   }
   async function upload(file:File){
     if(dirty||working)throw Error("Apply any open plot and Save the current mapping draft before replacing its source image.");
@@ -141,6 +188,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       const next=await parseResponse<MasterplanState>(reply);
       if(activeProject.current!==slug)return;
       setState(next);setDraft(next.draft);setDirty(false);setWorking(null);
+      setPlotHistory({past:[],future:[]});setDraftHistory({past:[],future:[]});
       setStatus(action==="save"?"Masterplan draft saved and server read-back confirmed.":
         action==="verify"?"Source, GPS controls, source-backed plot measurements verified.":
         action==="publish"?"Immutable Geo Masterplan published to customer site.":"Previous immutable release activated.");
@@ -148,20 +196,26 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     finally{setBusy(false);}
   }
   function selectPanel(next:"source"|"plots") {
-    if(panel===next)return;
+    if(panel===next||!confirmClosePlot())return;
+    setWorking(null);setOriginalId(null);setPlotHistory({past:[],future:[]});
     const url=new URL(window.location.href);
     url.searchParams.set("tab",next);
     window.history.replaceState({},"",url.pathname+url.search);
     setPanel(next);setTool("pan");
   }
   function newBoundary(){
-    if(!draft)return;
+    if(!draft||!confirmClosePlot())return;
+    setPlotHistory({past:[],future:[]});
     const ids=new Set(draft.plots.map(x=>x.id));let n=1;while(ids.has(String(n)))n++;
     setOriginalId(null);setWorking(newPlot(String(n)));setTool("draw");
   }
-  function choose(p:Plot){setOriginalId(p.id);setWorking(structuredClone(p));setTool("edit");}
+  function choose(p:Plot){
+    if(working?.id===p.id&&originalId===p.id)return;
+    if(!confirmClosePlot())return;
+    setPlotHistory({past:[],future:[]});setOriginalId(p.id);setWorking(structuredClone(p));setTool("edit");
+  }
   function updatePlot<K extends keyof Plot>(key:K,value:Plot[K]){
-    setWorking(p=>p?{...p,[key]:value}:p);
+    editWorking(p=>({...p,[key]:value}));
   }
   function apply(){
     if(!working||!draft) return;
@@ -173,14 +227,14 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     const plots=[...draft.plots.filter(p=>p.id!==(originalId||id)),{...working,id}]
       .sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
     changeDraft({plots});setWorking(null);setOriginalId(null);setTool("pan");
+    setPlotHistory({past:[],future:[]});
     setStatus("Polygon and dimensions staged. Save Draft to persist.");
   }
   function zoom(factor:number,uv?:Point){
     if(!draft)return;
     setFrame(previous=>zoomImageFrame(previous,{width:draft.width,height:draft.height},factor,uv));
   }
-  const setSide=(role:Role,patch:Partial<Side>)=>setWorking(p=>{
-    if(!p)return p;
+  const setSide=(role:Role,patch:Partial<Side>)=>editWorking(p=>{
     const changed=["edges","length","unit","source","roadFacing"].some(k=>Object.hasOwn(patch,k));
     return {...p,...((Object.hasOwn(patch,"roadFacing") || (role==="front"&&Object.hasOwn(patch,"edges")))?{facingVerified:false}:{}),
       sides:{...p.sides,[role]:{...(p.sides[role]||blankSide()),...(Object.hasOwn(patch,"edges")?{roadFacing:false}:{}),...patch,
@@ -189,7 +243,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const setRoadFront=(edge:number)=>{
     if(!working)return;
     if(!window.confirm("Make edge "+edge+" the road-facing Front? All side/facing approvals will be reset."))return;
-    setWorking(p=>p?assignFourCornerRoadFront(p,edge):p);
+    editWorking(p=>assignFourCornerRoadFront(p,edge));
   };
   function down(e:ReactPointerEvent<SVGSVGElement>){
     const svg=svgRef.current;if(!svg||!draft)return;
@@ -206,13 +260,13 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       const near=draft.plots.flatMap(plot=>plot.corners).find(q=>
         Math.hypot((q[0]-p[0])*draft.width,(q[1]-p[1])*draft.height)<8*frame.w/(svg.clientWidth||1));
       const corners=[...working.corners,near||p];
-      setWorking({...working,corners,layout:corners.length===3?"three":"four",sides:assignSides(corners)});
+      editWorking(p=>({...p,corners,layout:corners.length===3?"three":"four",sides:assignSides(corners)}));
       return;
     }
     if(tool==="edit"&&working){
       const hit=working.corners.findIndex(q=>
         Math.hypot((q[0]-p[0])*draft.width,(q[1]-p[1])*draft.height)<12*frame.w/(svg.clientWidth||1));
-      if(hit>=0){dragRef.current=hit;e.currentTarget.setPointerCapture(e.pointerId);}
+      if(hit>=0){checkpointPlot();dragRef.current=hit;e.currentTarget.setPointerCapture(e.pointerId);}
     }
   }
   function move(e:ReactPointerEvent<SVGSVGElement>){
@@ -274,6 +328,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       <button onClick={()=>zoom(.8)}>Zoom +</button>
       <button onClick={()=>zoom(1.25)}>Zoom −</button>
       <button onClick={()=>draft&&setFrame(fitImageFrame({width:draft.width,height:draft.height}))}>Fit</button>
+      <button disabled={busy||!(working?plotHistory.past.length:draftHistory.past.length)} onClick={undo}>Undo</button>
+      <button disabled={busy||!(working?plotHistory.future.length:draftHistory.future.length)} onClick={redo}>Redo</button>
       {panel==="plots"&&<button onClick={newBoundary} disabled={!imageUrl}>+ New Polygon</button>}
       <button disabled={!dirty||busy||!draft?.imageAssetId} onClick={()=>void operation("save")}>Save Draft</button>
       <button disabled={dirty||busy||!state?.draft.revision||Boolean(working)} onClick={()=>void operation("verify")}>Verify</button>
@@ -358,9 +414,9 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
             <label>Plot Number <input value={working.id} readOnly={originalId!==null}
               onChange={e=>updatePlot("id",e.target.value)}/></label>
             <small>{working.corners.length} polygon corners</small>
-            <button disabled={!working.corners.length} onClick={()=>setWorking(p=>p?{...p,
+            <button disabled={!working.corners.length} onClick={()=>editWorking(p=>({...p,
               corners:p.corners.slice(0,-1),sides:assignSides(p.corners.slice(0,-1)),
-               area:{...p.area,verified:false},facingVerified:false}:p)}>Undo Corner</button>
+               area:{...p.area,verified:false},facingVerified:false}))}>Undo Corner</button>
             <button disabled={working.corners.length<3} onClick={()=>setTool("edit")}>Drag Corners</button>
             <label>Approved Area<input type="number" step="any" min="0" value={working.area.value||""}
               onChange={e=>updatePlot("area",{...working.area,value:Number(e.target.value),verified:false})}/></label>
@@ -372,14 +428,14 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               updatePlot("area",{...working.area,source:e.target.value,verified:false})}/></label>
             <label className="masterplan-check"><input type="checkbox" checked={working.area.verified}
               onChange={e=>updatePlot("area",{...working.area,verified:e.target.checked})}/> Area verified</label>
-            <label>Facing<select value={working.facing} onChange={e=>setWorking({
-              ...working,facing:e.target.value,facingVerified:false})}>
+            <label>Facing<select value={working.facing} onChange={e=>editWorking(p=>({...p,
+              facing:e.target.value,facingVerified:false}))}>
               {directions.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
             <label>Facing Source<input value={working.facingSource} onChange={e=>
-              setWorking({...working,facingSource:e.target.value,facingVerified:false})}/></label>
+              editWorking(p=>({...p,facingSource:e.target.value,facingVerified:false}))}/></label>
             <label className="masterplan-check"><input type="checkbox" checked={working.facingVerified}
               onChange={e=>updatePlot("facingVerified",e.target.checked)}/> Facing reviewed</label>
-            <label>Road<input value={working.road} onChange={e=>setWorking(p=>p?{...p,road:e.target.value,facingVerified:false}:p)}/></label>
+            <label>Road<input value={working.road} onChange={e=>editWorking(p=>({...p,road:e.target.value,facingVerified:false}))}/></label>
             {working.corners.length===4&&working.layout==="four"&&<label>Road-facing FRONT edge
               <select value={working.sides.front?.edges[0]??0} onChange={e=>setRoadFront(Number(e.target.value))}>
                 {working.corners.map((_,i)=><option key={i} value={i}>Edge {i} · Corner {i+1} → {i===3?1:i+2}</option>)}
