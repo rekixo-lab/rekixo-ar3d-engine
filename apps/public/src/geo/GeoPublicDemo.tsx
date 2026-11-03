@@ -161,7 +161,7 @@ type GeoPayload = {
 
 type GeoMappedPlot = GeoPlotDrawerPlot;
 
-type GeoCameraView = "overview" | "front" | "corner" | "entry" | "aerial";
+type GeoCameraView = "overview" | "front" | "corner" | "entry";
 type MapsListener = { remove(): void };
 type MapCapabilities = { isWebGLOverlayViewAvailable?: boolean };
 type GoogleMap = {
@@ -171,6 +171,8 @@ type GoogleMap = {
   moveCamera?(options: Record<string, unknown>): void;
   getHeading?():number|undefined;
   setHeading?(heading:number):void;
+  getTilt?():number|undefined;
+  setTilt?(tilt:number):void;
   setOptions?(options:Record<string,unknown>):void;
   getRenderingType?(): string;
   getMapCapabilities?(): MapCapabilities;
@@ -235,7 +237,6 @@ const GEO_CAMERA_VIEWS: Array<{ id: GeoCameraView; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "front", label: "Front" },
   { id: "corner", label: "Corner" },
-  { id: "aerial", label: "Aerial" },
 ];
 let mapsPromise: Promise<GoogleRoot> | null = null;
 let mapsKeyLoaded = "";
@@ -371,8 +372,6 @@ function cameraPreset(view: GeoCameraView, buildingHeading: number) {
       return { zoom: closerGeoCameraZoom(19.85), tilt: 67.5, heading: normalizeHeading(heading + 35) };
     case "entry":
       return { zoom: closerGeoCameraZoom(21.25), tilt: 67.5, heading };
-    case "aerial":
-      return { zoom: closerGeoCameraZoom(18.65), tilt: 20, heading };
     default:
       return { zoom: closerGeoCameraZoom(19), tilt: 67.5, heading };
   }
@@ -402,6 +401,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref }: { data: G
   const hostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const cameraActionRef = useRef<((view: GeoCameraView) => void) | null>(null);
+  const reenterActionRef = useRef<(() => void) | null>(null);
   const zoomActionRef = useRef<((step: number) => void) | null>(null);
   const compassResetRef = useRef<(() => void) | null>(null);
   // Published plot boundaries are always interactive. Public chrome can be
@@ -602,15 +602,26 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref }: { data: G
           if(drift>8||performance.now()-start.time>850)return;
           selectAtScreenPoint(event.clientX,event.clientY);
         };
-        // A single finger owns only heading; release instantly restores
-        // Google's native two-finger pan/pinch. No delayed camera animation.
+        // A single finger now owns both heading and tilt, with immediate camera
+        // updates. Release restores native two-finger pan/pinch instantly.
         touchHost=hostRef.current;
         touchOrbit=createGeoOneFingerOrbit({
           getHeading:()=>map.getHeading?.()??initialCamera.heading,
+          getTilt:()=>map.getTilt?.()??initialCamera.tilt,
           setHeading:heading=>{
-            // moveCamera applies immediately, unlike a queued/eased gesture.
+            // Keep the legacy heading fallback for browsers missing moveCamera.
             if(map.moveCamera)map.moveCamera({heading});
             else map.setHeading?.(heading);
+            updateCompassHeading(heading);
+          },
+          setTilt:tilt=>{
+            if(map.moveCamera)map.moveCamera({tilt});
+            else map.setTilt?.(tilt);
+          },
+          setCamera:({heading,tilt})=>{
+            // One atomic move for diagonal swipes; no delayed animation.
+            if(map.moveCamera)map.moveCamera({heading,tilt});
+            else {map.setHeading?.(heading);map.setTilt?.(tilt);}
             updateCompassHeading(heading);
           },
           onCaptureChange:capturing=>{
@@ -790,11 +801,20 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref }: { data: G
           setZoomNotice("");
           // Start presets 50% closer using fractional zoom. Google's native
           // location-dependent zoom bound still applies, without rescaling GLB.
-          map.moveCamera?.({ center, ...preset });
+          if(map.moveCamera)map.moveCamera({ center, ...preset });
+          else {
+            map.setCenter(center);
+            map.setZoom(preset.zoom);
+            map.setHeading?.(preset.heading);
+            map.setTilt?.(preset.tilt);
+          }
           updateCompassHeading(preset.heading);
           overlay?.requestRedraw();
         };
         cameraActionRef.current = applyCamera;
+        // Re-enter restores the exact project anchor and initial overview
+        // zoom/heading/tilt, just like a fresh open but without a page reload.
+        reenterActionRef.current = () => applyCamera("overview");
         // A whole zoom level is 2x the map scale. Do not impose an additional
         // satellite imagery ceiling on the real map camera or manual gestures.
         zoomActionRef.current = (step) => {
@@ -866,6 +886,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref }: { data: G
       clearContextTimer();
       if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
       cameraActionRef.current = null;
+      reenterActionRef.current = null;
       zoomActionRef.current = null;
       compassResetRef.current = null;
       statusPresentationRef.current = null;
@@ -978,6 +999,12 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref }: { data: G
               {view.label}
             </button>
           ))}
+          <button
+            type="button"
+            aria-label="Re-enter project map"
+            title="Return to the project center and original camera"
+            onClick={() => reenterActionRef.current?.()}
+          >Re-enter</button>
           <a className="geo-model-site-link"
             href={modelSiteHref}
             target="_blank" rel="noopener noreferrer"
