@@ -15,12 +15,12 @@ test("public Building frontend does not add the four evenly spaced decorative en
   assert.match(site,/addPlantBatches\(root, plants, mobile\)/);
 });
 
-test("customer building scene removes the synthetic green terrain, preserving approved lawn and gate",()=>{
+test("customer building keeps green grass but excludes artificial flat slabs and entrance pots",()=>{
   const site=read("apps/public/src/viewer/siteEnvironment.ts");
   const viewer=read("apps/public/src/viewer/Viewer3D.tsx");
-  assert.match(site,/universalGroundCover = false/);
+  assert.match(site,/universalGroundCover = presentation/);
   assert.match(site,/if \(universalGroundCover && !bounds\.isEmpty\(\) && safeGround\)/);
-  assert.match(viewer,/environmentProfile\?\.landscape \?\? "auto",\s+false,/);
+  assert.match(viewer,/environmentProfile\?\.landscape \?\? "auto",\s+clientPresentation,/);
   assert.match(site,/includeGround: false,[\s\S]*includeSurroundingGround: false/);
   // Keep existing green lawn strips and the reviewed landscape; never cover an entrance.
   assert.match(site,/includeLawn: landscapePreset !== "rural-farm" && !hasLawn/);
