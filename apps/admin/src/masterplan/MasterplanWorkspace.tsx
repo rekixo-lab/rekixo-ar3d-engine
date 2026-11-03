@@ -3,7 +3,7 @@ import { listAssets, uploadAsset, type CloudAssetSummary } from "../studio/cloud
 import type { Asset } from "../studio/domain";
 import {fitImageFrame,imageWorldAt,panImageFrame,pinchImageFrame,zoomImageFrame} from "../../../../shared/masterplan-image-gestures.js";
 import {assignFourCornerRoadFront} from "../../../../shared/geo-plot-source-operations.js";
-import {packMasterplanRecovery,unpackMasterplanRecovery,reviewMasterplanCsv,
+import {packMasterplanRecovery,unpackMasterplanRecovery,reviewMasterplanCsv,invalidateMasterplanSourceProof,
   type MasterplanCsvReview} from "../../../../shared/masterplan-workflow.js";
 import "./masterplan-workspace.css";
 
@@ -16,6 +16,7 @@ type Control={u:number;v:number;lat:number;lng:number;source:string;verified:boo
 type MasterplanDraft={revision:number;verifiedRevision:number|null;imageAssetId:string|null;
   width:number;height:number;controlPoints:Control[];plots:Plot[]};
 type LocalSnapshot={draft:MasterplanDraft;working:Plot|null;originalId:string|null;dirty:boolean;savedAt?:string};
+type ImageComparison={file:File;width:number;height:number;previewUrl:string};
 type MasterplanState={project:{slug:string;name:string;status:string};draft:MasterplanDraft;
   activeRelease:{id:string;version:number;draftRevision:number}|null;history:Array<{id:string;version:number}>};
 type Mode="source"|"plots"|"controls";
@@ -80,6 +81,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const [dirty,setDirty]=useState(false);const [busy,setBusy]=useState(false);
   const [csvPreview,setCsvPreview]=useState<MasterplanCsvReview<Plot>|null>(null);
   const [csvName,setCsvName]=useState("");
+  const [imageComparison,setImageComparison]=useState<ImageComparison|null>(null);
+  const [imageCompared,setImageCompared]=useState(false);
   const [recovery,setRecovery]=useState<LocalSnapshot|null>(null);
   const [recoveryConflict,setRecoveryConflict]=useState(false);
   const recoveryKey=slug?"rekixo-masterplan-working-v1:"+slug:"";
@@ -110,6 +113,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   },[slug,endpoint,recoveryKey]);
   useEffect(()=>{let on=true;void load().catch(e=>{if(on)setError(String(e));});
     return()=>{on=false;};},[load]);
+  useEffect(()=>()=>{if(imageComparison?.previewUrl)URL.revokeObjectURL(imageComparison.previewUrl);},[imageComparison?.previewUrl]);
   useEffect(()=>{
     const source=assets.find(a=>a.id===draft?.imageAssetId);
     setImageUrl(source?.contentUrl ? source.contentUrl+"?preview=1" : "");
@@ -247,31 +251,64 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
       setDraft(next);setDirty(true);
     }
   }
-  async function upload(file:File){
-    if(dirty||working)throw Error("Apply any open plot and Save the current mapping draft before replacing its source image.");
+  async function prepareSource(file:File){
+    if(dirty||hasPendingPlot())throw Error("Apply and Save current work before replacing its source.");
+    if(!["image/png","image/jpeg","image/webp"].includes(file.type))
+      throw Error("Use original PNG, JPG or WebP masterplan.");
+    if(file.size>16*1024*1024)throw Error("Choose an image under 16 MB.");
+    const image=await createImageBitmap(file),width=image.width,height=image.height;
+    image.close();
+    if(width>50000||height>50000)throw Error("Masterplan pixel dimensions exceed allowed bounds.");
     if(draft?.imageAssetId&&(draft.plots.length>0||draft.controlPoints.length>0)){
-      if(!window.confirm("Replacing this masterplan image clears the CURRENT DRAFT's "+
-        draft.plots.length+" polygons and "+draft.controlPoints.length+
-        " GPS controls. Published releases remain immutable. A private review JSON will download now. Continue?"))return;
-      exportMasterplanDraftReview(slug,draft);
+      setImageComparison({file,width,height,previewUrl:URL.createObjectURL(file)});
+      setImageCompared(false);return;
     }
+    await upload(file,false);
+  }
+  async function upload(file:File,preserve=false):Promise<boolean>{
+    if(dirty||hasPendingPlot())throw Error("Apply any open plot and Save the current mapping draft before replacing its source image.");
     if(!["image/png","image/jpeg","image/webp"].includes(file.type))
       throw Error("Use original PNG, JPG or WebP masterplan.");
     if(file.size>16*1024*1024)throw Error("Choose an optimized masterplan image under 16 MB.");
     const image=await createImageBitmap(file);
     const width=image.width,height=image.height;image.close();
     if(width>50000||height>50000)throw Error("Masterplan image pixel size is too large.");
+    if(preserve&&(!draft||draft.width!==width||draft.height!==height||!imageCompared))
+      throw Error("To keep geometry, first compare both same-size images and check the alignment confirmation.");
+    if(draft?.imageAssetId&&(draft.plots.length>0||draft.controlPoints.length>0)){
+      const message=preserve
+        ?"Preserve polygon positions and GPS coordinates for the NEW same-size image as an UNVERIFIED draft? All survey, facing and measurement approvals will be revoked. You must visually recheck every plot and GPS point."
+        :"Replace image and CLEAR the CURRENT DRAFT's "+draft.plots.length+" polygons and "+draft.controlPoints.length+
+          " GPS points? Published releases remain immutable. Review backup JSON downloads first.";
+      if(!window.confirm(message))return false;
+      exportMasterplanDraftReview(slug,draft);
+    }
     const checksum=new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer()));
     const hash=Array.from(checksum,x=>x.toString(16).padStart(2,"0")).join("");
     const data:Asset={id:crypto.randomUUID(),projectId:slug,name:file.name,
       type:file.type,size:file.size,hash,blob:file};
     const result=await uploadAsset(slug,data,"source");
-    if(activeProject.current!==slug)return;
+    if(activeProject.current!==slug)return false;
     setAssets(a=>[...a.filter(v=>v.id!==result.asset.id),result.asset]);
-    changeDraft({imageAssetId:result.asset.id,width,height,controlPoints:[],plots:[],
+    const kept=preserve&&draft?invalidateMasterplanSourceProof(draft):null;
+    changeDraft({imageAssetId:result.asset.id,width,height,
+      controlPoints:kept?.controlPoints||[],plots:kept?.plots||[],
       verifiedRevision:null});
-    setFrame(fitImageFrame({width,height}));setWorking(null);
-    setStatus("Original image archived; all previous calibration and polygons cleared. Save the new draft.");
+    setCsvPreview(null);setFrame(fitImageFrame({width,height}));
+    setWorking(null);setPlotHistory({past:[],future:[]});
+    setStatus(preserve
+      ?"New source staged with old plot geometry UNVERIFIED. Check every polygon and GPS point; Save, Verify and Publish remain separate."
+      :"Original image uploaded; existing draft calibration and polygons cleared. Save the new draft.");
+    return true;
+  }
+  async function acceptComparedSource(preserve:boolean){
+    if(!imageComparison)return;
+    setBusy(true);setError("");
+    try{
+      const applied=await upload(imageComparison.file,preserve);
+      if(applied){setImageComparison(null);setImageCompared(false);}
+    }catch(error){setError(error instanceof Error?error.message:String(error));}
+    finally{setBusy(false);}
   }
   async function operation(action:"save"|"verify"|"publish"|"activate",releaseId?:string){
     if(!draft||!state)return;
@@ -495,8 +532,22 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
           <label>Upload image (PNG, JPG, WebP · max 16 MB)
             <input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy}
               onChange={e=>{const file=e.target.files?.[0];e.target.value="";
-                if(file){setBusy(true);void upload(file).catch(x=>setError(String(x))).finally(()=>setBusy(false));}}}/></label>
+                if(file){setBusy(true);void prepareSource(file).catch(x=>setError(String(x))).finally(()=>setBusy(false));}}}/></label>
           <p>{source?.name||"No image"} · {draft?.width||0}×{draft?.height||0} px</p>
+          {imageComparison&&<section className="masterplan-image-comparison">
+            <strong>Safe Image Replace · Compare Before Applying</strong>
+            <div className="masterplan-image-comparison__grid">
+              <figure><img src={imageUrl} alt="Current source map"/><figcaption>Current original</figcaption></figure>
+              <figure><img src={imageComparison.previewUrl} alt="Replacement map candidate"/><figcaption>New candidate</figcaption></figure>
+            </div>
+            <p>{imageComparison.width} × {imageComparison.height} px. Keep geometry only if corresponding plot corners and GPS anchors line up exactly. No published map will change yet.</p>
+            <label className="masterplan-check"><input type="checkbox" checked={imageCompared}
+              onChange={e=>setImageCompared(e.target.checked)}/> I compared image alignment and source evidence</label>
+            <button type="button" disabled={busy||!imageCompared||imageComparison.width!==draft?.width||imageComparison.height!==draft?.height}
+              onClick={()=>void acceptComparedSource(true)}>Keep Geometry as Unverified Draft</button>
+            <button type="button" disabled={busy} onClick={()=>void acceptComparedSource(false)}>Replace and Reset Mapping Draft</button>
+            <button type="button" disabled={busy} onClick={()=>{setImageComparison(null);setImageCompared(false);}}>Cancel</button>
+          </section>}
           <h2>Geo Control Points</h2>
           <p>Use 3–24 surveyed control points. Select Position and tap matching location on the image; then enter exact Latitude/Longitude and source.</p>
           {draft?.controlPoints.map((cp,i)=><fieldset key={i}><legend>Control Point {i+1}</legend>
