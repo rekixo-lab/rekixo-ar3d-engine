@@ -5,6 +5,7 @@ const uuid=x=>typeof x==="string"&&/^[0-9a-f-]{36}$/i.test(x);
 const safe=(x,max)=>typeof x==="string"&&x.length<=max&&!/[\x00-\x1f\x7f]/.test(x);
 export async function clientGeoNotices(request,env,ctx,actor){
  if(!["GET","POST","PUT","DELETE"].includes(request.method))return json({error:"Method not allowed."},405);
+ if(actor.role!=="client_admin")return json({error:"Client Admin required for private notices."},403);
  try{
   const source=await activeMap(env,ctx);
   if(!source)return json({mappingReleaseId:null,notices:[],notice:"Publish a source-bound mapping first."},request.method==="GET"?200:409);
