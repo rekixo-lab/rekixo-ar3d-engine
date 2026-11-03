@@ -200,7 +200,7 @@
 }
 
 
-/* Geo fullscreen: four independent, rounded camera buttons, like the normal board.
+/* Geo fullscreen: five independent, rounded actions, like the normal board.
    Only the buttons receive backgrounds; the shared dock remains invisible. */
 .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone {
   position: absolute !important;
@@ -210,7 +210,7 @@
   left: 50% !important;
   right: auto !important;
   display: grid !important;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   align-items: stretch !important;
   gap: clamp(5px, 1vw, 11px) !important;
   box-sizing: border-box !important;
@@ -232,7 +232,8 @@
   pointer-events: auto !important;
 }
 
-.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button {
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button,
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone .geo-model-site-link {
   position: relative !important;
   inset: auto !important;
   display: inline-flex !important;
@@ -259,13 +260,21 @@
 }
 
 .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button:hover,
-.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button:focus-visible {
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button:focus-visible,
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone .geo-model-site-link:hover,
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone .geo-model-site-link:focus-visible {
   border-color: rgba(104, 235, 183, .77) !important;
   border-radius: 10px !important;
   background: rgba(19, 76, 64, .92) !important;
   color: #f0fff8 !important;
 }
 
+/* Keep the 3D model link distinguishable and tappable in fullscreen. */
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone .geo-model-site-link {
+  border-color: rgba(88, 190, 155, .57) !important;
+  background: rgba(13, 61, 50, .85) !important;
+  color: #eafff6 !important;
+}
 .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button.is-active {
   border: 1px solid rgba(83, 235, 177, .95) !important;
   border-radius: 10px !important;
@@ -274,7 +283,8 @@
   box-shadow: 0 5px 15px rgba(0, 52, 34, .22) !important;
 }
 
-.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button:focus-visible {
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button:focus-visible,
+.geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone .geo-model-site-link:focus-visible {
   outline: none !important;
   box-shadow: 0 0 0 2px rgba(104, 235, 183, .86) !important;
 }
@@ -291,7 +301,8 @@
     max-width: calc(100% - 16px) !important;
     gap: 5px !important;
   }
-  .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button {
+  .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone button,
+  .geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone .geo-model-site-link {
     min-height: 42px !important;
     padding: 7px 2px !important;
     border-radius: 10px !important;
