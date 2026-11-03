@@ -1,6 +1,6 @@
 // Engine-owned project profile and client directory. No Platform integration.
 import {provisionProjectClient,revokeProjectClient} from "./project-client-access.mjs";
-import {ownerProvisionClientPassword,ownerCreateClientPassword} from "./project-client-passwords.mjs";
+import {ownerProvisionClientPassword,ownerCreateClientPassword,clientLoginId} from "./project-client-passwords.mjs";
 // Directory roles are proposals only: never permissions, sessions or credentials.
 const json = (payload, status = 200) => Response.json(payload,{
   status, headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"},
@@ -150,6 +150,86 @@ export async function handleProjectManagementAdmin(request,env,actor,project,par
         .bind(id,project.id,name,mail,mobile,role,notes,actor.email,now,actor.email,now).run();
       await audit(env,actor,"project.client_record_added",project.id,id,{proposedRole:role});
       return json(await getState(env,project),201);
+    }
+    if(request.method==="PATCH"&&body.action==="update-client"){
+      if(typeof body.id!=="string"||!/^[0-9a-f-]{36}$/i.test(body.id))
+        return fail("Choose a valid client record.");
+      const previous=await env.DB.prepare(`SELECT c.*,p.login_type AS loginType,
+        p.login_id AS loginId,p.active AS passwordActive
+        FROM project_client_directory_3d c LEFT JOIN project_client_passwords_3d p
+        ON p.client_id=c.id AND p.project_id=c.project_id
+        WHERE c.project_id=? AND c.id=?`).bind(project.id,body.id).first();
+      if(!previous)return fail("Client is not in this project.",404);
+      if(body.expectedUpdatedAt!==previous.updated_at)
+        return fail("Client was changed in another tab. Reload first.",409);
+      const displayName=normalize(body.displayName,160);
+      const mail=normalize(body.email||"",254).toLowerCase();
+      const mobile=normalize(body.phone||"",25);
+      const notes=normalize(body.notes||"",500);
+      const role=body.proposedRole;
+      if(!displayName||(!mail&&!mobile)||!email(mail)||!phone(mobile)||
+        !["viewer","editor","approver","client_admin"].includes(role))
+        return fail("Valid name, contact and role are required.");
+      const roleChanged=role!==previous.proposed_role;
+      const nextLoginId=previous.loginType?
+        clientLoginId(previous.loginType==="email"?mail:mobile,previous.loginType):null;
+      if(previous.loginType&&!nextLoginId)
+        return fail("This client's login uses the "+previous.loginType+". Enter a valid replacement before saving.");
+      const loginChanged=Boolean(nextLoginId&&nextLoginId!==previous.loginId);
+      const now=new Date().toISOString(),ts=Date.now();
+      const statements=[
+        env.DB.prepare(`UPDATE project_client_directory_3d
+          SET display_name=?,email=?,phone=?,notes=?,proposed_role=?,updated_by=?,updated_at=?
+          WHERE project_id=? AND id=? AND updated_at=?`)
+          .bind(displayName,mail,mobile,notes,role,actor.email,now,project.id,body.id,previous.updated_at)
+      ];
+      if(roleChanged){
+        statements.push(env.DB.prepare(`UPDATE project_client_grants_3d
+          SET epoch=epoch+1,active=0,updated_at=?,granted_by=?
+          WHERE project_id=? AND client_id=?`).bind(now,actor.email,project.id,body.id));
+        statements.push(env.DB.prepare(`UPDATE project_client_passwords_3d
+          SET active=0,updated_at=? WHERE project_id=? AND client_id=?`)
+          .bind(now,project.id,body.id));
+      }else if(loginChanged){
+        statements.push(env.DB.prepare(`UPDATE project_client_passwords_3d
+          SET login_id=?,password_version=password_version+1,must_change_password=1,updated_at=?
+          WHERE project_id=? AND client_id=? AND login_id=?`)
+          .bind(nextLoginId,now,project.id,body.id,previous.loginId));
+        statements.push(env.DB.prepare(`UPDATE project_client_grants_3d
+          SET epoch=epoch+1,updated_at=?,granted_by=? WHERE project_id=? AND client_id=?`)
+          .bind(now,actor.email,project.id,body.id));
+      }
+      if(roleChanged||loginChanged){
+        statements.push(env.DB.prepare("DELETE FROM project_client_invitations_3d WHERE project_id=? AND client_id=?")
+          .bind(project.id,body.id));
+        statements.push(env.DB.prepare(`UPDATE project_client_sessions_3d SET revoked_at=?
+          WHERE project_id=? AND client_id=? AND revoked_at IS NULL`).bind(ts,project.id,body.id));
+      }
+      statements.push(env.DB.prepare(`INSERT INTO engine_admin_audit
+        (id,actor_email,action,project_id,target_id,details_json,created_at)
+        VALUES(?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),actor.email,"project.client_updated",project.id,body.id,
+        JSON.stringify({roleChanged,loginChanged,allSessionsRevoked:roleChanged||loginChanged}),now));
+      const result=await env.DB.batch(statements);
+      if(result[0]?.meta?.changes!==1)return fail("Client changed concurrently. Reload first.",409);
+      return json(await getState(env,project));
+    }
+    if(request.method==="PATCH"&&body.action==="enable-client"){
+      if(typeof body.id!=="string"||!/^[0-9a-f-]{36}$/i.test(body.id))
+        return fail("Valid client ID required.");
+      const now=new Date().toISOString();
+      const result=await env.DB.batch([
+        env.DB.prepare(`UPDATE project_client_directory_3d
+          SET access_state='not_provisioned',updated_by=?,updated_at=?
+          WHERE project_id=? AND id=? AND access_state='disabled'`)
+          .bind(actor.email,now,project.id,body.id),
+        env.DB.prepare(`INSERT INTO engine_admin_audit
+          (id,actor_email,action,project_id,target_id,details_json,created_at)
+          VALUES(?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),actor.email,
+          "project.client_reenabled",project.id,body.id,"{}",now)
+      ]);
+      if(result[0]?.meta?.changes!==1)return fail("Client is not disabled or was updated.",409);
+      // Re-enabling a directory record never reactivates the old password or grant.
+      return json(await getState(env,project));
     }
     if(request.method==="POST"&&["provision-client-password","reset-client-password"].includes(body.action)){
       const credential=await ownerProvisionClientPassword(env,actor,project,body.id,body.loginType);

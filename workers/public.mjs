@@ -13,6 +13,7 @@ import { servePublicMasterplanShareCard } from "./masterplan-share-public.mjs";
 import { serveR2Object } from "./http-range.mjs";
 import { validProjectSlug } from "../shared/project-slug-policy.js";
 import {handleProjectClientPortal} from "./project-client-portal.mjs";
+import {optionalCustomerDomain} from "./engine-domain-public.mjs";
 import {
   activeGeoReleaseState,
   publicGeoExperienceFromState,
@@ -411,6 +412,8 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    const customHost=await optionalCustomerDomain(request,env,url);
+    if(customHost)return customHost;
     // AR3D customer-host Client Admin: its D1 credentials/sessions are isolated
     // from the Engine Owner Cloudflare administration routes.
     const clientResponse = await handleProjectClientPortal(request,env,url);

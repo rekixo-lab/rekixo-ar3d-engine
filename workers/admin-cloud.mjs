@@ -20,6 +20,8 @@ import {
 import { processDwgArchitecture } from "./dwg-processor-route.mjs";
 import { handleProjectBrandingAdmin } from "./project-branding.mjs";
 import { handleProjectManagementAdmin } from "./project-management.mjs";
+import { readOwnerCredentials, handleOwnerAccount } from "./engine-owner-account.mjs";
+import { handleEngineDomainsAdmin } from "./engine-domains.mjs";
 import { handleMasterplanGeoAdmin } from "./masterplan-geo-admin.mjs";
 import { handleMasterplanSalesAdmin } from "./masterplan-sales.mjs";
 import { handleMasterplanShareAdmin } from "./masterplan-share-admin.mjs";
@@ -241,10 +243,9 @@ async function sessionFor(request, env) {
   const token = cookieValue(request, COOKIE);
   const [body, signature] = token.split(".");
   if (!body || !signature) return null;
-  const cfg = config(env);
+  const cfg = await readOwnerCredentials(env,config(env));
   if (!(await verifySessionSignature(body, signature, cfg.sessionSecret)))
     return null;
-
   let session;
   try {
     session = JSON.parse(decoder.decode(bytesFromBase64Url(body)));
@@ -259,7 +260,6 @@ async function sessionFor(request, env) {
     session.exp <= Date.now()
   )
     return null;
-
   const security = await env.DB.prepare(
     "SELECT session_version AS sessionVersion FROM engine_admin_security WHERE id='owner' LIMIT 1",
   ).first();
@@ -393,7 +393,7 @@ async function login(request, env) {
     const body = await request.json().catch(() => ({}));
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
-    const cfg = config(env);
+    const cfg = await readOwnerCredentials(env,config(env));
     const now = Date.now();
 
     stage = "prune-rate-limit";
@@ -547,7 +547,6 @@ async function listCloudProjects(env, url) {
     filter += " AND (lower(p.name) LIKE ? OR lower(p.slug) LIKE ? OR lower(COALESCE(p.location,\'\')) LIKE ?)";
     params.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
-
   const select = env.DB.prepare(
     `SELECT p.id,p.slug,p.name,p.location,p.status,p.project_kind,p.updated_at,
             d.revision AS draft_revision,
@@ -599,7 +598,6 @@ async function createCloudProject(request, env, actor) {
   // Legacy API callers intentionally preserve the pre-v2 workflow; the
   // new create-project wizard sends an explicit kind.
   const projectKind = body.projectKind === undefined ? "legacy" : body.projectKind;
-
   if (
     !isEngineProjectKind(projectKind) ||
     !validProjectId(id) ||
@@ -608,7 +606,6 @@ async function createCloudProject(request, env, actor) {
     location.length > 180
   )
     return json({ error: "Valid project ID, slug, name and location are required." }, { status: 400 });
-
   const existing = await env.DB.prepare(
     "SELECT id,slug,name,location,status,project_kind,updated_at FROM projects_3d WHERE id=? OR slug=? LIMIT 2",
   ).bind(id, slug).all();
@@ -621,7 +618,6 @@ async function createCloudProject(request, env, actor) {
     if (exact) return json({ error: "Existing project identity has a different project kind." }, { status: 409 });
     return json({ error: "Project ID or slug already exists." }, { status: 409 });
   }
-
   const now = new Date().toISOString();
   try {
     await env.DB.batch([
@@ -647,7 +643,6 @@ async function createCloudProject(request, env, actor) {
   } catch {
     return json({ error: "Project ID or slug already exists." }, { status: 409 });
   }
-
   return json(
     {
       project: {
@@ -705,14 +700,12 @@ async function cloudDraft(request, env, actor, project, slug) {
       draft,
     });
   }
-
   if (request.method !== "PUT")
     return json({ error: "Method not allowed." }, { status: 405 });
   if (!sameOrigin(request))
     return json({ error: "Invalid request origin." }, { status: 403 });
   if (project.status === "archived")
     return json({ error: "Restore the project before editing its cloud draft." }, { status: 409 });
-
   const raw = await request.text();
   if (encoder.encode(raw).byteLength > MAX_DRAFT_BYTES)
     return json({ error: "Cloud draft exceeds 2 MB." }, { status: 413 });
@@ -1196,7 +1189,6 @@ async function projectReleases(request, env, actor, project, parts) {
 
   return json({ error: "Cloud release route not found." }, { status: 404 });
 }
-
 
 async function projectGeoDraftVerification(request, env, actor, project) {
   if (request.method !== "POST")
@@ -2330,6 +2322,8 @@ async function routeProjects(request, env, actor, url) {
   if (parts.length === 1)
     return patchProject(request, env, actor, project);
 
+  if (parts[1] === "domains" && parts.length === 2)
+    return handleEngineDomainsAdmin(request,env,actor,project);
   if (parts[1] === "manage") {
     const response=await handleProjectManagementAdmin(request,env,actor,project,parts);
     if(response)return response;
@@ -2412,6 +2406,9 @@ export async function handleCloudAdminRequest(request, env, url = new URL(reques
   const actor = await sessionFor(request, env);
   if (!actor)
     return json({ error: "Engine Admin sign-in required." }, { status: 401 });
+
+  if (url.pathname === `${CLOUD_PATH}/account`)
+    return handleOwnerAccount(request,env,actor,{current:await readOwnerCredentials(env,config(env)),verifyPassword,sameOrigin,clearSessionCookie,json});
 
   if (url.pathname === `${CLOUD_PATH}/deletion-status`)
     return deletionStatus(request, env);

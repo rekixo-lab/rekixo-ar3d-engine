@@ -788,15 +788,30 @@ function App() {
   );
 }
 
+function CustomDomainAdmin(){
+  const [scope,setScope]=useState("");
+  const [error,setError]=useState("");
+  useEffect(()=>{let live=true;
+    void fetch("/3Dprojects/api/domain-context",{cache:"no-store"}).then(async r=>{
+      const result=await r.json() as {projectSlug?:string;error?:string};
+      if(!r.ok||!result.projectSlug)throw Error(result.error||"Custom domain is not ready.");
+      if(live)setScope(result.projectSlug);
+    }).catch(e=>{if(live)setError(e instanceof Error?e.message:"Custom domain unavailable.");});
+    return()=>{live=false;};
+  },[]);
+  if(error)return <main role="alert"><h1>Client Admin unavailable</h1><p>{error}</p></main>;
+  return scope?<ProjectClientAdmin projectSlug={scope}/>:<LoadingPage/>;
+}
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root mount node");
 const geoRoute = /^\/3Dprojects\/[^/]+\/geo\/?$/.test(window.location.pathname);
 const masterplanRoute = /^\/3Dprojects\/[^/]+\/masterplan\/?$/.test(window.location.pathname);
+const customDomainAdmin=window.location.pathname==="/admin"||window.location.pathname==="/admin/";
 const clientAdminMatch = window.location.pathname.match(/^\/3Dprojects\/([a-z0-9]+(?:-[a-z0-9]+)*)\/client-admin\/?$/);
 createRoot(root).render(
   <React.StrictMode>
     <Suspense fallback={<LoadingPage />}>
-      {clientAdminMatch ? <ProjectClientAdmin projectSlug={clientAdminMatch[1]} /> :
+      {customDomainAdmin ? <CustomDomainAdmin /> : clientAdminMatch ? <ProjectClientAdmin projectSlug={clientAdminMatch[1]} /> :
        masterplanRoute ? <MasterplanPublic /> : geoRoute ? <GeoPublicDemo /> : <App />}
     </Suspense>
   </React.StrictMode>,

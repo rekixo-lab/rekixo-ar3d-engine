@@ -22,7 +22,7 @@ export function projectModuleVisible(kind, module) {
   // An explicit unrecognized type must never inherit legacy capabilities.
   if (kind != null && kind !== "" && !isEngineProjectKind(kind)) return false;
   const k = selectedProjectKind(kind);
-  const common = ["overview","profile","clients","assets","advanced"];
+  const common = ["overview","profile","clients","assets","advanced","account"];
   if (common.includes(module)) return true;
   if (k === "legacy") return ["source","building","geo","geo-plots","releases","branding"].includes(module);
   if (k === "masterplan_geo") return ["masterplan","masterplan-plots","mapping-controls","sales","branding"].includes(module);
