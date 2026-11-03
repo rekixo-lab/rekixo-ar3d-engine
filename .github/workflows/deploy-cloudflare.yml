@@ -129,7 +129,7 @@ jobs:
           STATUS="$(curl --silent --show-error --output "$BODY" --write-out '%{http_code}' \
             --header "Authorization: Bearer $GH_TOKEN" \
             --header "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/validate.yml/runs?head_sha=$PR_HEAD_SHA&event=pull_request&per_page=20")"
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$PR_HEAD_SHA&event=pull_request&per_page=20")"
           if [ "$STATUS" != "200" ]; then
             echo "::error::Could not confirm successful PR CI (HTTP $STATUS)."
             rm -f "$BODY"
@@ -142,6 +142,8 @@ jobs:
           const verified = Array.isArray(payload.workflow_runs) &&
             payload.workflow_runs.some(run =>
               run.head_sha === expectedSha &&
+              run.event === "pull_request" &&
+              run.path === ".github/workflows/validate.yml" &&
               run.status === "completed" &&
               run.conclusion === "success"
             );
