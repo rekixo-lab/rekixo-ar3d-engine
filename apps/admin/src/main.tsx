@@ -22,6 +22,7 @@ const PublishedViewer = lazy(() => import("./studio/PublishedViewer"));
 const CloudLogin = lazy(() => import("./CloudLogin"));
 const ProjectClientPortal = lazy(() => import("./management/ProjectClientPortal"));
 const OwnerAccountSettings = lazy(() => import("./management/OwnerAccountSettings"));
+const ProjectDomains = lazy(() => import("./management/ProjectDomains"));
 
 function RouteLoading({ label }: { label: string }) {
   return (
@@ -96,6 +97,9 @@ function AdminRouter() {
     return <LegacyStudioRedirect />;
   }
 
+  if (path === "/3Dprojects/domains") {
+    return <AdminShellRoute label="Opening Customer Domains…"><ProjectDomains /></AdminShellRoute>;
+  }
   if (path === "/3Dprojects/account") {
     return <AdminShellRoute label="Opening Super Admin Account…"><OwnerAccountSettings /></AdminShellRoute>;
   }

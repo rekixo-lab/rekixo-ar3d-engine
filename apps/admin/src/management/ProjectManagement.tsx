@@ -100,6 +100,20 @@ export default function ProjectManagement({section}:{section:Tab}){
     {message&&<p role="status" className="engine-manage-ok">{message}</p>}
     {section==="profile" ? <>
       <section className="engine-manage-card">
+        <h2>Project Content & Customer Links</h2>
+        <p>Safely update content through the existing draft → verify → publish tools. Published versions stay intact.</p>
+        <div className="engine-manage-actions">
+          <a href={`/3Dprojects/domains?project=${encodeURIComponent(slug)}`}>Custom Domain (Optional)</a>
+          <a href={`/3Dprojects/share?project=${encodeURIComponent(slug)}`}>Logo / WhatsApp Share</a>
+          <a href={`/3Dprojects/${state?.project.projectKind==="masterplan_geo"?"masterplan":"building"}?project=${encodeURIComponent(slug)}`}>
+            Replace / Update {state?.project.projectKind==="masterplan_geo"?"Masterplan Image":"3D Model"}
+          </a>
+          <a href={`/3Dprojects/${state?.project.projectKind==="masterplan_geo"?"masterplan-plots":"geo-plots"}?project=${encodeURIComponent(slug)}`}>
+            Review Plot Mapping
+          </a>
+        </div>
+      </section>
+      <section className="engine-manage-card">
         <h2>Project Identity</h2>
         <p>Edit the existing project without changing its permanent ID, slug, mapped polygons or published versions.</p>
         <form onSubmit={e=>{e.preventDefault();void saveProjectMetadata();}}>

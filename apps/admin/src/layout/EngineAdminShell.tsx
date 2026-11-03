@@ -13,7 +13,7 @@ import { projectModuleVisible, PROJECT_KIND_LABELS } from "../../../../shared/en
 
 type ShellSection = "overview" | "profile" | "clients" | "assets" |
   "source" | "building" | "geo" | "geo-plots" | "masterplan" | "masterplan-plots" |
-  "mapping-controls" | "sales" | "releases" | "branding" | "advanced" | "account";
+  "mapping-controls" | "sales" | "releases" | "branding" | "advanced" | "account" | "domains";
 
 type NavItem = {
   id: ShellSection;
@@ -86,6 +86,7 @@ function currentSection(pathname: string): ShellSection {
   if (pathname.includes("/share") || pathname.includes("/branding")) return "branding";
   if (pathname.includes("/advanced")) return "advanced";
   if (pathname.includes("/account")) return "account";
+  if (pathname.includes("/domains")) return "domains";
   if (pathname.includes("/building") || pathname.includes("/studio")) return "building";
   return "overview";
 }
@@ -140,6 +141,8 @@ const sectionMeta: Record<ShellSection, { eyebrow: string; title: string; help: 
     title: "Share & Branding",
     help: "Manage one project logo/favicon and separate immutable Building and Geo share previews.",
   },
+  domains: {eyebrow:"OPTIONAL CUSTOMER SETUP",title:"Custom Domains",
+    help:"Bind only requested customer domains; standard Engine links stay available."},
   account: {eyebrow: "OWNER ACCESS", title: "Account Security",
     help: "Manage the Engine Super Admin sign-in and session security."},
   advanced: {
