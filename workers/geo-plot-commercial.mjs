@@ -1,6 +1,7 @@
 // Release-bound legacy Geo plot commercial facts. Owner-only writes;
 // no identifying buyer details or unsupported listing claims are made public.
 import {validateGeoPlotCollection} from "./geo-plot-geometry.mjs";
+import {summarizeApprovedGeoPlotStatuses} from "../shared/geo-plot-status.js";
 const sha=async text=>Array.from(new Uint8Array(await crypto.subtle.digest(
  "SHA-256",new TextEncoder().encode(text)))).map(b=>b.toString(16).padStart(2,"0")).join("");
 const reply=(body,status=200)=>Response.json(body,{status,headers:{
@@ -31,7 +32,7 @@ export function normalizeGeoCommercialChange(body){
     expectedRevision:body.expectedRevision};
 }
 export async function activeMap(env,ctx){
-  const row=await env.DB.prepare(`SELECT r.id,r.sha256,r.plots_json
+  const row=await env.DB.prepare(`SELECT r.id,r.sha256,r.plots_json,r.publication_mode
     FROM geo_plot_mapping_active_3d a
     JOIN geo_plot_mapping_releases_3d r ON r.id=a.mapping_release_id
       AND r.project_id=a.project_id AND r.experience_id=a.experience_id
@@ -42,7 +43,7 @@ export async function activeMap(env,ctx){
   if(!row)return null;
   if(await sha(row.plots_json)!==row.sha256)
     throw Error("Commercial source mapping checksum mismatch; data cannot be approved.");
-  return {releaseId:row.id,plots:validateGeoPlotCollection(JSON.parse(row.plots_json))};
+  return {releaseId:row.id,publicationMode:row.publication_mode,plots:validateGeoPlotCollection(JSON.parse(row.plots_json))};
 }
 async function listState(env,ctx,source){
   if(!source)return {mappingReleaseId:null,rows:[],notice:"Current verified published mapping required before commercial approval."};
@@ -53,9 +54,12 @@ async function listState(env,ctx,source){
     ORDER BY plot_id COLLATE NOCASE LIMIT 2500`)
     .bind(ctx.project.id,source.releaseId).all();
   const reviewed=new Map((rows.results||[]).map(r=>[String(r.plotId).toLowerCase(),r]));
-  return {mappingReleaseId:source.releaseId,plotCount:source.plots.length,
+  const approved={};
+  for(const plot of source.plots){const r=reviewed.get(plot.id.toLowerCase());if(r?.publicApproved===1)approved[plot.id]={status:r.status};}
+  const summary=summarizeApprovedGeoPlotStatuses({publicationMode:source.publicationMode,plots:source.plots,commercial:approved});
+  return {mappingReleaseId:source.releaseId,publicationMode:source.publicationMode,plotCount:source.plots.length,counts:{available:summary.available,booked:summary.booked,sold:summary.sold,unreviewed:summary.pending},
     plotIds:source.plots.map(p=>p.id),
-    rows:source.plots.map(p=>{const r=reviewed.get(p.id.toLowerCase());return {plotId:p.id,status:r?.publicApproved===1?r.status:'available',draftStatus:r?.status||null,pricePaise:r?.pricePaise??null,revision:r?.revision||0,publicApproved:r?.publicApproved===1,evidenceRef:r?.evidenceRef||'',area:p.area||null,sides:p.sides||null,hasReview:Boolean(r)};}),
+    rows:source.plots.map(p=>{const r=reviewed.get(p.id.toLowerCase());return {plotId:p.id,status:summary.statusById[p.id],draftStatus:r?.status||null,pricePaise:r?.pricePaise??null,revision:r?.revision||0,publicApproved:r?.publicApproved===1,evidenceRef:r?.evidenceRef||'',area:p.area||null,sides:p.sides||null,hasReview:Boolean(r)};}),
     notice:"Owner-reviewed commercial facts only. No buyer/payment ledger equivalence is implied."};
 }
 export async function handleGeoPlotCommercial(request,env,ctx,actor,{allowApprove=true}={}){
