@@ -43,10 +43,10 @@ test("one finger horizontal swipe rotates the Geo camera, and does not pan or fa
   r.orbit.onTouchMove(first);
   assert.equal(first.counters.prevented,1);
   assert.equal(first.counters.stopped,1);
-  assert.ok(Math.abs(r.heading-(90-32*.46))<1e-9);
+  assert.ok(Math.abs(r.heading-(90+32*.46))<1e-9);
   const next=makeEvent([finger(192)]);
   r.orbit.onTouchMove(next);
-  assert.ok(Math.abs(r.heading-(90-72*.46))<1e-9);
+  assert.ok(Math.abs(r.heading-(90+72*.46))<1e-9);
   assert.equal(r.redraw.length,2);
   r.orbit.onTouchEnd(makeEvent([]));
   assert.deepEqual(r.captures,[true,false],"native map gestures resume on release");
@@ -56,14 +56,28 @@ test("one finger horizontal swipe rotates the Geo camera, and does not pan or fa
   assert.equal(r.orbit.suppressClick(),false,"later genuine taps must work");
 });
 
-test("leftward swipes turn the scene right with normalized 0..360 headings",()=>{
+test("leftward swipe decreases camera bearing with normalized 0..360 headings",()=>{
   const r=rig(355);
   r.orbit.onTouchStart(makeEvent([finger(200)]));
   r.orbit.onTouchMove(makeEvent([finger(170)]));
   assert.ok(r.heading>=0&&r.heading<360);
-  assert.ok(Math.abs(r.heading-8.8)<1e-9);
+  assert.ok(Math.abs(r.heading-341.2)<1e-9);
   assert.equal(normalizeGeoOrbitHeading(-4),356);
   assert.equal(normalizeGeoOrbitHeading(725),5);
+});
+
+test("swipe direction stays consistent across north / 360-degree boundary",()=>{
+  const right=rig(355);
+  right.orbit.onTouchStart(makeEvent([finger(100)]));
+  right.orbit.onTouchMove(makeEvent([finger(130)]));
+  assert.ok(Math.abs(right.heading-8.8)<1e-9,"right swipe wraps forward from 355° to 8.8°");
+  right.orbit.onTouchEnd(makeEvent([]));
+
+  const left=rig(5);
+  left.orbit.onTouchStart(makeEvent([finger(130)]));
+  left.orbit.onTouchMove(makeEvent([finger(100)]));
+  assert.ok(Math.abs(left.heading-351.2)<1e-9,"left swipe wraps backward from 5° to 351.2°");
+  left.orbit.onTouchEnd(makeEvent([]));
 });
 
 test("real tap, vertical-only movement and touch on controls do not rotate",()=>{
@@ -129,11 +143,11 @@ test("camera rotation is visible on every move, changes direction and stops on r
   const r=rig(90);
   r.orbit.onTouchStart(makeEvent([finger(100)]));
   r.orbit.onTouchMove(makeEvent([finger(140)]));
-  assert.ok(r.heading<90,"moving right should turn map content right");
+  assert.ok(r.heading>90,"right swipe must increase camera heading");
   const afterRight=r.heading;
   assert.equal(r.redraw.length,1,"redraw is requested during the finger move");
   r.orbit.onTouchMove(makeEvent([finger(95)]));
-  assert.ok(r.heading>afterRight,"moving left must reverse rotation immediately");
+  assert.ok(r.heading<afterRight,"left swipe must decrease heading immediately");
   const afterLeft=r.heading;
   r.orbit.onTouchEnd(makeEvent([]));
   assert.equal(r.heading,afterLeft);
