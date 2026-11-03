@@ -8,10 +8,10 @@ type Profile = {
   whatsapp:string;email:string;websiteUrl:string;mapsUrl:string;brochureUrl:string;
 };
 type ManagedClient = {id:string;displayName:string;email:string;phone:string;proposedRole:string;
-  accessState:"not_provisioned"|"disabled";notes:string;createdAt:string;
+  accessState:"not_provisioned"|"disabled";notes:string;createdAt:string;updatedAt:string;
   grantActive?:boolean;grantedRole?:string;grantEpoch?:number;
   credentialLoginId?:string|null;credentialLoginType?:string|null;passwordActive?:number;mustChangePassword?:number};
-type ManagedState = {project:{id:string;name:string;slug:string;projectKind:string;status:string};
+type ManagedState = {project:{id:string;name:string;slug:string;projectKind:string;status:string;location:string};
   profile:{revision:number;values:Profile};clients:ManagedClient[];clientLoginEnabled:boolean;
   invitation?:{clientId:string;role:string;expiresAt:number;inviteUrl:string};
   credential?:{clientId:string;loginId:string;loginType:string;password:string;mustChangePassword:boolean}};
@@ -42,6 +42,8 @@ export default function ProjectManagement({section}:{section:Tab}){
   const slug=new URLSearchParams(location.search).get("project")||"";
   const endpoint=`/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}/manage`;
   const [state,setState]=useState<ManagedState|null>(null);
+  const [projectName,setProjectName]=useState("");const [projectLocation,setProjectLocation]=useState("");
+  const [editingClient,setEditingClient]=useState<ManagedClient|null>(null);
   const [profile,setProfile]=useState<Profile|null>(null);
   const [name,setName]=useState("");const [email,setEmail]=useState("");
   const [phone,setPhone]=useState("");const [role,setRole]=useState("client_admin");
@@ -60,6 +62,7 @@ export default function ProjectManagement({section}:{section:Tab}){
     if(!slug){setState(null);setProfile(null);return;}
     const next=await request<ManagedState>(endpoint);
     setState(next);setProfile(next.profile.values);
+    setProjectName(next.project.name);setProjectLocation(next.project.location||"");
   },[endpoint,slug]);
   useEffect(()=>{let live=true;void load().catch(e=>{if(live)setError(String(e));});
     return()=>{live=false;};},[load]);
@@ -75,6 +78,19 @@ export default function ProjectManagement({section}:{section:Tab}){
     }catch(e){setError(e instanceof Error?e.message:"Operation failed.");return false;}
     finally{setBusy(false);}
   }
+  async function saveProjectMetadata(){
+    if(!state||!projectName.trim()||busy)return;
+    setBusy(true);setError("");setMessage("");
+    try{
+      const next=await request<{name:string;location?:string}>(
+        `/3Dprojects/api/cloud/projects/${encodeURIComponent(slug)}`,"PATCH",
+        {action:"metadata",name:projectName.trim(),location:projectLocation.trim()});
+      setState(current=>current?{...current,project:{...current.project,name:next.name,location:next.location||""}}:current);
+      setProjectName(next.name);setProjectLocation(next.location||"");
+      setMessage("Project name and location updated. Its stable link and published releases were kept.");
+    }catch(e){setError(e instanceof Error?e.message:"Project update failed.");}
+    finally{setBusy(false);}
+  }
   if(!slug)return <section className="engine-manage"><h2>Select a project from Overview first</h2></section>;
   return <main className="engine-manage">
     <header><p className="eyebrow">ENGINE · PROJECT ADMINISTRATION</p>
@@ -83,6 +99,24 @@ export default function ProjectManagement({section}:{section:Tab}){
     {error&&<p role="alert" className="engine-manage-error">{error}</p>}
     {message&&<p role="status" className="engine-manage-ok">{message}</p>}
     {section==="profile" ? <>
+      <section className="engine-manage-card">
+        <h2>Project Identity</h2>
+        <p>Edit the existing project without changing its permanent ID, slug, mapped polygons or published versions.</p>
+        <form onSubmit={e=>{e.preventDefault();void saveProjectMetadata();}}>
+          <div className="engine-manage-grid">
+            <label>Project Name<input required maxLength={200} value={projectName}
+              disabled={busy||state?.project.status==="archived"}
+              onChange={e=>setProjectName(e.target.value)}/></label>
+            <label>Project Location<input maxLength={180} value={projectLocation}
+              disabled={busy||state?.project.status==="archived"}
+              onChange={e=>setProjectLocation(e.target.value)}/></label>
+          </div>
+          <div className="engine-manage-actions">
+            <span>Permanent URL slug: {state?.project.slug||slug}</span>
+            <button type="submit" disabled={busy||!projectName.trim()||state?.project.status==="archived"}>Update Project Name</button>
+          </div>
+        </form>
+      </section>
       <section className="engine-manage-card">
         <h2>Canonical Project Contact Profile</h2>
         <p>Manage source-backed contact information for this Engine project. This workspace does not silently change an immutable customer release.</p>
@@ -185,6 +219,39 @@ export default function ProjectManagement({section}:{section:Tab}){
           </div>
         </form>
       </section>
+      {editingClient&&<section className="engine-manage-card">
+        <h2>Edit Client — {editingClient.displayName}</h2>
+        <p>Changing a login mobile/email signs out old sessions. Changing the role revokes existing access until a new invitation or password is issued.</p>
+        <form onSubmit={e=>{e.preventDefault();
+          if(editingClient.proposedRole!==state?.clients.find(c=>c.id===editingClient.id)?.proposedRole&&
+            !confirm("Changing role will revoke existing login and invitations. Continue?"))return;
+          void perform("PATCH",{action:"update-client",id:editingClient.id,
+            expectedUpdatedAt:editingClient.updatedAt,displayName:editingClient.displayName,
+            email:editingClient.email,phone:editingClient.phone,
+            proposedRole:editingClient.proposedRole,notes:editingClient.notes
+          }).then(ok=>{if(ok)setEditingClient(null);});
+        }}>
+          <div className="engine-manage-grid">
+            <label>Client Name<input required maxLength={160} value={editingClient.displayName}
+              onChange={e=>setEditingClient(v=>v?{...v,displayName:e.target.value}:v)}/></label>
+            <label>Email<input type="email" maxLength={254} value={editingClient.email}
+              onChange={e=>setEditingClient(v=>v?{...v,email:e.target.value}:v)}/></label>
+            <label>Mobile<input type="tel" maxLength={25} value={editingClient.phone}
+              onChange={e=>setEditingClient(v=>v?{...v,phone:e.target.value}:v)}/></label>
+            <label>Role<select value={editingClient.proposedRole}
+              onChange={e=>setEditingClient(v=>v?{...v,proposedRole:e.target.value}:v)}>
+              {["viewer","editor","approver","client_admin"].map(v=><option key={v} value={v}>{v}</option>)}
+            </select></label>
+            <label>Notes<input maxLength={500} value={editingClient.notes}
+              onChange={e=>setEditingClient(v=>v?{...v,notes:e.target.value}:v)}/></label>
+          </div>
+          <div className="engine-manage-actions">
+            <button type="button" onClick={()=>setEditingClient(null)}>Cancel</button>
+            <button type="submit" disabled={busy||!editingClient.displayName.trim()||
+              !(editingClient.email||editingClient.phone)}>Save Client Changes</button>
+          </div>
+        </form>
+      </section>}
       <section className="engine-manage-card"><h2>Clients ({state?.clients.length||0})</h2>
         <div className="engine-manage-client-list">
           {state?.clients.map(client=><div key={client.id}>
@@ -194,6 +261,13 @@ export default function ProjectManagement({section}:{section:Tab}){
                 "Not invited · no access"}</small>
               {client.credentialLoginId&&<small>Login ID: {client.credentialLoginId} ·
                 {client.mustChangePassword?" Temporary password pending change":" Password active"}</small>}
+            </div>
+            <div className="engine-manage-actions">
+              <button type="button" disabled={busy||state?.project.status==="archived"}
+                onClick={()=>setEditingClient({...client})}>Edit Client</button>
+              {client.accessState==="disabled"&&<button type="button" disabled={busy}
+                onClick={()=>{if(confirm("Re-enable this client record? Old credentials stay inactive until you issue new access."))
+                  void perform("PATCH",{action:"enable-client",id:client.id});}}>Enable Record</button>}
             </div>
             {client.accessState==="not_provisioned"&&<div className="engine-manage-actions">
               {client.proposedRole==="client_admin"&&<button type="button"
