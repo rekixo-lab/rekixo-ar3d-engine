@@ -560,3 +560,30 @@ button.engine-client-admin-plot-row:hover{border-color:#71d6ad}
     transition: none !important;
   }
 }
+
+/* Platform-parity Client Admin workspace */
+.engine-client-admin-workspace{display:grid;grid-template-columns:220px minmax(0,1fr);gap:15px;margin:16px 0}
+.engine-client-admin-sidebar{position:sticky;top:15px;align-self:start;min-width:0;padding:13px;border:1px solid #28495b;border-radius:15px;background:#0b2130}
+.engine-client-admin-sidebar-brand{display:grid;gap:5px;padding:11px 10px 17px;border-bottom:1px solid #294b5a}
+.engine-client-admin-sidebar-brand strong{font-size:16px;color:#f0fff9}
+.engine-client-admin-sidebar-brand small{font-size:12px;color:#7de6ba;overflow-wrap:anywhere}
+.engine-client-admin-workspace .engine-client-admin-tabs{display:flex;flex-direction:column;align-items:stretch;gap:5px;margin:12px 0;border:0;background:transparent;padding:0}
+.engine-client-admin-workspace .engine-client-admin-tabs button{flex:none;min-height:43px;text-align:left;padding:10px 12px;border-radius:9px;transition:background .18s ease,color .18s ease}
+.engine-client-admin-workspace .engine-client-admin-tabs button:hover{background:#1a3b49;color:white}
+.engine-client-admin-workspace .engine-client-admin-tabs button.is-active{background:#17674f;color:white}
+.engine-client-admin-sidebar-hint{padding:8px 10px;color:#8cabb7;font-size:11px;line-height:1.6}
+.engine-client-admin-main{min-width:0}
+.engine-client-admin-workspace .engine-client-admin-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+.engine-client-admin-live-preview{width:100%;height:260px;margin-top:12px;border:1px solid #385c68;border-radius:10px;background:#081822}
+.engine-client-admin-quick{display:grid;gap:10px}
+.engine-client-admin-quick button,.client-geo-manage button:not(.client-geo-table-row),.client-geo-sales button,.client-geo-gallery button,.client-geo-notices button{min-height:38px;padding:9px 12px;border:1px solid #326b68;border-radius:9px;background:#175347;color:#f0fff8;font-size:12px;font-weight:750;cursor:pointer}
+.client-geo-manage button:disabled,.client-geo-sales button:disabled,.client-geo-gallery button:disabled,.client-geo-notices button:disabled{opacity:.52;cursor:not-allowed}
+.client-geo-manage{padding:15px;border:1px solid #315364;border-radius:14px;background:#0e2636}
+.client-geo-toolbar{display:flex;flex-wrap:wrap;align-items:end;gap:9px;margin-bottom:12px}
+.client-geo-toolbar>div{flex:1 1 260px}
+.client-geo-toolbar h2,.client-geo-sales h2,.client-geo-gallery h2,.client-geo-notices h2{margin:0 0 5px;font-size:19px}
+.client-geo-toolbar p,.client-geo-sales p,.client-geo-gallery p,.client-geo-notices p{margin:5px 0;color:#abc2cb;font-size:12px;line-height:1.55}
+.client-geo-toolbar input{flex:0 1 190px}
+.client-geo-toolbar select{flex:0 1 160px}
+.client-geo-manage input,.client-geo-manage select,.client-geo-manage textarea,.client-geo-sales input,.client-geo-sales select,.client-geo-gallery input,.client-geo-notices input,.client-geo-notices select,.client-geo-notices textarea{box-sizing:border-box;min-width:0;max-width:100%;width:100%;min-height:39px;padding:8px 11px;border:1px solid #446977;border-radius:9px;background:#091e2c;color:#eefbf8;font:inherit;font-size:13px}
+.client-geo-toolbar input,.client-geo-toolbar select{width:auto}
