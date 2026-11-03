@@ -126,8 +126,10 @@ test("both editors offer road edge selection and reset geometry-dependent approv
 });
 test("source image replacement cannot silently drop uncommitted polygons or GPS points",()=>{
   const editor=read("apps/admin/src/masterplan/MasterplanWorkspace.tsx");
-  assert.match(editor,/if\(dirty\|\|working\)throw Error/);
-  assert.match(editor,/Replacing this masterplan image clears the CURRENT DRAFT/);
+  assert.match(editor,/if\(dirty\|\|hasPendingPlot\(\)\)throw Error/);
+  assert.match(editor,/Replace image and CLEAR the CURRENT DRAFT/);
+  assert.match(editor,/invalidateMasterplanSourceProof\(draft\)/);
+  assert.match(editor,/imageCompared/);
   assert.match(editor,/exportMasterplanDraftReview\(slug,draft\)/);
   assert.match(editor,/not a full backup/);
 });
