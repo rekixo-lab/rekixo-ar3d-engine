@@ -13,6 +13,7 @@ import {
 } from "../studio/cloud";
 import { newProject, projectSlug } from "../studio/domain";
 import { PROJECT_KIND_LABELS, newProjectStartPath, type EngineProjectKind } from "../../../../shared/engine-project-kinds.js";
+import ProjectHandoffCheck from "./ProjectHandoffCheck";
 import "./engine-dashboard.css";
 
 type MasterplanOverviewState = {
@@ -501,7 +502,9 @@ export default function EngineDashboard() {
                   <a href={`/3Dprojects/geo-plots?project=${encodeURIComponent(selectedProject.slug)}`}>Open Geo Plot Mapper</a>
                 </article>}
               </section>)}
-
+              <ProjectHandoffCheck key={selectedProject.slug} slug={selectedProject.slug}
+                kind={selectedProject.projectKind||"legacy"} buildingLive={buildingLive}
+                geoLive={geoLive} geoMapped={Boolean(geoPlotState?.activeMapping?.current)} />
 
             </>
           )}
