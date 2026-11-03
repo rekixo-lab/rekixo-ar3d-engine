@@ -106,21 +106,39 @@ jobs:
             echo "project_reset_changed=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Detect safe fast-UI deployment scope
+        id: scope
+        if: github.event_name == 'push'
+        run: node scripts/ci-change-scope.mjs push >> "$GITHUB_OUTPUT"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
+      # PR validation already typechecked, built, tested and browser-smoked
+      # this exact stylesheet-only change. Full-risk changes ALWAYS retest.
       - name: Verify generalized Engine
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui'
         run: npm test
 
+      - name: Restore cached Chromium
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install browser E2E runner
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui'
         run: npx --no-install playwright install --with-deps chromium
 
       - name: Run browser E2E smoke
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui'
         run: npx --no-install playwright test --config playwright.config.ts
 
       - name: Require Cloudflare deployment secret
@@ -162,6 +180,7 @@ jobs:
         run: node scripts/purge-project-r2-prefix.mjs
 
       - name: Verify remote Engine Admin secret names
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui' || steps.scope.outputs.ui_admin_changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -193,6 +212,7 @@ jobs:
 
       - name: Check Cloudflare Containers access
         id: containers-access
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui' || steps.scope.outputs.ui_admin_changed == 'true'
         shell: bash
         run: |
           set -uo pipefail
@@ -211,9 +231,10 @@ jobs:
         run: node scripts/prepare-published-designs.mjs
 
       - name: Build and upload Geo model derivatives
+        # Stylesheet-only public changes never mutate canonical GLBs or R2.
         if: >-
           (github.event_name == 'workflow_dispatch' && inputs.deployment_scope == 'engine-all') ||
-          (github.event_name == 'push' && steps.public_runtime.outputs.changed == 'true')
+          (github.event_name == 'push' && steps.public_runtime.outputs.changed == 'true' && steps.scope.outputs.lane != 'ui')
         shell: bash
         run: |
           set -euo pipefail
@@ -262,6 +283,7 @@ jobs:
         # If the account/token cannot manage Containers, skip the rollout so
         # normal Admin releases remain healthy and the DWG route fails closed.
         id: admin-deploy
+        if: github.event_name != 'push' || steps.scope.outputs.lane != 'ui' || steps.scope.outputs.ui_admin_changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -272,7 +294,7 @@ jobs:
           fi
 
       - name: Report DWG processor deployment state
-        if: steps.containers-access.outputs.available != 'true'
+        if: steps.admin-deploy.conclusion == 'success' && steps.containers-access.outputs.available != 'true'
         shell: bash
         run: |
           echo "::warning::Rekixo Admin is deployed, but native DWG decoding is not active on Cloudflare yet. Auto Build will preserve DWG as evidence and continue safely with the remaining source pack."
