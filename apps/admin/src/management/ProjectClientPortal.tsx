@@ -376,7 +376,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
         {availablePanels.map(item=><button key={item} type="button"
           aria-current={panel===item?"page":undefined} className={panel===item?"is-active":""}
           onClick={()=>setPanel(item)}>{item==="overview"?"Overview":
-          item==="plots"?"Plot Management":item==="pricing"?"Pricing":item==="contact"?"Contact":
+          item==="plots"?"Plots":item==="pricing"?"Pricing":item==="contact"?"Contact":
           item==="gallery"?"Gallery":item==="sales"?"Sales & Accounts":item==="notices"?"Plot Updates":"Deal Progress"}</button>)}
       </nav>
       <p className="engine-client-admin-sidebar-hint">Project-scoped management · Your maps and releases are protected</p>
@@ -395,7 +395,8 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
         </section>
         <div className="engine-client-admin-grid">
           <section className="engine-client-admin-card">
-            <h2>Project masterplan / Geo preview</h2>
+            <h2>Project overview</h2>
+            <h3>Live masterplan / Geo preview</h3>
             <p>View the actual published customer site, without changing mapping.</p>
             <div className="engine-client-admin-actions">
               <button type="button" onClick={()=>setShowLivePreview(v=>!v)}>
@@ -438,10 +439,12 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
           canApprove={Boolean(overview?.permissions.commercialApprove)}
           onCommercialChange={setCommercial}/>:
         <section className="engine-client-admin-card">
-          <h2>Published Plot Status</h2>
+          <h2>Geo plot management</h2>
+          <p>Published Plot Status — read only</p>
           <div className="engine-client-admin-plot-list">
-            {commercial.rows.map(row=><div key={row.plotId} className="engine-client-admin-plot-row">
-              <strong>Plot {row.plotId}</strong><span>{row.status}</span></div>)}
+            {commercial.rows.map(row=><button key={row.plotId} type="button"
+              className="engine-client-admin-plot-row" onClick={()=>setPlotSearch(row.plotId)}>
+              <strong>Plot {row.plotId}</strong><span>{row.status}</span></button>)}
           </div>
         </section>):
         <section className="engine-client-admin-card"><p>Loading published Geo plot mapping…</p></section>)}
