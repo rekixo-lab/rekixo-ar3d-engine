@@ -204,7 +204,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   }
   function changeDraft(patch:Partial<MasterplanDraft>){
     if(!draft)return;
-    setDraftHistory(h=>({past:[...h.past.slice(-29),structuredClone(draft)],future:[]}));
+    setDraftHistory(h=>({past:[...h.past.slice(-7),structuredClone(draft)],future:[]}));
     setCsvPreview(null);setDraft({...draft,...patch});setDirty(true);
   }
   function hasPendingPlot(){
