@@ -86,7 +86,7 @@ export default function EngineAdvanced() {
       loadMapId().catch(() => ({ mapId: null, configured: false })),
       deletionStatus().catch(() => ({ job: null })),
     ]);
-    setProjectCount(projectResult.projects.length);
+    setProjectCount(projectResult.total);
     setMapsKey(maps.apiKey || "");
     setMapsConfigured(Boolean(maps.apiKey));
     setMapId(mapIdState.mapId || "");
