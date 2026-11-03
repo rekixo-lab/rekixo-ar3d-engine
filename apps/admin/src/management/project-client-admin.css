@@ -587,3 +587,27 @@ button.engine-client-admin-plot-row:hover{border-color:#71d6ad}
 .client-geo-toolbar select{flex:0 1 160px}
 .client-geo-manage input,.client-geo-manage select,.client-geo-manage textarea,.client-geo-sales input,.client-geo-sales select,.client-geo-gallery input,.client-geo-notices input,.client-geo-notices select,.client-geo-notices textarea{box-sizing:border-box;min-width:0;max-width:100%;width:100%;min-height:39px;padding:8px 11px;border:1px solid #446977;border-radius:9px;background:#091e2c;color:#eefbf8;font:inherit;font-size:13px}
 .client-geo-toolbar input,.client-geo-toolbar select{width:auto}
+
+.client-geo-info{color:#a7bdc7;font-size:12px;line-height:1.55}
+.client-geo-list{display:grid;gap:5px;max-height:570px;overflow-y:auto;overflow-x:hidden}
+.client-geo-table-heading,.client-geo-table-row{display:grid;grid-template-columns:minmax(65px,.6fr) minmax(90px,.85fr) minmax(90px,1.2fr) minmax(98px,1fr) minmax(85px,1fr) minmax(76px,.8fr) minmax(55px,.6fr);align-items:center;gap:8px}
+.client-geo-table-heading{padding:10px 12px;color:#88a9b6;font-size:11px;font-weight:750}
+button.client-geo-table-row{width:100%;min-height:47px;padding:10px 12px;text-align:left;border:1px solid #2d5363;border-radius:10px;background:#123145;color:#dbeef3;cursor:pointer}
+button.client-geo-table-row:hover,button.client-geo-table-row.is-active{border-color:#5cd1a8;background:#194454}
+.client-geo-table-row>span,.client-geo-table-row>strong{overflow-wrap:anywhere;font-size:12px}
+.client-geo-status{width:fit-content;border-radius:7px;padding:4px 7px;font-size:11px!important;text-transform:capitalize;font-weight:750}
+.client-geo-status.available{background:#115940;color:#96f3c4}
+.client-geo-status.booked{background:#655020;color:#ffe3a1}
+.client-geo-status.sold{background:#66343d;color:#ffb6bd}
+.client-geo-empty{padding:20px;color:#aac3cc;text-align:center}
+.client-geo-pagination{display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0;font-size:12px}
+.client-geo-editor{margin-top:14px;padding:16px;border:1px solid #326574;border-radius:12px;background:#112c3b}
+.client-geo-editor header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.client-geo-editor header h3{font-size:17px;margin:0 0 10px}
+.client-geo-editor header span{font-size:12px;color:#b8d1d9}
+.client-geo-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:13px 0}
+.client-geo-editor-grid label,.client-geo-editor>label,.client-geo-upload label{display:grid;gap:7px;min-width:0;font-size:12px;color:#c3d7db}
+.client-geo-editor-grid .client-geo-wide{grid-column:1/-1}
+.client-geo-editor>hr{margin:16px 0;border:0;border-top:1px solid #315767}
+.client-geo-inline{display:flex!important;align-items:center;gap:9px!important;margin:10px 0}
+.client-geo-inline input{min-height:18px;width:18px}
