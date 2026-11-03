@@ -52,7 +52,7 @@ export async function clientGeoSales(request,env,ctx,actor){
    const result=await env.DB.batch([
     env.DB.prepare("INSERT INTO geo_client_sales_3d(id,project_id,mapping_release_id,plot_id,buyer_name,buyer_phone,agreement_paise,state,revision,notes,evidence_ref,created_by,created_at,operation_id) SELECT ?,?,?,?,?,?,?,'booked',1,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM geo_plot_mapping_active_3d WHERE project_id=? AND mapping_release_id=?)")
       .bind(id,ctx.project.id,source.releaseId,target.id,b.buyerName.trim(),phone,b.agreementPaise,(b.notes||"").trim(),b.evidenceRef.trim(),actor.email,now,b.operationId,ctx.project.id,source.releaseId),
-    await audit(env,ctx,actor,"geo.client_sale_booked",id,{plotId:target.id,mappingReleaseId:source.releaseId})
+    audit(env,ctx,actor,"geo.client_sale_booked",id,{plotId:target.id,mappingReleaseId:source.releaseId},{kind:"sale",id,revision:1})
    ]);
    if(result[0]?.meta?.changes!==1)return json({error:"Sale could not be created. Reload."},409);
   }else if(request.method==="POST"&&b.action==="receipt"){
@@ -66,16 +66,17 @@ export async function clientGeoSales(request,env,ctx,actor){
    const result=await env.DB.batch([
     env.DB.prepare("INSERT INTO geo_client_receipts_3d(id,project_id,sale_id,kind,amount_paise,paid_on,method,reference,note,created_by,created_at,operation_id) SELECT ?,?,s.id,'receipt',?,?,?,?,?,?,?,? FROM geo_client_sales_3d s WHERE s.id=? AND s.project_id=? AND s.mapping_release_id=? AND s.state IN ('booked','confirmed') AND (SELECT COALESCE(SUM(CASE WHEN kind='receipt' THEN amount_paise ELSE -amount_paise END),0) FROM geo_client_receipts_3d WHERE sale_id=s.id)+?<=s.agreement_paise")
       .bind(id,ctx.project.id,b.amountPaise,b.paidOn,b.method,(b.reference||"").trim(),(b.note||"").trim(),actor.email,now,b.operationId,b.saleId,ctx.project.id,source.releaseId,b.amountPaise),
-    await audit(env,ctx,actor,"geo.client_receipt_recorded",b.saleId,{mappingReleaseId:source.releaseId})
+    audit(env,ctx,actor,"geo.client_receipt_recorded",b.saleId,{mappingReleaseId:source.releaseId},{kind:"receipt",id})
    ]);
    if(result[0]?.meta?.changes!==1)return json({error:"Receipt exceeds outstanding amount or sale is no longer active."},409);
   }else if(request.method==="POST"&&b.action==="reverse"){
    if(!uuid(b.saleId)||!uuid(b.receiptId)||!string(b.reason,400)||b.reason.trim().length<3)
      return json({error:"Valid payment and correction reason required."},400);
+   const reversalId=crypto.randomUUID();
    const result=await env.DB.batch([
     env.DB.prepare("INSERT INTO geo_client_receipts_3d(id,project_id,sale_id,kind,amount_paise,paid_on,method,reference,note,reverses_id,created_by,created_at,operation_id) SELECT ?,?,p.sale_id,'reversal',p.amount_paise,p.paid_on,p.method,p.reference,?,p.id,?,?,? FROM geo_client_receipts_3d p JOIN geo_client_sales_3d s ON s.id=p.sale_id AND s.project_id=p.project_id WHERE p.id=? AND p.sale_id=? AND p.project_id=? AND s.mapping_release_id=? AND p.kind='receipt' AND NOT EXISTS(SELECT 1 FROM geo_client_receipts_3d x WHERE x.reverses_id=p.id)")
-     .bind(crypto.randomUUID(),ctx.project.id,b.reason.trim(),actor.email,now,b.operationId,b.receiptId,b.saleId,ctx.project.id,source.releaseId),
-    await audit(env,ctx,actor,"geo.client_receipt_reversed",b.receiptId,{mappingReleaseId:source.releaseId})
+     .bind(reversalId,ctx.project.id,b.reason.trim(),actor.email,now,b.operationId,b.receiptId,b.saleId,ctx.project.id,source.releaseId),
+    audit(env,ctx,actor,"geo.client_receipt_reversed",b.receiptId,{mappingReleaseId:source.releaseId},{kind:"receipt",id:reversalId})
    ]);
    if(result[0]?.meta?.changes!==1)return json({error:"Receipt already reversed or not found."},409);
   }else if(request.method==="PUT"&&["confirm","void"].includes(b.action)){
@@ -87,7 +88,7 @@ export async function clientGeoSales(request,env,ctx,actor){
    const result=await env.DB.batch([
     env.DB.prepare("UPDATE geo_client_sales_3d SET state=?,revision=revision+1,confirmed_at=?,confirmed_by=?,evidence_ref=? WHERE id=? AND project_id=? AND mapping_release_id=? AND state='booked' AND revision=?"+where+" AND EXISTS(SELECT 1 FROM geo_plot_mapping_active_3d WHERE project_id=? AND mapping_release_id=?)")
      .bind(newState,b.action==="confirm"?now:null,b.action==="confirm"?actor.email:null,b.evidenceRef.trim(),b.saleId,ctx.project.id,source.releaseId,b.expectedRevision,ctx.project.id,source.releaseId),
-    await audit(env,ctx,actor,"geo.client_sale_"+newState,b.saleId,{mappingReleaseId:source.releaseId})
+    audit(env,ctx,actor,"geo.client_sale_"+newState,b.saleId,{mappingReleaseId:source.releaseId},{kind:"sale",id:b.saleId,revision:b.expectedRevision+1})
    ]);
    if(result[0]?.meta?.changes!==1)return json({error:"Sale changed, has outstanding receipts, or is not Booked."},409);
   }else return json({error:"Unknown sales action."},400);
