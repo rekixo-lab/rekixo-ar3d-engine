@@ -81,7 +81,7 @@ export default function EngineAdvanced() {
   async function load() {
     setError("");
     const [projectResult, maps, mapIdState, deletion] = await Promise.all([
-      projects("", "active", 100, 0),
+      projects("", "all", 100, 0),
       geoMapsSettings().catch(() => ({ apiKey: null })),
       loadMapId().catch(() => ({ mapId: null, configured: false })),
       deletionStatus().catch(() => ({ job: null })),
