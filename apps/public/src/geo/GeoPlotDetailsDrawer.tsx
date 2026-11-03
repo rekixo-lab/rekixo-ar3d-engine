@@ -36,6 +36,23 @@ function formatMeasurement(value:number,unit:string) {
 const prettyStatus = (status: GeoPlotDrawerCommercial["status"]) =>
   status === "available" ? "Available" : status === "booked" ? "Booked" : "Sold";
 
+// Inline icons keep both public contact actions crisp without loading assets.
+function GeoPlotContactIcon({kind}:{kind:"whatsapp"|"call"}) {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {kind==="whatsapp" ? <>
+      <path d="M20.5 11.65a8.45 8.45 0 0 1-12.3 7.55L3.7 20.5l1.45-4.35A8.45 8.45 0 1 1 20.5 11.65Z"/>
+      <path d="M9.05 8.15c-.48.25-.79.74-.72 1.38.24 2.29 3.11 5.16 5.4 5.4.64.07 1.14-.24 1.38-.72l.3-.74-2.02-1.03-1.07 1.02a6.45 6.45 0 0 1-2.28-2.28l1.03-1.07-1.04-2.02-.98.06Z"/>
+    </> : <path d="M21.2 16.6v2.7a1.9 1.9 0 0 1-2.06 1.9
+      17.25 17.25 0 0 1-7.51-2.68 17 17 0 0 1-5.22-5.22
+      17.25 17.25 0 0 1-2.68-7.55A1.9 1.9 0 0 1 5.62 3.7h2.7
+      a1.9 1.9 0 0 1 1.9 1.63c.12.86.35 1.7.69 2.48
+      a1.9 1.9 0 0 1-.43 2.01l-1.12 1.12a13.6 13.6 0 0 0 4.69 4.69
+      l1.12-1.12a1.9 1.9 0 0 1 2.01-.43c.78.34 1.62.57 2.48.69
+      a1.9 1.9 0 0 1 1.54 1.83Z"/>}
+  </svg>;
+}
+
 export function GeoPlotDetailsDrawer({
   plot, commercial, projectName, geoHeadingDeg, publicPhone, publicWhatsappHref, onClose,
 }: Props) {
@@ -79,8 +96,10 @@ export function GeoPlotDetailsDrawer({
   const allRoles = shown?.layout==="three" || shown?.corners.length===3
     ? ["front","back","depthA"] : ["front","back","depthA","depthB"];
   const safePhone=(publicPhone||"").replace(/[^0-9+]/g,"");
-  const callHref=/^\+?[0-9]{10,15}$/.test(safePhone)?"tel:"+safePhone:"";
-  const whatsappHref=publicWhatsappHref&&shown
+  const callHref=/^\+?[0-9]{7,15}$/.test(safePhone)?"tel:"+safePhone:"";
+  // Use only the explicitly published WhatsApp number, never a private
+  // client contact or an assumed WhatsApp account on the phone number.
+  const whatsappHref=shown&&/^https:\/\/wa\.me\/[0-9]{11,15}$/.test(publicWhatsappHref||"")
     ? publicWhatsappHref+"?text="+encodeURIComponent("Hello, I would like details about Plot "+shown.id+" in "+projectName+".")
     : "";
   const price=commercial?.pricePaise;
@@ -223,11 +242,27 @@ export function GeoPlotDetailsDrawer({
             </div>:null}
             {shown.notes?<p className="geo-plot-drawer__notes">{shown.notes}</p>:null}
           </section>
-          {callHref||whatsappHref?<nav className="geo-plot-drawer__contact" aria-label="Published project contact actions">
-            {whatsappHref?<a href={whatsappHref} target="_blank" rel="noopener noreferrer"
-              className="geo-plot-drawer__whatsapp">WhatsApp</a>:null}
-            {callHref?<a href={callHref} className="geo-plot-drawer__call">Call Now</a>:null}
-          </nav>:null}
+          <nav className="geo-plot-drawer__contact" aria-label={"Contact about Plot "+shown.id}>
+            {whatsappHref
+              ?<a href={whatsappHref} target="_blank" rel="noopener noreferrer"
+                className="geo-plot-drawer__contact-action geo-plot-drawer__whatsapp"
+                aria-label={"WhatsApp about Plot "+shown.id}>
+                <GeoPlotContactIcon kind="whatsapp"/><span>WhatsApp</span>
+              </a>
+              :<span className="geo-plot-drawer__contact-action geo-plot-drawer__whatsapp is-unavailable"
+                aria-disabled="true" title="WhatsApp number not published">
+                <GeoPlotContactIcon kind="whatsapp"/><span>WhatsApp</span>
+              </span>}
+            {callHref
+              ?<a href={callHref} className="geo-plot-drawer__contact-action geo-plot-drawer__call"
+                aria-label={"Call about Plot "+shown.id}>
+                <GeoPlotContactIcon kind="call"/><span>Call Now</span>
+              </a>
+              :<span className="geo-plot-drawer__contact-action geo-plot-drawer__call is-unavailable"
+                aria-disabled="true" title="Call number not published">
+                <GeoPlotContactIcon kind="call"/><span>Call Now</span>
+              </span>}
+          </nav>
         </div>
       </>}
     </aside>

@@ -110,11 +110,50 @@
 .geo-plot-drawer__muted{margin:11px 0;font-size:11px;color:#a7b8c5;line-height:1.5}
 .geo-plot-drawer__review-note{margin:12px 0 0;padding:10px;border:1px solid #5d7583;border-radius:9px;background:#203643;color:#e5edf1;font-size:11px;line-height:1.5}
 .geo-plot-drawer__notes{margin:12px 0 0;color:#bdd2dd;font-size:11px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
-.geo-plot-drawer__contact{display:flex;gap:8px;margin-top:18px;padding-bottom:4px}
-.geo-plot-drawer__contact a{flex:1;display:grid;place-items:center;min-height:42px;padding:8px 10px;border-radius:10px;text-decoration:none;font-size:12px;font-weight:850;color:#f4fffc}
-.geo-plot-drawer__whatsapp{background:#14794e;border:1px solid #45ca92}
-.geo-plot-drawer__call{background:#1d4258;border:1px solid #597c98}
-.geo-plot-drawer__contact a:focus-visible{outline:2px solid #9cffd6;outline-offset:2px}
+/* Screenshot-inspired compact WhatsApp / Call row immediately after plot facts.
+   Both actions always occupy equal space; missing opted-in contacts are disabled. */
+.geo-plot-drawer__contact{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  min-width:0;
+  margin-top:17px;
+  padding:13px 0 6px;
+  border-top:1px solid rgba(130,168,185,.17);
+}
+.geo-plot-drawer__contact-action{
+  box-sizing:border-box;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  width:100%;
+  min-width:0;
+  min-height:49px;
+  padding:10px 8px;
+  border-radius:12px;
+  text-decoration:none;
+  white-space:nowrap;
+  color:#f9fffe;
+  font-size:12px;
+  font-weight:850;
+  line-height:1.2;
+  letter-spacing:.01em;
+  box-shadow:0 5px 12px rgba(0,6,14,.12);
+  transition:background .16s ease,border-color .16s ease,transform .16s ease;
+}
+.geo-plot-drawer__contact-action svg{width:18px;height:18px;flex:0 0 18px}
+.geo-plot-drawer__contact-action span{min-width:0}
+.geo-plot-drawer__whatsapp{background:#0bb762;border:1px solid #17c773}
+.geo-plot-drawer__call{background:#253765;border:1px solid #5067a2}
+.geo-plot-drawer__contact-action:is(a):hover{transform:translateY(-1px);filter:brightness(1.08)}
+.geo-plot-drawer__contact-action:is(a):active{transform:translateY(0)}
+.geo-plot-drawer__contact-action:is(a):focus-visible{
+  outline:2px solid #a2ffe1;outline-offset:3px;
+}
+.geo-plot-drawer__contact-action.is-unavailable{
+  opacity:.44;cursor:not-allowed;box-shadow:none;filter:saturate(.5);
+}
 @media(max-width:640px) {
   /* Fill the scene itself; reserve the same 55px right-hand map strip. */
   .geo-plot-drawer{top:0;bottom:0;left:0;width:calc(100% - 55px);max-height:none;border-radius:0 15px 0 0}
@@ -123,6 +162,9 @@
   .geo-plot-drawer__head{padding:12px 12px 10px}
   .geo-plot-drawer__scroll{padding:10px 11px max(44px,env(safe-area-inset-bottom,0px))}
   .geo-plot-drawer__diagram-card{padding:8px}
+  .geo-plot-drawer__contact{gap:8px;margin-top:14px;padding-top:12px}
+  .geo-plot-drawer__contact-action{min-height:46px;padding:9px 6px;gap:6px;border-radius:11px;font-size:12px}
+  .geo-plot-drawer__contact-action svg{width:17px;height:17px;flex-basis:17px}
 }
 /* Native fullscreen's camera buttons float above this full-height panel.
    Keep content scrollable with internal room for the four independent controls. */
@@ -139,6 +181,7 @@
    Closing the drawer restores their normal interaction automatically. */
 @media(prefers-reduced-motion:reduce){
   .geo-plot-drawer{transition-duration:.01ms;transition-delay:0s;will-change:auto}
+  .geo-plot-drawer__contact-action{transition:none}
 }
 
 /* The status filter is retained in React state and restored after the drawer
