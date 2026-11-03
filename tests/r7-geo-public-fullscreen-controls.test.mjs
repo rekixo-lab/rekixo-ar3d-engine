@@ -14,6 +14,11 @@ test("public Geo mirrors camera controls into native fullscreen", () => {
   assert.match(helper, /document\.fullscreenElement/);
   assert.match(helper, /cloneNode\(true\)/);
   assert.match(helper, /originals\[index\]\?\.click\(\)/);
+  assert.match(publicSource, /<a className="geo-model-site-link"/);
+  assert.match(publicSource, /href=\{modelSiteHref\}/);
+  // Fullscreen bridge clones the entire nav; native anchor links stay clickable.
+  assert.match(helper, /cloneNode\(true\)/);
+  assert.match(publicCss, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
   assert.match(helper, /geo-camera-toolbar--fullscreen-clone/);
 });
 
@@ -25,22 +30,23 @@ test("normal Geo customer view renders the live toolbar in a row below the map",
   assert.doesNotMatch(css, /visibility:\s*hidden\s*!important/);
 });
 
-test("mobile camera buttons fit four columns with transparent controls and no outer panel", () => {
+test("mobile Geo dock fits five actions with transparent controls and no outer panel", () => {
   assert.match(publicCss, /@media \(max-width: 640px\)[\s\S]*geo-public-toolbar-slot/);
-  assert.match(publicCss, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(publicCss, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
   assert.match(publicCss, /border:\s*0 !important;[\s\S]*background:\s*transparent !important;[\s\S]*box-shadow:\s*none !important;/);
   assert.match(publicCss, /button\.is-active::after/);
   assert.match(publicCss, /\.jio-public-project-logo\s*\{\s*width:\s*34px;\s*height:\s*34px;/);
 });
 
-test("fullscreen camera controls have no outer panel and four separate rounded buttons", () => {
-  const fullscreenStyles = css.slice(css.indexOf("/* Geo fullscreen: four independent, rounded camera buttons"));
+test("fullscreen Geo dock has five independent actions including the 3D website link", () => {
+  const fullscreenStyles = css.slice(css.indexOf("/* Geo fullscreen: five independent, rounded actions"));
   assert.match(fullscreenStyles, /\.geo-integrated-scene:fullscreen \.geo-camera-toolbar--fullscreen-clone\s*\{[\s\S]*display:\s*grid\s*!important/);
-  assert.match(fullscreenStyles, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(fullscreenStyles, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
   assert.match(fullscreenStyles, /gap:\s*clamp\(5px, 1vw, 11px\)/);
   assert.match(fullscreenStyles, /padding:\s*0 !important;[\s\S]*border:\s*0 !important;[\s\S]*background:\s*transparent !important;/);
   assert.match(fullscreenStyles, /box-shadow:\s*none !important;[\s\S]*backdrop-filter:\s*none !important;/);
-  assert.match(fullscreenStyles, /\.geo-integrated-scene:fullscreen \.geo-camera-toolbar--fullscreen-clone button\s*\{[\s\S]*border-radius:\s*10px !important/);
+  assert.match(fullscreenStyles, /\.geo-integrated-scene:fullscreen \.geo-camera-toolbar--fullscreen-clone button,[\s\S]*\.geo-model-site-link\s*\{[\s\S]*border-radius:\s*10px !important/);
+  assert.match(fullscreenStyles, /\.geo-model-site-link\s*\{[\s\S]*color:\s*#eafff6 !important/);
   assert.match(fullscreenStyles, /button:hover,[\s\S]*button:focus-visible[\s\S]*border-radius:\s*10px !important/);
   assert.match(fullscreenStyles, /button\.is-active\s*\{[\s\S]*border-radius:\s*10px !important/);
   assert.match(fullscreenStyles, /button\.is-active::after\s*\{[\s\S]*display:\s*none !important/);
@@ -62,7 +68,7 @@ test("fullscreen uses the Geo scene and places the cloned camera dock at the bot
   assert.ok(publicSource.includes("fullscreenControl: false"));
   assert.ok(publicSource.includes("scene.requestFullscreen?.()"));
   assert.ok(publicSource.includes("document.exitFullscreen()"));
-  const fullscreenDock = css.slice(css.indexOf("/* Geo fullscreen: four independent, rounded camera buttons"));
+  const fullscreenDock = css.slice(css.indexOf("/* Geo fullscreen: five independent, rounded actions"));
   assert.ok(fullscreenDock.includes(".geo-integrated-scene:fullscreen .geo-camera-toolbar--fullscreen-clone"));
   assert.ok(fullscreenDock.includes("bottom: calc(10px + env(safe-area-inset-bottom"));
 });
