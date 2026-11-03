@@ -22,6 +22,7 @@ test("mobile Geo map reaches camera dock on short and tall phones",async({page})
         <div class="geo-public-toolbar-slot"><nav class="geo-camera-toolbar geo-camera-toolbar--normal-row">
           <button class="is-active">Overview</button><button>Front</button><button>Corner</button>
           <button>Aerial</button>
+          <a class="geo-model-site-link" href="/3Dprojects/satharai" target="_blank" rel="noopener noreferrer">3D Model</a>
         </nav></div>
       </div></main></body></html>`);
     await page.addStyleTag({content:rootStyles});
@@ -53,10 +54,13 @@ test("mobile Geo map reaches camera dock on short and tall phones",async({page})
         documentHeight:document.documentElement.scrollHeight,
         shellHeight:rect(".jio-public-shell").height,
         dockPosition:getComputedStyle(document.querySelector(".geo-public-toolbar-slot")!).position,
-        cameraButtons:[...document.querySelectorAll(".geo-camera-toolbar--normal-row button")].map(node=>node.textContent?.trim()),
+        cameraButtons:[...document.querySelectorAll(".geo-camera-toolbar--normal-row button, .geo-camera-toolbar--normal-row a")].map(node=>node.textContent?.trim()),
+        modelLink:{href:document.querySelector(".geo-model-site-link")?.getAttribute("href"),
+          target:document.querySelector(".geo-model-site-link")?.getAttribute("target"),
+          rel:document.querySelector(".geo-model-site-link")?.getAttribute("rel")},
         dockBackground:getComputedStyle(document.querySelector(".geo-public-toolbar-slot")!).backgroundColor,
         dockBorder:getComputedStyle(document.querySelector(".geo-public-toolbar-slot")!).borderTopWidth,
-        buttons:[...document.querySelectorAll(".geo-camera-toolbar--normal-row button")].map(node=>({
+        buttons:[...document.querySelectorAll(".geo-camera-toolbar--normal-row button, .geo-camera-toolbar--normal-row a")].map(node=>({
           radius:getComputedStyle(node).borderRadius,
           background:getComputedStyle(node).backgroundColor,
           border:getComputedStyle(node).borderTopWidth,
@@ -65,7 +69,10 @@ test("mobile Geo map reaches camera dock on short and tall phones",async({page})
       };
     });
     const label=`${viewport.width}x${viewport.height}`;
-    expect(measured.cameraButtons,label+" only four camera buttons").toEqual(["Overview","Front","Corner","Aerial"]);
+    expect(measured.cameraButtons,label+" four camera views and the 3D site action").toEqual(["Overview","Front","Corner","Aerial","3D Model"]);
+    expect(measured.modelLink,label+" project-specific model route").toEqual({
+      href:"/3Dprojects/satharai",target:"_blank",rel:"noopener noreferrer"
+    });
     expect(measured.dockBackground,label+" dock panel is transparent").toBe("rgba(0, 0, 0, 0)");
     expect(measured.dockBorder,label+" dock panel border removed").toBe("0px");
     expect(measured.buttons.every(button=>button.radius==="10px"),label+" stable rounded corners").toBeTruthy();
@@ -73,7 +80,7 @@ test("mobile Geo map reaches camera dock on short and tall phones",async({page})
     expect(measured.buttons[0].background,label+" active button has own green fill")
       .not.toBe(measured.buttons[1].background);
     expect(Math.max(...measured.buttons.map(button=>button.width))-
-      Math.min(...measured.buttons.map(button=>button.width)),label+" four equal widths").toBeLessThan(2);
+      Math.min(...measured.buttons.map(button=>button.width)),label+" five equal widths").toBeLessThan(2);
     expect(measured.titleText,label+" title restored").toBe("satharai");
     expect(measured.subtitleText,label+" subtitle restored").toContain("Thiruvallur");
     expect(measured.headerDisplay,label+" mobile title row is not legacy fullscreen grid").toBe("flex");
@@ -99,15 +106,21 @@ test("desktop Geo keeps existing dock and site sizing rules",async({page})=>{
     <header class="jio-public-header"><h1>Project</h1></header>
     <div class="geo-public-map-layout">
       <div class="geo-integrated-scene"></div>
-      <div class="geo-public-toolbar-slot"><nav class="geo-camera-toolbar geo-camera-toolbar--normal-row">Overview</nav></div>
+      <div class="geo-public-toolbar-slot"><nav class="geo-camera-toolbar geo-camera-toolbar--normal-row">
+        <button>Overview</button><button>Front</button><button>Corner</button><button>Aerial</button>
+        <a class="geo-model-site-link" href="/3Dprojects/demo" target="_blank" rel="noopener noreferrer">3D Model</a>
+      </nav></div>
     </div></main>`);
   await page.addStyleTag({content:rootStyles});
   await page.addStyleTag({content:fullscreenStyles});
   await page.addStyleTag({content:geoStyles});
   const result=await page.evaluate(()=>({
     dockPosition:getComputedStyle(document.querySelector(".geo-public-toolbar-slot")!).position,
-    shellDisplay:getComputedStyle(document.querySelector(".jio-public-shell")!).display
+    shellDisplay:getComputedStyle(document.querySelector(".jio-public-shell")!).display,
+    actions:[...document.querySelectorAll(".geo-camera-toolbar--normal-row > *")].map(el=>el.getBoundingClientRect().width)
   }));
   expect(result.dockPosition).toBe("fixed");
   expect(result.shellDisplay).not.toBe("flex");
+  expect(result.actions).toHaveLength(5);
+  expect(Math.max(...result.actions)-Math.min(...result.actions)).toBeLessThan(2);
 });
