@@ -21,6 +21,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
 
@@ -41,6 +42,7 @@ jobs:
           fetch-depth: 2
 
       - name: Require merged PR for production push
+        id: merged-pr
         if: github.event_name == 'push'
         shell: bash
         env:
@@ -67,13 +69,14 @@ jobs:
           const fs = require("fs");
           const payload = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
           const mergeSha = process.argv[3];
-          const mergedToMain = Array.isArray(payload) && payload.some(
+          const matchingPr = Array.isArray(payload) && payload.find(
             (pr) => pr && pr.merged_at && pr.base?.ref === "main" && pr.merge_commit_sha === mergeSha
           );
-          if (!mergedToMain) {
+          if (!matchingPr || !matchingPr.head?.sha) {
             console.error("::error::Production deploy blocked: no merged PR to main matches this exact commit SHA.");
             process.exit(1);
           }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, "pr_head_sha=" + matchingPr.head.sha + "\\n");
           console.log("Production commit is associated with a merged PR to main.");
           NODE
           rm -f "$BODY"
@@ -110,6 +113,45 @@ jobs:
         id: scope
         if: github.event_name == 'push'
         run: node scripts/ci-change-scope.mjs push >> "$GITHUB_OUTPUT"
+
+      - name: Require successful PR CI for fast UI deployment
+        # Never skip full production tests on an unvalidated PR. GitHub
+        # pull_request validation runs are keyed to the actual PR head SHA.
+        if: github.event_name == 'push' && steps.scope.outputs.lane == 'ui'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ steps.merged-pr.outputs.pr_head_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$PR_HEAD_SHA"
+          BODY="$(mktemp)"
+          STATUS="$(curl --silent --show-error --output "$BODY" --write-out '%{http_code}' \\
+            --header "Authorization: Bearer $GH_TOKEN" \\
+            --header "Accept: application/vnd.github+json" \\
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/validate.yml/runs?head_sha=$PR_HEAD_SHA&event=pull_request&per_page=20")"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Could not confirm successful PR CI (HTTP $STATUS)."
+            rm -f "$BODY"
+            exit 1
+          fi
+          node - "$BODY" "$PR_HEAD_SHA" <<'NODE'
+          const fs = require("fs");
+          const payload = JSON.parse(fs.readFileSync(process.argv[2],"utf8"));
+          const expectedSha = process.argv[3];
+          const verified = Array.isArray(payload.workflow_runs) &&
+            payload.workflow_runs.some(run =>
+              run.head_sha === expectedSha &&
+              run.status === "completed" &&
+              run.conclusion === "success"
+            );
+          if (!verified) {
+            console.error("::error::Fast UI deployment requires passing PR validation for this exact commit.");
+            process.exit(1);
+          }
+          console.log("Exact PR head SHA has completed successful validation.");
+          NODE
+          rm -f "$BODY"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
