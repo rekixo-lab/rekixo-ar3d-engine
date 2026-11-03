@@ -177,7 +177,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     setStatus("CSV analysed; existing polygons and published releases have not changed.");
   }
   function applyCsvPreview(){
-    if(!csvPreview||(!csvPreview.changed.length&&!csvPreview.added.length))return;
+    if(!csvPreview||dirty||hasPendingPlot()||(!csvPreview.changed.length&&!csvPreview.added.length))return;
     if(!window.confirm("Apply CSV values to the LOCAL DRAFT only? Existing polygon positions are protected. Changed source approvals remain unverified until independently rechecked."))return;
     changeDraft({plots:csvPreview.plots});
     setCsvPreview(null);setStatus("CSV values staged in draft only. Review missing-data warnings, then Save Draft and Verify.");
@@ -205,7 +205,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   function changeDraft(patch:Partial<MasterplanDraft>){
     if(!draft)return;
     setDraftHistory(h=>({past:[...h.past.slice(-29),structuredClone(draft)],future:[]}));
-    setDraft({...draft,...patch});setDirty(true);
+    setCsvPreview(null);setDraft({...draft,...patch});setDirty(true);
   }
   function hasPendingPlot(){
     if(!working)return false;
@@ -584,7 +584,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
             {csvPreview.unmapped.length>0&&<small>Unmapped: {csvPreview.unmapped.slice(0,12).join(", ")}</small>}
             {csvPreview.missing.length>0&&<small>Existing plots not in CSV (preserved): {csvPreview.missing.slice(0,12).join(", ")}</small>}
             {csvPreview.issues.slice(0,8).map((issue,i)=><small key={i}>{issue}</small>)}
-            <button type="button" disabled={!csvPreview.changed.length&&!csvPreview.added.length}
+            <button type="button" disabled={dirty||Boolean(working)||(!csvPreview.changed.length&&!csvPreview.added.length)}
               onClick={applyCsvPreview}>Apply CSV to Draft Only</button>
             <button type="button" onClick={()=>setCsvPreview(null)}>Cancel Import</button>
           </section>}
