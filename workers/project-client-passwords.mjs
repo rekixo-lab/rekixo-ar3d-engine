@@ -3,7 +3,9 @@
 import {clientTokenHash,newClientBearer} from "./project-client-access.mjs";
 import {validProjectSlug} from "../shared/project-slug-policy.js";
 const encode=new TextEncoder();
-const ITERATIONS=125000;
+// Cloudflare Workers rejects a single PBKDF2 deriveBits call above 100,000 iterations.
+// Keep provisioning, sign-in and password changes on the same supported cost.
+const ITERATIONS=100000;
 export const validClientPassword=value=>
  typeof value==="string"&&value.length>=8&&value.length<=128&&
  !/\s/.test(value)&&/[a-z]/i.test(value)&&/[0-9]/.test(value);
