@@ -496,3 +496,31 @@
     padding-right: 12px;
   }
 }
+
+.engine-admin-project-picker input[type="search"] {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid #2b3b56;
+  border-radius: 9px;
+  background: #111c30;
+  color: #effff8;
+  font: inherit;
+}
+.engine-admin-project-picker input[type="search"]:focus-visible {
+  outline: 2px solid #30c982;
+  outline-offset: 2px;
+}
+.engine-admin-project-picker .engine-admin-project-more {
+  width: 100%;
+  margin-top: 6px;
+  min-height: 34px;
+  border: 1px solid #2b3b56;
+  border-radius: 8px;
+  background: #15273a;
+  color: #cbf2e5;
+  cursor: pointer;
+}
