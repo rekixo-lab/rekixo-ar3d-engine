@@ -977,7 +977,19 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref }: { data: G
         className="geo-plot-drawer__outside-dismiss"
         aria-label="Close plot details by tapping outside"
         title="Close plot details"
-        onClick={()=>setSelectedPlot(null)}
+        // A picked plot opens on pointerup, before the browser's click.
+        // If this button closes on click, the same click can immediately
+        // close the newly opened drawer. Only a subsequent pointerdown may
+        // dismiss it; keyboard-generated clicks (detail=0) still work.
+        onPointerDown={event=>{
+          if(!event.isPrimary||event.button!==0)return;
+          event.preventDefault();
+          event.stopPropagation();
+          setSelectedPlot(null);
+        }}
+        onClick={event=>{
+          if(event.detail===0)setSelectedPlot(null);
+        }}
       />}
       <GeoPlotDetailsDrawer
         plot={selectedPlot}
