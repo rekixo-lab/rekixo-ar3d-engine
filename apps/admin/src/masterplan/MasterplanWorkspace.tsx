@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { listAssets, uploadAsset, type CloudAssetSummary } from "../studio/cloud";
 import type { Asset } from "../studio/domain";
 import {fitImageFrame,imageWorldAt,panImageFrame,pinchImageFrame,zoomImageFrame} from "../../../../shared/masterplan-image-gestures.js";
@@ -442,6 +442,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     pointerRef.current.delete(e.pointerId);dragRef.current=null;
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   }
+  const missingIssues=useMemo(()=>missingData(),[draft]);
   const approved=state?.draft.verifiedRevision===state?.draft.revision&&Boolean(state?.draft.revision);
   const alreadyLive=Boolean(approved&&state?.activeRelease?.draftRevision===state?.draft.revision);
   const publishedUrl=slug?`/3Dprojects/${encodeURIComponent(slug)}/masterplan`:"";
@@ -589,10 +590,10 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
             <button type="button" onClick={()=>setCsvPreview(null)}>Cancel Import</button>
           </section>}
           <details className="masterplan-missing-data">
-            <summary>Missing Data Checker · {missingData().length} issues</summary>
-            {missingData().length===0?<p>All mapped plot fields are source-reviewed.</p>:
-              <ul>{missingData().slice(0,35).map((issue,i)=><li key={i}>{issue}</li>)}</ul>}
-            {missingData().length>35&&<small>Showing first 35; download mapping CSV for a full source review.</small>}
+            <summary>Missing Data Checker · {missingIssues.length} issues</summary>
+            {missingIssues.length===0?<p>All mapped plot fields are source-reviewed.</p>:
+              <ul>{missingIssues.slice(0,35).map((issue,i)=><li key={i}>{issue}</li>)}</ul>}
+            {missingIssues.length>35&&<small>Showing first 35; download mapping CSV for a full source review.</small>}
           </details>
           <div className="masterplan-inventory">{draft?.plots.map(p=><button key={p.id} type="button"
             className={working?.id===p.id?"active":""} onClick={()=>choose(p)}>{p.id}</button>)}</div>
