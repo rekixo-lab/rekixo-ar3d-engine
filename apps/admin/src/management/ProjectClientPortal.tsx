@@ -442,10 +442,12 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
           <h2>Geo plot management</h2>
           <p>Published Plot Status — read only</p>
           <div className="engine-client-admin-plot-list">
-            {commercial.rows.map(row=><button key={row.plotId} type="button"
+            {commercial.rows.map(row=><button key={row.plotId} type="button" aria-pressed={plotSearch===row.plotId}
               className="engine-client-admin-plot-row" onClick={()=>setPlotSearch(row.plotId)}>
               <strong>Plot {row.plotId}</strong><span>{row.status}</span></button>)}
           </div>
+          {plotSearch&&<p role="status">Selected Plot {plotSearch} ·
+            {" "}{commercial.rows.find(row=>row.plotId===plotSearch)?.status||"Not found"}</p>}
         </section>):
         <section className="engine-client-admin-card"><p>Loading published Geo plot mapping…</p></section>)}
 
