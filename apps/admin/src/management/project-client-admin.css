@@ -611,3 +611,52 @@ button.client-geo-table-row:hover,button.client-geo-table-row.is-active{border-c
 .client-geo-editor>hr{margin:16px 0;border:0;border-top:1px solid #315767}
 .client-geo-inline{display:flex!important;align-items:center;gap:9px!important;margin:10px 0}
 .client-geo-inline input{min-height:18px;width:18px}
+
+.client-geo-upload{display:grid;grid-template-columns:1fr 1fr auto;align-items:end;gap:12px;margin:16px 0}
+.client-geo-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:12px}
+.client-geo-gallery-grid article{overflow:hidden;border:1px solid #355969;border-radius:11px;background:#112c3c}
+.client-geo-gallery-grid img{display:block;width:100%;height:130px;object-fit:cover}
+.client-geo-gallery-grid article>div{display:flex;justify-content:space-between;gap:8px;padding:9px;font-size:12px}
+.client-geo-gallery-grid article>button{margin:0 9px 9px}
+.client-geo-gallery-grid strong,.client-geo-gallery-grid small{overflow-wrap:anywhere}
+.client-geo-notice-list{display:grid;gap:9px;margin-top:20px}
+.client-geo-notice-list article{display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid #355766;border-radius:10px;background:#112b3b}
+.client-geo-notice-list article>div{flex:1;min-width:0}
+.client-geo-notice-list article span{margin-left:8px;color:#7ce5ba;font-size:10px}
+.client-geo-sales-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+.client-geo-sales-stats>div{display:grid;gap:7px;padding:13px;border:1px solid #335563;border-radius:10px;background:#102e40}
+.client-geo-sales-stats span{color:#aac6cc;font-size:12px}
+.client-geo-sales-stats strong{font-size:clamp(15px,2vw,23px);overflow-wrap:anywhere}
+.client-geo-sale-list{display:grid;gap:7px;margin-top:16px;max-height:440px;overflow:auto}
+.client-geo-sale-list button{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.client-geo-sale-list button.is-active{border-color:#7cf0bc;background:#1c7358}
+.client-geo-payment{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #305568;font-size:12px}
+@media(max-width:1100px){
+ .engine-client-admin-workspace{grid-template-columns:190px minmax(0,1fr)}
+ .client-geo-table-heading{display:none}
+ .client-geo-table-row{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+ .client-geo-table-row>:last-child{text-align:right}
+}
+@media(max-width:800px){
+ .engine-client-admin-workspace{display:block}
+ .engine-client-admin-sidebar{position:static;margin-bottom:12px}
+ .engine-client-admin-sidebar-brand,.engine-client-admin-sidebar-hint{display:none}
+ .engine-client-admin-workspace .engine-client-admin-tabs{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;margin:0}
+ .engine-client-admin-workspace .engine-client-admin-tabs button{flex:0 0 auto;min-height:39px;white-space:nowrap;padding:8px 12px}
+ .engine-client-admin-workspace .engine-client-admin-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .client-geo-upload{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .client-geo-upload>button{grid-column:1/-1}
+}
+@media(max-width:520px){
+ .client-geo-editor-grid{grid-template-columns:minmax(0,1fr)}
+ .client-geo-editor-grid .client-geo-wide{grid-column:auto}
+ .client-geo-toolbar input,.client-geo-toolbar select{flex:1 1 45%;width:100%}
+ .client-geo-table-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ .client-geo-table-row>:last-child{text-align:left}
+ .client-geo-sales-stats{grid-template-columns:1fr}
+ .client-geo-upload{grid-template-columns:1fr}
+ .client-geo-notice-list article{flex-wrap:wrap}
+}
+@media(prefers-reduced-motion:reduce){
+ .engine-client-admin-workspace .engine-client-admin-tabs button{transition:none}
+}
