@@ -17,9 +17,14 @@ async function state(env,ctx,source){
  ).bind(ctx.project.id,source.releaseId).first();
  return {mappingReleaseId:source.releaseId,sales:sales.results||[],payments:payments.results||[],totalSales:Number(total?.total||0),notice:"Private client-entered sale and receipt records; public Sold approval and bank verification are separate."};
 }
-async function audit(env,ctx,actor,action,target,details){
- return env.DB.prepare("INSERT INTO engine_admin_audit(id,actor_email,action,project_id,target_id,details_json,created_at) VALUES(?,?,?,?,?,?,?)")
- .bind(crypto.randomUUID(),actor.email,action,ctx.project.id,target,JSON.stringify(details),new Date().toISOString());
+function audit(env,ctx,actor,action,target,details,proof){
+ const check=proof.kind==="receipt"
+   ?"EXISTS(SELECT 1 FROM geo_client_receipts_3d WHERE id=? AND project_id=?)"
+   :"EXISTS(SELECT 1 FROM geo_client_sales_3d WHERE id=? AND project_id=? AND revision=?)";
+ const params=proof.kind==="receipt"?[proof.id,ctx.project.id]:
+   [proof.id,ctx.project.id,proof.revision];
+ return env.DB.prepare("INSERT INTO engine_admin_audit(id,actor_email,action,project_id,target_id,details_json,created_at) SELECT ?,?,?,?,?,?,? WHERE "+check)
+ .bind(crypto.randomUUID(),actor.email,action,ctx.project.id,target,JSON.stringify(details),new Date().toISOString(),...params);
 }
 export async function clientGeoSales(request,env,ctx,actor){
  if(actor.role!=="client_admin")return json({error:"Client Admin required."},403);
