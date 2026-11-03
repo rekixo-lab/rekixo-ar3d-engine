@@ -6,10 +6,13 @@ import {listGeoCommercialState} from "../workers/geo-plot-commercial.mjs";
 const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 class DB{
  constructor(db){this.db=db;}
- prepare(sql){const db=this.db;return {bind(...args){return {
-   async all(){return {results:db.prepare(sql).all(...args)};},
-   async first(){return db.prepare(sql).get(...args)||null;}
- }};}}
+ prepare(sql){
+  const db=this.db;
+  return {bind(...args){
+   return {all:async()=>({results:db.prepare(sql).all(...args)}),
+    first:async()=>db.prepare(sql).get(...args)||null};
+  }};
+ }
 }
 test("All mapped Geo IDs and public-approved counters match customer release",async()=>{
  const db=new DatabaseSync(":memory:");
