@@ -6,7 +6,7 @@ const publicCss=await readFile(new URL("../apps/public/src/geo/geo-public-demo.c
 const drawerCss=await readFile(new URL("../apps/public/src/geo/geo-plot-details-drawer.css",import.meta.url),"utf8");
 const fullscreenCss=await readFile(new URL("../apps/public/src/geo/fullscreen-controls.css",import.meta.url),"utf8");
 
-test("plot details drawer flushes to map edges while preserving title, right strip and camera controls",async({page})=>{
+test("plot details drawer ends above Google legal footer and outside map strip closes it",async({page})=>{
   for(const screen of [{width:360,height:640},{width:393,height:852},{width:430,height:932},{width:1100,height:850}]){
     await page.setViewportSize(screen);
     await page.setContent(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -25,6 +25,8 @@ test("plot details drawer flushes to map edges while preserving title, right str
           </div>
           <nav class="geo-map-quick-actions"><button>−</button><button>+</button><button>⛶</button></nav>
           <section class="geo-plot-status"><button>STATUS</button></section>
+          <button type="button" class="geo-plot-drawer__outside-dismiss"
+            aria-label="Close plot details by tapping outside"></button>
           <aside class="geo-plot-drawer is-open" aria-label="Selected plot details">
             <div class="geo-plot-drawer__head"><div class="geo-plot-drawer__heading">
               <span class="geo-plot-drawer__eyebrow">PLOT DETAILS</span><h2>Plot 5</h2>
@@ -33,7 +35,7 @@ test("plot details drawer flushes to map edges while preserving title, right str
           </aside>
         </div>
         <div class="geo-public-toolbar-slot"><nav class="geo-camera-toolbar geo-camera-toolbar--normal-row">
-          <button>Overview</button><button>Front</button><button>Corner</button><button>Aerial</button>
+          <button>Overview</button><button>Front</button><button>Corner</button><button>Re-enter</button>
         </nav></div>
       </div></main></body></html>`);
     await page.addStyleTag({content:rootCss});
@@ -48,6 +50,8 @@ test("plot details drawer flushes to map edges while preserving title, right str
       return{
         map:rect(".geo-integrated-scene"),
         panel:rect(".geo-plot-drawer"),
+        outside:rect(".geo-plot-drawer__outside-dismiss"),
+        outsideZ:Number(getComputedStyle(document.querySelector(".geo-plot-drawer__outside-dismiss")!).zIndex),
         header:rect(".jio-public-header"),
         dock:rect(".geo-public-toolbar-slot"),
         rightStrip:rect(".geo-integrated-scene").right-rect(".geo-plot-drawer").right,
@@ -65,7 +69,9 @@ test("plot details drawer flushes to map edges while preserving title, right str
     const tag=screen.width+"×"+screen.height;
     expect(Math.abs(actual.panel.left-actual.map.left),tag+" left edge flush").toBeLessThan(2);
     expect(Math.abs(actual.panel.top-actual.map.top),tag+" top edge flush").toBeLessThan(2);
-    expect(Math.abs(actual.panel.bottom-actual.map.bottom),tag+" bottom edge flush").toBeLessThan(2);
+    expect(Math.abs(actual.map.bottom-actual.panel.bottom-30),tag+" clear 30px map attribution footer").toBeLessThan(2);
+    expect(Math.abs(actual.outside.bottom-actual.panel.bottom),tag+" outside-tap ends at same credit footer").toBeLessThan(2);
+    expect(Math.abs(actual.outside.right-actual.map.right),tag+" outside-tap covers the right map strip").toBeLessThan(2);
     if(screen.width<=640)
       expect(Math.abs(actual.rightStrip-55),tag+" right map strip unchanged").toBeLessThan(2);
     else expect(actual.rightStrip,tag+" responsive desktop right gap").toBeGreaterThanOrEqual(55);
@@ -73,12 +79,36 @@ test("plot details drawer flushes to map edges while preserving title, right str
     if(screen.width<=640)
       expect(actual.dock.top,tag+" four normal camera controls below map").toBeGreaterThanOrEqual(actual.map.bottom-1);
     expect(actual.zoomZ,tag+" zoom buttons now behind drawer").toBeLessThan(actual.panelZ);
+    expect(actual.outsideZ,tag+" outside-tap layer below panel").toBeLessThan(actual.panelZ);
+    expect(actual.outsideZ,tag+" outside-tap layer above map controls").toBeGreaterThan(actual.zoomZ);
     expect(actual.statusVisibility,tag+" no status panel behind open drawer").toBe("hidden");
-    expect(actual.mask,tag+" attribution cutout retained").toContain("30px");
+    expect(actual.mask,tag+" drawer no longer has see-through footer").toBe("none");
     expect(actual.scrollerOverflow,tag+" internal vertical scrolling").toBe("auto");
     expect(actual.creditRailBackground,tag+" bottom imagery covered by solid credit rail").toBe("rgb(7, 28, 39)");
     expect(actual.logoZ,tag+" Google's original logo remains above credit rail").toBe(101);
     expect(actual.creditZ,tag+" original copyright remains above credit rail").toBe(101);
     if(screen.width<=640)expect(actual.headingPadding,tag+" no extra 60px header gap").toBe("12px");
+
+    await page.evaluate(()=>{
+      (window as unknown as {__geoCloseTaps:number;__geoLegalTaps:number}).__geoCloseTaps=0;
+      (window as unknown as {__geoCloseTaps:number;__geoLegalTaps:number}).__geoLegalTaps=0;
+      document.querySelector(".geo-plot-drawer__outside-dismiss")?.addEventListener("click",()=>{
+        (window as unknown as {__geoCloseTaps:number}).__geoCloseTaps++;
+      });
+      document.querySelector('.gm-style a[href*="google.com/maps"]')?.addEventListener("click",event=>{
+        event.preventDefault();
+        (window as unknown as {__geoLegalTaps:number}).__geoLegalTaps++;
+      });
+    });
+    // Click only the uncovered right-hand map strip; clicks inside drawer
+    // stay in the drawer, and legal attribution below remains link-accessible.
+    await page.locator(".geo-plot-drawer__outside-dismiss").click({
+      position:{x:actual.outside.right-actual.outside.left-15,y:85},
+    });
+    expect(await page.evaluate(()=>(window as unknown as {__geoCloseTaps:number}).__geoCloseTaps),
+      tag+" tapping the map beside drawer closes it").toBe(1);
+    await page.locator('.gm-style a[href*="google.com/maps"]').click();
+    expect(await page.evaluate(()=>(window as unknown as {__geoLegalTaps:number}).__geoLegalTaps),
+      tag+" Google logo remains clickable").toBe(1);
   }
 });

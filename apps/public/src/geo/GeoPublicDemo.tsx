@@ -972,6 +972,13 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref }: { data: G
           <span className="geo-plot-status-switch" aria-hidden="true"><i/></span>
         </button>
       </section>}
+      {selectedPlot&&<button
+        type="button"
+        className="geo-plot-drawer__outside-dismiss"
+        aria-label="Close plot details by tapping outside"
+        title="Close plot details"
+        onClick={()=>setSelectedPlot(null)}
+      />}
       <GeoPlotDetailsDrawer
         plot={selectedPlot}
         commercial={selectedPlot?data.plotMapping?.commercial?.[selectedPlot.id]:undefined}
