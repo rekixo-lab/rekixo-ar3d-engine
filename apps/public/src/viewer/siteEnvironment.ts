@@ -519,6 +519,7 @@ export function createArchitecturalSiteEnvironment(
   universalGroundCover = presentation,
   buildingBounds: THREE.Box3 = bounds,
   buildingOutline: readonly { x: number; z: number }[] = [],
+  grassOnlyPresentation = false,
 ) {
   configureProceduralSurfaceTextures(renderer);
   const root = new THREE.Group();
@@ -540,6 +541,47 @@ export function createArchitecturalSiteEnvironment(
   // source Building geometry is never moved by the environment motion controller.
   root.userData.presentationOnly = true;
   root.userData.nonAuthoritative = true;
+
+  // Customer-facing 3D is intentionally just the unmodified source model
+  // surrounded by flat green grass. Do not instantiate roads, trees, fences,
+  // site-area meshes, vehicles, decorative fallback or other site dressing.
+  // The operator/editor path retains the original source-backed functionality.
+  if (grassOnlyPresentation) {
+    root.userData.environmentMode = "flat-grass-only";
+    let grassCover: ReturnType<typeof createUniversalGrassGroundCover> | undefined;
+    if (!bounds.isEmpty()) {
+      const footprintSize = buildingBounds.getSize(new THREE.Vector3());
+      const footprintCenter = buildingBounds.getCenter(new THREE.Vector3());
+      const exclusions: GrassCoverArea[] = footprintSize.x > 0 && footprintSize.z > 0
+        ? [{
+            kind: "building-footprint",
+            x: footprintCenter.x,
+            z: footprintCenter.z,
+            width: footprintSize.x,
+            depth: footprintSize.z,
+            rotation: 0,
+          }]
+        : [];
+      grassCover = createUniversalGrassGroundCover({
+        bounds,
+        footprintBounds: buildingBounds,
+        footprintOutline: buildingOutline,
+        groundElevation: typeof groundElevation === "number" && Number.isFinite(groundElevation)
+          ? groundElevation : bounds.min.y,
+        mobile,
+        excludedAreas: exclusions,
+        lawnAreas: [],
+        flatSurface: true,
+      });
+      root.add(grassCover.root);
+    }
+    return {
+      root,
+      update(_deltaSeconds: number) {},
+      setNight(night: boolean) { grassCover?.setNight(night); },
+      dispose() { disposeRoot(root); root.clear(); },
+    };
+  }
 
   // Basement bounds are not a ground survey. Omit optional dressing if grade is unknown.
   const knownGrade =

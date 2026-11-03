@@ -70,6 +70,8 @@ interface Viewer3DProps {
   sourcePresentation?: SourcePresentation;
   buildingPresentation?: BuildingPresentationManifestV1;
   clientPresentation?: boolean;
+  /** Customer public 3D views all use flat grass, independently of optional floor UI. */
+  flatGrassOnly?: boolean;
   /** Show the floor-isolation strip on a customer-facing Building viewer. */
   showClientFloorControls?: boolean;
   projectLocation?: string;
@@ -104,6 +106,7 @@ export function Viewer3D({
   sourcePresentation,
   buildingPresentation,
   clientPresentation = false,
+  flatGrassOnly = true,
   showClientFloorControls = false,
   projectLocation,
   allowInteriorControls = true,
@@ -1058,6 +1061,7 @@ export function Viewer3D({
           clientPresentation, // Restore grass cover in all customer camera views.
           buildingFootprintBounds,
           buildingFootprintOutline,
+          flatGrassOnly, // Flat grass across standard, premium twin and all public 3D modules.
         );
         scene.add(siteEnvironment.root);
         if (
