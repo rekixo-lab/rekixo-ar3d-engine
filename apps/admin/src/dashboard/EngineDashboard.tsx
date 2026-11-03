@@ -15,6 +15,12 @@ import { newProject, projectSlug } from "../studio/domain";
 import { PROJECT_KIND_LABELS, newProjectStartPath, type EngineProjectKind } from "../../../../shared/engine-project-kinds.js";
 import "./engine-dashboard.css";
 
+type MasterplanOverviewState = {
+  draft: {revision:number; verifiedRevision:number|null; imageAssetId:string|null;
+    controlPoints:unknown[]; plots:Array<{id:string}>};
+  activeRelease:{id:string;version:number;draftRevision:number}|null;
+};
+
 type SourcePackState = {
   latestPack?: {
     version: number;
@@ -41,6 +47,7 @@ export default function EngineDashboard() {
   const [search, setSearch] = useState("");
   const [buildingReleases, setBuildingReleases] = useState<CloudReleaseSummary[]>([]);
   const [geoState, setGeoState] = useState<CloudGeoReleaseState>();
+  const [masterplanState,setMasterplanState] = useState<MasterplanOverviewState|null>(null);
   const [geoPlotState,setGeoPlotState] = useState<{
     activeMapping?:{id:string;current:boolean}|null;
     draft?:{plots?:Array<{id:string}>}|null;
@@ -87,6 +94,7 @@ export default function EngineDashboard() {
     if (!selectedSlug) {
       setBuildingReleases([]);
       setGeoState(undefined);
+      setMasterplanState(null);
       setGeoPlotState(null);
       setExperienceItems([]);
       setSourcePack(null);
@@ -98,6 +106,24 @@ export default function EngineDashboard() {
     setError("");
     setSourcePackError("");
     setGeoPlotState(null);
+    setMasterplanState(null);
+    const selectedKind=projectItems.find(project=>project.slug===selectedSlug)?.projectKind;
+    if(selectedKind==="masterplan_geo"){
+      void fetch(`${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(selectedSlug)}/masterplan-geo`,
+        {headers:{Accept:"application/json"},cache:"no-store"})
+        .then(async response=>{
+          const payload=await response.json() as MasterplanOverviewState & {error?:string};
+          if(!response.ok)throw Error(payload.error||"Masterplan state unavailable.");
+          return payload;
+        }).then(payload=>{
+          if(!live)return;
+          setBuildingReleases([]);setExperienceItems([]);setGeoState(undefined);
+          setSourcePack(null);setMasterplanState(payload);
+        }).catch(error=>{
+          if(live)setError(error instanceof Error?error.message:"Masterplan state unavailable.");
+        }).finally(()=>{if(live)setDetailLoading(false);});
+      return ()=>{live=false;};
+    }
     const geoPlotRequest=fetch(
       `${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(selectedSlug)}/geo-plots`,
       {headers:{Accept:"application/json"},cache:"no-store"}
@@ -152,7 +178,7 @@ export default function EngineDashboard() {
     return () => {
       live = false;
     };
-  }, [selectedSlug]);
+  }, [selectedSlug, projectItems]);
 
   const selectedProject = useMemo(
     () => projectItems.find((project) => project.slug === selectedSlug),
@@ -177,12 +203,22 @@ export default function EngineDashboard() {
   const geoLive = Boolean(activeGeo && selectedProject?.status === "published");
 
   const nextAction = useMemo(() => {
-    if (selectedProject?.projectKind === "masterplan_geo") return {
-      label: "Prepare Geo Masterplan",
-      help: "Upload the approved masterplan image, verify geographic control points, then map polygon plots independently of Building.",
-      href: projectHref("masterplan", selectedProject.slug),
-      action: "link" as const,
-    };
+    if (selectedProject?.projectKind === "masterplan_geo") {
+      const draft=masterplanState?.draft;
+      const active=masterplanState?.activeRelease;
+      const next=(!draft?.imageAssetId)
+        ? {label:"Upload Original Masterplan",help:"Choose the approved source image before mapping.",tab:"source"}
+        : (!draft.plots.length||draft.controlPoints.length<3)
+          ? {label:"Complete GPS & Plot Mapping",help:`${draft.plots.length} plots mapped · ${draft.controlPoints.length} GPS controls. Finish source-backed entries.`,tab:"plots"}
+          : draft.verifiedRevision!==draft.revision
+            ? {label:"Verify Masterplan Draft",help:`${draft.plots.length} mapped plots. Review measurements, GPS and source evidence before publishing.`,tab:"plots"}
+            : active?.draftRevision!==draft.revision
+              ? {label:"Publish Verified Masterplan",help:"The current draft is verified and ready for its own immutable release.",tab:"plots"}
+              : {label:"Masterplan Published",help:`Live v${active.version} · ${draft.plots.length} mapped plots. Review customer handoff before sharing.`,tab:"plots"};
+      return {label:next.label,help:next.help,
+        href:projectHref(next.tab==="source"?"masterplan":"masterplan-plots",selectedProject.slug),
+        action:"link" as const};
+    }
     if (!selectedProject) {
       return {
         label: "Create your first Engine project",
@@ -251,7 +287,7 @@ export default function EngineDashboard() {
       href: projectHref("releases", selectedProject.slug),
       action: "link" as const,
     };
-  }, [selectedProject, sourceReady, activeBuilding, geoExperience, activeGeo, geoPlotState, sourcePackError]);
+  }, [selectedProject, masterplanState, sourceReady, activeBuilding, geoExperience, activeGeo, geoPlotState, sourcePackError]);
 
   function selectProject(slug: string) {
     setSelectedSlug(slug);
@@ -362,6 +398,9 @@ export default function EngineDashboard() {
                   <span>{selectedProject.location || selectedProject.slug} · {PROJECT_KIND_LABELS[selectedProject.projectKind || "legacy"]}</span>
                 </div>
                 <div className="engine-overview-live-actions">
+                  {selectedProject.projectKind==="masterplan_geo" && masterplanState?.activeRelease ? (
+                    <a href={`/3Dprojects/${encodeURIComponent(selectedProject.slug)}/masterplan`} target="_blank" rel="noreferrer">Open Masterplan Live</a>
+                  ) : null}
                   {buildingLive ? (
                     <a href={publicProjectPath(selectedProject.slug)} target="_blank" rel="noreferrer">Open Building Live</a>
                   ) : null}
@@ -376,7 +415,7 @@ export default function EngineDashboard() {
                 <div>
                   <p>RECOMMENDED ACTION</p>
                   <h3>{detailLoading ? "Checking project state…" : nextAction.label}</h3>
-                  <span>{detailLoading ? "Current source, releases and experiences are loading." : nextAction.help}</span>
+                  <span>{detailLoading ? "Checking current project draft and publication." : nextAction.help}</span>
                 </div>
                 {nextAction.action === "create" ? (
                   <button className="engine-control-button engine-control-button--primary" type="button" onClick={() => setShowCreate(true)}>Create Project</button>
