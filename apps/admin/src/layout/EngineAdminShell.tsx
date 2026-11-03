@@ -256,7 +256,7 @@ export default function EngineAdminShell({ children }: { children: ReactNode }) 
     return () => {
       live = false;
     };
-  }, [selectedSlug]);
+  }, [selectedSlug,projectKind]);
 
   function changeProject(slug: string) {
     if (!slug || slug === selectedSlug) return;
