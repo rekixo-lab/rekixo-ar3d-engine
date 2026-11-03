@@ -8,6 +8,8 @@ import { applyRigidBuildingPlacement } from "./geoRigidTransform";
 import { buildModelGeoPlotLayer,pickModelGeoPlot,type ModelPlotLayer } from "./geoPlotModelOverlay";
 import { loadPublicBranding, type PublicProjectBranding } from "../branding";
 import { GeoPlotDetailsDrawer, type GeoPlotDrawerPlot } from "./GeoPlotDetailsDrawer";
+import GeoCompassRose from "./GeoCompassRose";
+import {geoMapNorthRotation} from "../../../../shared/geo-map-compass.js";
 import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shared/geo-plot-viewport.js";
 import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
@@ -401,6 +403,8 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const cameraActionRef = useRef<((view: GeoCameraView) => void) | null>(null);
   const zoomActionRef = useRef<((step: number) => void) | null>(null);
+  const compassResetRef = useRef<(() => void) | null>(null);
+  const compassBearingRef = useRef<HTMLSpanElement | null>(null);
   // Published plot boundaries are always interactive. Public chrome can be
   // minimal without removing the canonical GLB plot picker or detail panel.
   const [selectedPlot, setSelectedPlot] = useState<GeoMappedPlot|null>(null);
@@ -427,6 +431,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
     let mapIdle: MapsListener | undefined;
     let mapTypeChanged: MapsListener | undefined;
     let mapZoomChanged: MapsListener | undefined;
+    let mapHeadingChanged: MapsListener | undefined;
     let mapClick: MapsListener | undefined;
     let pointerHost:HTMLDivElement|null=null;
     let onNativePointerDown:((event:PointerEvent)=>void)|null=null;
@@ -500,6 +505,30 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           gestureHandling: "greedy",
           clickableIcons: false,
         });
+
+        // Geographic north is always sourced from the CURRENT Google map
+        // camera bearing, not from the device orientation or GLB model yaw.
+        // Write a CSS variable directly to avoid re-rendering the 3D viewer
+        // during every one-finger rotation frame.
+        const updateCompassHeading = (rawHeading:number|undefined) => {
+          const northRotation=geoMapNorthRotation(rawHeading);
+          if(northRotation===null)return;
+          sceneRef.current?.style.setProperty("--geo-map-north-rotation",northRotation+"deg");
+          if(compassBearingRef.current)
+            compassBearingRef.current.textContent=Math.round(normalizeHeading(rawHeading!))+"°";
+        };
+        updateCompassHeading(map.getHeading?.()??initialCamera.heading);
+        mapHeadingChanged=map.addListener("heading_changed",()=>{
+          updateCompassHeading(map.getHeading?.());
+        });
+        compassResetRef.current=()=>{
+          // A compass tap restores geographic north without changing tilt,
+          // zoom, model placement or the plot's saved world-facing direction.
+          if(map.moveCamera)map.moveCamera({heading:0});
+          else map.setHeading?.(0);
+          updateCompassHeading(map.getHeading?.()??0);
+          overlay?.requestRedraw();
+        };
 
         // Canonical GLB-attached plot geometry is rendered by the SAME WebGL
         // camera as the masterplan. The lat/lng paths below are for viewport
@@ -583,6 +612,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
             // moveCamera applies immediately, unlike a queued/eased gesture.
             if(map.moveCamera)map.moveCamera({heading});
             else map.setHeading?.(heading);
+            updateCompassHeading(heading);
           },
           onCaptureChange:capturing=>{
             if(touchCapable)map.setOptions?.({
@@ -762,6 +792,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
           // Start presets 50% closer using fractional zoom. Google's native
           // location-dependent zoom bound still applies, without rescaling GLB.
           map.moveCamera?.({ center, ...preset });
+          updateCompassHeading(preset.heading);
           overlay?.requestRedraw();
         };
         cameraActionRef.current = applyCamera;
@@ -807,6 +838,7 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
         });
         mapIdle = map.addListener("idle", () => {
           overlay?.requestRedraw();
+          updateCompassHeading(map.getHeading?.());
           refreshPlotPolygons?.(true);
         });
         mapTypeChanged = map.addListener("maptypeid_changed", () => {
@@ -836,8 +868,10 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
       if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
       cameraActionRef.current = null;
       zoomActionRef.current = null;
+      compassResetRef.current = null;
       statusPresentationRef.current = null;
       mapZoomChanged?.remove();
+      mapHeadingChanged?.remove();
       mapClick?.remove();
       if(pointerHost&&onNativePointerDown)
         pointerHost.removeEventListener("pointerdown",onNativePointerDown,true);
@@ -865,8 +899,19 @@ function IntegratedGeoScene({ data, toolbarContainer }: { data: GeoPayload; tool
   }, [data]);
 
   return (
-    <div ref={sceneRef} className="geo-integrated-scene">
+    <div ref={sceneRef} className="geo-integrated-scene"
+      style={{"--geo-map-north-rotation":(geoMapNorthRotation(
+        cameraPreset("overview",data.placement.headingDeg).heading)??0)+"deg"} as CSSProperties}>
       <div ref={hostRef} className="geo-integrated-map" aria-label={`${data.project.name} integrated 3D geographic scene`} />
+      <button type="button" className="geo-map-compass"
+        aria-label="Map compass. Tap to face north."
+        title="Geographic true north · tap to reset map bearing"
+        onClick={()=>compassResetRef.current?.()}>
+        <GeoCompassRose/>
+        <span ref={compassBearingRef} className="geo-map-compass__bearing">
+          {Math.round(normalizeHeading(cameraPreset("overview",data.placement.headingDeg).heading))}°
+        </span>
+      </button>
       <nav className="geo-map-quick-actions" aria-label="Geo zoom and fullscreen controls">
         <button type="button" aria-label="Zoom out 2×" title="Zoom out 2×" onClick={() => zoomActionRef.current?.(-1)}>−</button>
         <button type="button" aria-label="Zoom in 2×" title="Zoom in 2× (one full map zoom level)" onClick={() => zoomActionRef.current?.(1)}>+</button>

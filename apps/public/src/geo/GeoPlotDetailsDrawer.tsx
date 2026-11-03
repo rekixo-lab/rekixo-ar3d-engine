@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { publicGeoAreaUnits, publicGeoPlotDiagram, type PublicGeoPlotForDiagram } from "../../../../shared/geo-plot-detail-diagram.js";
 import {geoPlotFacingEntries} from "../../../../shared/geo-plot-facing.js";
+import GeoCompassRose from "./GeoCompassRose";
 import "./geo-plot-details-drawer.css";
 
 export type GeoPlotDrawerPlot = PublicGeoPlotForDiagram & {
@@ -106,6 +107,17 @@ export function GeoPlotDetailsDrawer({
               <span className={"geo-plot-drawer__status geo-plot-drawer__status--"+displayStatus}>
                 {prettyStatus(displayStatus)}
               </span>
+              {facings.length>0&&(
+                <div className="geo-plot-drawer__compass-preview"
+                  role="img"
+                  aria-label={"Geographic facing of Plot "+shown.id+": "+facings.map(face=>face.label).join(", ")}>
+                  <GeoCompassRose facingDirections={facings.map(face=>face.direction)}/>
+                  <span className="geo-plot-drawer__compass-caption">
+                    <small>TRUE NORTH</small>
+                    <strong>{facings.map(face=>face.label).join(" / ")}</strong>
+                  </span>
+                </div>
+              )}
             </div>
             {diagram ? <>
               <svg viewBox="0 0 320 210" className="geo-plot-drawer__svg"
