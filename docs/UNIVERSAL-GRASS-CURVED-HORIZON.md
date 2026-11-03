@@ -2,7 +2,7 @@
 
 ## Current customer-facing behavior (November 2026)
 
-Customer-facing 3D Building views use **flat, continuously green grass only** around the source GLB/masterplan/building. `Viewer3D` selects `grassOnlyPresentation`, and `siteEnvironment` returns early with the `flatSurface: true` ground cover. The flat option has zero horizon rise and no blue/sky-tinted far ring; the original three-tier grass detail and the source-model footprint cutout remain.
+Customer-facing 3D Building views use **flat, continuously green grass only** around the source GLB/masterplan/building. `Viewer3D` defaults `flatGrassOnly` to `true` for **every public 3D route**, including the standard Building page, model modules and Premium Digital Twin, without changing their camera/floor UI. `siteEnvironment` returns early with the `flatSurface: true` ground cover. The flat option has zero horizon rise and no blue/sky-tinted far ring; the original three-tier grass detail and the source-model footprint cutout remain.
 
 No **additional scene objects** from the public site manifest or generic presentation fallback render in this mode: no roads, paving, trees, plants, cars, gates, outdoor lights, side lawns, urban backdrop, or decorative hardscape. The viewer's camera and original imported model remain unchanged and centered by the existing camera logic. This behavior applies across Overview, Front, Corner, Entry and Aerial.
 
