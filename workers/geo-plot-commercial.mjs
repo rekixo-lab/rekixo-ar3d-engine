@@ -45,7 +45,7 @@ export async function activeMap(env,ctx){
     throw Error("Commercial source mapping checksum mismatch; data cannot be approved.");
   return {releaseId:row.id,publicationMode:row.publication_mode,plots:validateGeoPlotCollection(JSON.parse(row.plots_json))};
 }
-async function listState(env,ctx,source){
+export async function listGeoCommercialState(env,ctx,source){
   if(!source)return {mappingReleaseId:null,rows:[],notice:"Current verified published mapping required before commercial approval."};
   const rows=await env.DB.prepare(`SELECT plot_id AS plotId,status,price_paise AS pricePaise,
     currency,evidence_ref AS evidenceRef,public_approved AS publicApproved,
@@ -67,7 +67,7 @@ export async function handleGeoPlotCommercial(request,env,ctx,actor,{allowApprov
     return reply({error:"Method not allowed."},405);
   try{
     const source=await activeMap(env,ctx);
-    if(request.method==="GET")return reply(await listState(env,ctx,source));
+    if(request.method==="GET")return reply(await listGeoCommercialState(env,ctx,source));
     if(ctx.project.status==="archived")throw Error("Archived projects are read-only.");
     if(!source)throw Error("Publish a verified source-bound Geo mapping before commercial approval.");
     const raw=await request.text();
@@ -128,7 +128,7 @@ export async function handleGeoPlotCommercial(request,env,ctx,actor,{allowApprov
     ]);
     if(results[0]?.meta?.changes!==1||results[1]?.meta?.changes!==1)
       throw Error("Concurrent mapping or commercial revision change; reload.");
-    return reply(await listState(env,ctx,source));
+    return reply(await listGeoCommercialState(env,ctx,source));
   }catch(error){return reply({error:error instanceof Error?error.message:"Commercial review failed."},409);}
 }
 export async function publicGeoCommercialForRelease(env,projectId,mappingId,plotIds){
