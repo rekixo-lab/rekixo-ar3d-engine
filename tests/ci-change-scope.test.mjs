@@ -9,12 +9,16 @@ test("only app stylesheets use fast lane and receive targeted visual specs",()=>
   const geo = classifyCiChanges(["apps/public/src/geo/geo-public-demo.css"]);
   assert.equal(geo.lane,"ui");
   assert.equal(geo.run_building_browser,false);
+  assert.equal(geo.ui_public_changed,true);
+  assert.equal(geo.ui_admin_changed,false);
   assert.match(geo.fast_browser_specs,/geo-true-north-compass\.spec\.ts/);
   assert.match(geo.fast_browser_specs,/geo-mobile-viewport-fit\.spec\.ts/);
 
   const admin = classifyCiChanges(["apps/admin/src/layout/engine-admin.css"]);
   assert.equal(admin.lane,"ui");
   assert.equal(admin.run_building_browser,false);
+  assert.equal(admin.ui_public_changed,false);
+  assert.equal(admin.ui_admin_changed,true);
   assert.match(admin.fast_browser_specs,/client-admin-responsive-motion\.spec\.ts/);
 
   const building = classifyCiChanges(["apps/public/src/viewer/viewer.css"]);
