@@ -27,6 +27,8 @@ export function classifyCiChanges(paths) {
   return {
     lane,
     changed_count: files.length,
+    ui_admin_changed: lane === "ui" && adminCss,
+    ui_public_changed: lane === "ui" && (geoCss || publicOtherCss),
     // The separate, expensive live Building browser suite is relevant only to
     // non-Geo Public CSS, or to full-risk changes. Production readiness and
     // release-integrity checks are NEVER skipped by this value.
