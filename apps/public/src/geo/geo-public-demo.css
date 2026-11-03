@@ -912,6 +912,9 @@
   -webkit-tap-highlight-color:transparent;
   touch-action:manipulation;
   cursor: pointer;
+  /* 25% smaller, keeping the original round dial and click-to-north control. */
+  transform: scale(.75);
+  transform-origin: top left;
 }
 .geo-map-compass:hover,.geo-map-compass:focus-visible {
   border-radius:50%;
@@ -974,7 +977,7 @@
   pointer-events:none;
 }
 @media(max-width:640px){
-  .geo-map-compass{top:10px;left:10px;width:62px;height:62px;padding:0;border-radius:50%}
+  .geo-map-compass{top:8px;left:8px;width:62px;height:62px;padding:0;border-radius:50%}
   .geo-map-compass .geo-compass-rose{width:62px;height:62px}
 }
 @media(prefers-reduced-motion:reduce){
