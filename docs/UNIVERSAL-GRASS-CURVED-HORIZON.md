@@ -2,13 +2,13 @@
 
 ## Current customer-facing behavior (November 2026)
 
-The universal procedural turf mesh and green curved grass ground cover are **enabled again** for customer-facing Building presentations. `Viewer3D` passes `clientPresentation` to `createArchitecturalSiteEnvironment`, which keeps grass away from building footprints and reviewed roads, paths, parking and paving. This returns the surrounding grass in all public Building camera presets.
+Customer-facing 3D Building views use **flat, continuously green grass only** around the source GLB/masterplan/building. `Viewer3D` selects `grassOnlyPresentation`, and `siteEnvironment` returns early with the `flatSurface: true` ground cover. The flat option has zero horizon rise and no blue/sky-tinted far ring; the original three-tier grass detail and the source-model footprint cutout remain.
 
-The separate **flat presentation ground slabs remain disabled** via `includeGround: false` and `includeSurroundingGround: false`; the original GLB and reviewed Studio lawn/road/gate data are unchanged. The earlier attempt to disable the universal grass mesh removed the entire green lawn and was reverted.
+No **additional scene objects** from the public site manifest or generic presentation fallback render in this mode: no roads, paving, trees, plants, cars, gates, outdoor lights, side lawns, urban backdrop, or decorative hardscape. The viewer's camera and original imported model remain unchanged and centered by the existing camera logic. This behavior applies across Overview, Front, Corner, Entry and Aerial.
 
-The four evenly spaced automatic front potted plants are also disabled. Existing source-backed garden strips remain in place; gaps in actual GLB/source geometry must be corrected in that reviewed source rather than covered by speculative filler over an entrance. Overview, Front, Corner, Entry and Aerial all use the same customer Building scene.
+**Important source boundary:** If a road or tree is part of the authored GLB itself, it remains inside the preserved masterplan/building model; do not remove source geometry by name or overwrite a published customer model without review. Operator/admin editing retains the normal site-element workflow.
 
-## Earlier implementation (historical design)
+## Older curved/tinted terrain implementation (retained for non-customer/editor context)
 
 The public Building viewer now receives a presentation-only ground layer for customer-facing views, independent of optional decorative dressing. The layer combines the existing locally generated turf detail texture with a radial, low-poly landscape surface that gradually curves upward and tints from natural grass into a blue-green atmospheric horizon, blending with the existing shader-based sky.
 
