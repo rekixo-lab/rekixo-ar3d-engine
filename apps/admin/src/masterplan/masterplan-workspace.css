@@ -72,3 +72,64 @@
 
 /* Engine shell already supplies the page title and active-project context. */
 .engine-admin-content .masterplan-workspace > header { display: none; }
+
+
+/* Workflow safety additions: preview-first data changes and compact editing. */
+.masterplan-workspace button,
+.masterplan-workspace input,
+.masterplan-workspace select,
+.masterplan-workspace summary {
+  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease;
+}
+.masterplan-workspace button:hover:not(:disabled) { border-color:#70dfb8; }
+.masterplan-workspace button:focus-visible,
+.masterplan-workspace input:focus-visible,
+.masterplan-workspace select:focus-visible,
+.masterplan-workspace summary:focus-visible {
+  outline:2px solid #52e3ae;outline-offset:2px;
+}
+.masterplan-recovery,.masterplan-csv-preview,.masterplan-image-comparison,.masterplan-missing-data {
+  display:grid;gap:9px;padding:12px;border-radius:12px;
+  border:1px solid #497886;background:#102e3b;color:#e2fff2;
+  margin:9px 0;min-width:0;
+}
+.masterplan-recovery { border-color:#d4a556;background:#39311e; }
+.masterplan-recovery strong,.masterplan-csv-preview strong,
+.masterplan-image-comparison strong { font-size:13px; }
+.masterplan-recovery p,.masterplan-csv-preview p,
+.masterplan-image-comparison p,.masterplan-missing-data p {
+  margin:0;font-size:12px;line-height:1.55;color:#cde3e6;
+}
+.masterplan-csv-preview small {overflow-wrap:anywhere;font-size:11px;color:#d3eae9}
+.masterplan-missing-data summary {cursor:pointer;font-size:12px;font-weight:700;}
+.masterplan-missing-data ul {margin:0;padding-left:18px;display:grid;gap:4px;max-height:160px;overflow:auto;}
+.masterplan-missing-data li {font-size:11px;overflow-wrap:anywhere;}
+.masterplan-image-comparison__grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+.masterplan-image-comparison figure {margin:0;min-width:0;padding:5px;border-radius:9px;background:#0b1e2b;}
+.masterplan-image-comparison img {display:block;width:100%;max-height:235px;object-fit:contain;background:#050e18;border-radius:7px;}
+.masterplan-image-comparison figcaption {font-size:11px;text-align:center;padding:6px 0;color:#bfdfe4;}
+.masterplan-tools {position:relative;align-items:center;gap:6px;}
+.masterplan-tools button {min-height:36px;padding:7px 10px;font-size:12px;}
+.masterplan-dock {scrollbar-gutter:stable;}
+.masterplan-inventory button {min-width:34px;}
+@media(max-width:950px){
+  .masterplan-grid{grid-template-columns:minmax(0,1fr);}
+  .masterplan-stage {height:min(60vh,620px);min-height:310px;}
+  .masterplan-dock{max-height:none;}
+  .masterplan-tools{gap:5px;padding:7px;}
+  .masterplan-tools button{min-height:38px;}
+}
+@media(max-width:560px){
+  .masterplan-workspace{padding:8px 4px 64px;}
+  .masterplan-stats{gap:5px;margin:8px 0;}
+  .masterplan-stats span{min-width:66px;padding:7px;}
+  .masterplan-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));}
+  .masterplan-tools button,.masterplan-tools a{padding:8px 3px;text-align:center;}
+  .masterplan-image-comparison__grid{grid-template-columns:minmax(0,1fr);}
+  .masterplan-image-comparison img{max-height:190px;}
+  .masterplan-dock{padding:11px;gap:8px;}
+}
+@media(prefers-reduced-motion:reduce){
+  .masterplan-workspace button,.masterplan-workspace input,
+  .masterplan-workspace select,.masterplan-workspace summary{transition:none;}
+}
