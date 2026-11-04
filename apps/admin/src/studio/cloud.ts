@@ -822,13 +822,14 @@ export async function verifyGeoPreview(
 export async function publishGeoRelease(
   slug: string,
   expectedDraftRevision: number,
+  mappingGapConfirmation = "",
 ) {
   return api<{ release: CloudGeoReleaseSummary }>(
     `${CLOUD_BASE}/projects/${encodeURIComponent(slug)}/geo-releases`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "publish", expectedDraftRevision }),
+      body: JSON.stringify({ action: "publish", expectedDraftRevision, mappingGapConfirmation }),
     },
   );
 }
@@ -836,6 +837,7 @@ export async function publishGeoRelease(
 export async function activateGeoRelease(
   slug: string,
   geoReleaseId: string,
+  mappingGapConfirmation = "",
 ) {
   return api<{ release: CloudGeoReleaseSummary }>(
     `${CLOUD_BASE}/projects/${encodeURIComponent(
@@ -844,7 +846,7 @@ export async function activateGeoRelease(
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: "{}",
+      body: JSON.stringify({ mappingGapConfirmation }),
     },
   );
 }

@@ -202,7 +202,8 @@ export default function GeoPlotMapper(){
   const [publishedPreview,setPublishedPreview]=useState<{
     draftRevision:number;activeReleaseId:string|null;token:string;
     diff:{liveCount:number;draftCount:number;added:number;removed:number;changed:number;
-      changes:Array<{plotId:string;kind:string;fields:string[]}>}
+      changes:Array<{plotId:string;kind:string;fields:string[]}>};
+    continuity?:{sourceRows:number;carriedRows:number;reviewRows:number;missingRows:number}
   }|null>(null);
   const [cloneFrom,setCloneFrom]=useState("");
   const [cloneX,setCloneX]=useState("");
@@ -546,6 +547,37 @@ export default function GeoPlotMapper(){
       setMessage("ERROR: "+message);
       return {ok:false,reason:message};
     }finally{setBusy(false);}
+  };
+  const preserveSameCoordinateModel=async()=>{
+    if(!state||!geo||!state.draft.stale||dirty||working||busy)return;
+    setBusy(true);setMessage("");
+    try{
+      const plan=await callApi<{token:string;plotCount:number;nextCanonicalSha256:string}>(
+        api,{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({action:"preserve-coordinates-preflight",
+            expectedRevision:state.draft.revision})});
+      if(activeProjectRef.current!==slug)throw Error("Project changed. Restart source review.");
+      const exact="PRESERVE 3D COORDINATES "+slug;
+      const accepted=window.prompt("KEEP EXISTING 3D PLOT COORDINATES?\\n\\n"+
+        plan.plotCount+" polygons will remain in their exact OLD model-local X/Z positions on the NEW 3D model. "+
+        "ONLY use this after comparing both models and confirming the same metric scale, origin, orientation and plot layout. "+
+        "Different geometry needs verified image-source remapping instead.\\n\\n"+
+        "All area, side, facing, road, model-plane and source approvals become UNVERIFIED. "+
+        "Historical publications and commercial records remain untouched. Customer site will not change from this draft action.\\n\\n"+
+        "Type "+exact+" to create an unverified preserved draft:");
+      if(accepted!==exact){setMessage("3D replacement preservation cancelled. Old mapping draft is safe.");return;}
+      const next=await callApi<MappingState>(api,{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"preserve-coordinates",expectedRevision:state.draft.revision,
+          expectedPreflightToken:plan.token,confirmation:exact})});
+      if(activeProjectRef.current!==slug)throw Error("Project switched after source rebind. Reload.");
+      setState(next);setPlots(next.draft.plots);setDirty(false);resetWorking(null);
+      setOriginalId(null);setMode("pan");setPublishedPreview(null);
+      setMessage("Preserved "+plan.plotCount+" plotted boundaries and IDs in the NEW source as an UNVERIFIED private draft. "+
+        "Inspect ALL polygons on the new model, confirm plane height, road, sides and survey values, then Verify and Publish explicitly. "+
+        "Prior published mappings and customer statuses have not been overwritten.");
+    }catch(error){setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));}
+    finally{setBusy(false);}
   };
   const stageCornerFromVerifiedImage=(plotId:string,index:number,uv:Point,
     transform:SimilarityTransform,alignmentRevision:number):{ok:boolean;reason?:string}=>{
@@ -892,7 +924,9 @@ export default function GeoPlotMapper(){
         throw Error("Draft revision changed while comparing live publication. Reload.");
       setPublishedPreview(info);
       setMessage("Live/draft preflight ready. "+info.diff.added+" added, "+
-        info.diff.changed+" changed, "+info.diff.removed+" removed plots. Review before publish.");
+        info.diff.changed+" changed, "+info.diff.removed+" removed plots. "+
+        (info.continuity ? info.continuity.carriedRows+" status/price records eligible for carry-forward." :
+          "Commercial continuity preview unavailable on this API.")+" Review before publish.");
     }catch(error){setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));}
     finally{setBusy(false);}
   };
@@ -927,6 +961,13 @@ export default function GeoPlotMapper(){
           d.changes.slice(0,12).map(p=>p.kind.toUpperCase()+" Plot "+p.plotId+
             " ("+p.fields.join(", ")+")").join("\n")+
           (d.changes.length>12?"\n...plus "+(d.changes.length-12)+" more changes.":"")+
+          (approvedPreflight.continuity ?
+            "\n\nCOMMERCIAL CONTINUITY: "+approvedPreflight.continuity.carriedRows+
+            " status/price records retained; "+approvedPreflight.continuity.reviewRows+
+            " require NEW source approval; "+approvedPreflight.continuity.missingRows+
+            " unmatched remain in historical releases."+
+            "\nDifferent 3D/Geo model source: owner must reapprove statuses before publication." :
+            "\n\nCommercial continuity is not reported by this API; independently verify statuses before publication.")+
           "\nEvery release is immutable; edit in the Mapper and publish a new version anytime. Continue?";
         if(!window.confirm(summary))return;
       }
@@ -1213,8 +1254,14 @@ export default function GeoPlotMapper(){
         "None / stale"}</b></span>
     </section>
     {state?.draft.stale&&<div className="geo-plot-warning">
-      <p>Geo source has changed. Old polygon coordinates are locked to avoid wrong placement.
-      Historical published releases remain available when the matching Geo release is restored.</p>
+      <p>3D Geo source has changed. Old polygons and commercial history are preserved.
+      Use 1 · CSV / Image → Source replacement to verify the old and new model against
+      the same original image, then remap only affected Plot IDs. Recheck all plot approvals
+      before publishing. Historical releases remain available for recovery.</p>
+      <button type="button" disabled={busy||dirty||Boolean(working)}
+        onClick={()=>void preserveSameCoordinateModel()}>
+        Keep Existing Plot Coordinates · Unverified Draft
+      </button>
       <button type="button" disabled={busy} onClick={()=>{
         const exact="RESET MAPPING "+slug;
         if(window.prompt("Create an EMPTY mapping for the new Geo release. Unsaved old draft polygons will be replaced. Type "+exact)===exact)
@@ -1858,6 +1905,12 @@ export default function GeoPlotMapper(){
             <strong>Live {publishedPreview.diff.liveCount} → Draft {publishedPreview.diff.draftCount}</strong>
             <p>{publishedPreview.diff.added} added · {publishedPreview.diff.changed} changed ·
               {publishedPreview.diff.removed} removed. A fresh preflight and confirmation is required to publish.</p>
+            {publishedPreview.continuity&&<p>
+              Retain {publishedPreview.continuity.carriedRows} private status/price records ·
+              {publishedPreview.continuity.reviewRows} need new source approval ·
+              {publishedPreview.continuity.missingRows} unmatched remain in historical releases.
+              Customer records will not silently inherit approvals after a 3D model change.
+            </p>}
             {publishedPreview.diff.changes.slice(0,12).map((x,i)=><p key={i}>
               {x.kind}: Plot {x.plotId} ({x.fields.join(", ")})</p>)}
             {publishedPreview.diff.changes.length>12&&<p>

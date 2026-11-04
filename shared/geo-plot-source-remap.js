@@ -58,3 +58,17 @@ export function stageSelectedGeoSourceRemap(plots,previous,current,selectedIds=[
   validateGeoPlotCollection(moved);
   return {plots:moved,plan};
 }
+
+
+// Explicit same-frame replacement, analogous to preserving aligned 2D
+// masterplan polygons. This is NEVER automatic and never verification.
+// Model X/Z coordinates survive; all signed/model-plane approvals are revoked.
+export function stageUnverifiedSameCoordinateModel(plots) {
+  const existing=validateGeoPlotCollection(plots);
+  const staged=existing.map(plot=>{
+    const clean=geometryWithRevokedApprovals(plot,plot.corners);
+    const {planeY,...withoutOldElevation}=clean;
+    return {...withoutOldElevation,planeSource:"",planeVerified:false};
+  });
+  return validateGeoPlotCollection(staged);
+}

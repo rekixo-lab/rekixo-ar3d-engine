@@ -7,7 +7,7 @@ import { handleGeoPlotAlignment,requireCurrentImageAlignmentReview } from "./geo
 import { requireGeoInventoryReview } from "../shared/geo-plot-source-review.js";
 import { compareGeoPlotPublication } from "../shared/geo-plot-publication-diff.js";
 import { normalizeImageModelAlignment } from "../shared/geo-plot-image-alignment.js";
-import { stageSelectedGeoSourceRemap } from "../shared/geo-plot-source-remap.js";
+import { stageSelectedGeoSourceRemap,stageUnverifiedSameCoordinateModel } from "../shared/geo-plot-source-remap.js";
 import { geometryWithRevokedApprovals } from "../shared/geo-plot-precision-history.js";
 import { projectGeoRecoveryManifest } from "./geo-plot-recovery.mjs";
 import { handleGeoPlotCommercial } from "./geo-plot-commercial.mjs";
@@ -15,6 +15,7 @@ import { handleGeoPlotPricingSheet } from "./geo-plot-pricing.mjs";
 import { handleGeoPlotDeals } from "./geo-plot-deals.mjs";
 import { geoPlotMappingProjectKind } from "../shared/geo-plot-project-policy.js";
 import { preliminaryPublishPlotGuard } from "../shared/geo-plot-publication-mode.js";
+import { planGeoCommercialContinuity } from "../shared/geo-plot-commercial-continuity.js";
 
 const json = (value, init = {}) => Response.json(value, {headers: {"Cache-Control":"no-store"}, ...init});
 const fail = (message, status = 400) => json({error:message}, {status});
@@ -181,6 +182,77 @@ async function rebindReviewedSource(env,ctx,actor,body){
         independentAlignmentRevision:preflight.verifiedAlignmentRevision}),now).run();
   return state(env,ctx);
 }
+// Safe for a manually confirmed identical model-local X/Z coordinate frame.
+// Never auto-preserve on a new source; preview shows an UNVERIFIED private draft.
+async function sameCoordinatePreflight(env,ctx,body) {
+  const draft=await env.DB.prepare("SELECT * FROM geo_plot_mapping_drafts_3d WHERE project_id=?")
+    .bind(ctx.project.id).first();
+  if(!draft||!Number.isInteger(body.expectedRevision)||draft.revision!==body.expectedRevision)
+    throw Error("Mapping draft revision changed. Reload before comparing model sources.");
+  if(draft.geo_release_id===ctx.active.geo_release_id &&
+     draft.building_release_id===ctx.active.source_building_release_id)
+    throw Error("Source is already current; no replacement is needed.");
+  const released=await activeGeoReleaseState(env,ctx.project.slug);
+  if(released.state!=="ok")throw Error("The new active Geo release failed checksum validation.");
+  const current=await publicGeoExperienceFromState(env,released);
+  if(current.geoRelease?.id!==ctx.active.geo_release_id ||
+     current.buildingRelease?.id!==ctx.active.source_building_release_id ||
+     !/^[a-f0-9]{64}$/i.test(current.canonicalModel?.sha256||""))
+    throw Error("The new Geo/Building model cannot be independently pinned.");
+  const staged=stageUnverifiedSameCoordinateModel(JSON.parse(draft.plots_json));
+  const stagedText=JSON.stringify(staged);
+  if(new TextEncoder().encode(stagedText).byteLength>4_000_000)
+    throw Error("Preserved mapping is larger than the supported D1 draft size.");
+  const token=await digest(JSON.stringify({
+    projectId:ctx.project.id,experienceId:ctx.active.experience_id,
+    previousGeoReleaseId:draft.geo_release_id,
+    previousBuildingReleaseId:draft.building_release_id,
+    nextGeoReleaseId:ctx.active.geo_release_id,
+    nextBuildingReleaseId:ctx.active.source_building_release_id,
+    nextCanonicalSha256:current.canonicalModel.sha256,
+    oldRevision:draft.revision,oldPlotsSha256:await digest(draft.plots_json),
+    stagedSha256:await digest(stagedText)
+  }));
+  return {token,expectedRevision:draft.revision,previousGeoReleaseId:draft.geo_release_id,
+    previousBuildingReleaseId:draft.building_release_id,
+    nextGeoReleaseId:ctx.active.geo_release_id,
+    nextBuildingReleaseId:ctx.active.source_building_release_id,
+    plotCount:staged.length,nextCanonicalSha256:current.canonicalModel.sha256,stagedText};
+}
+async function rebindSameCoordinates(env,ctx,actor,body){
+  if(body.confirmation!=="PRESERVE 3D COORDINATES "+ctx.project.slug)
+    throw Error("Explicit matching-coordinate confirmation required.");
+  const preflight=await sameCoordinatePreflight(env,ctx,body);
+  if(body.expectedPreflightToken!==preflight.token)
+    throw Error("Replacement model or old mapping changed. Preview both sources again.");
+  const now=currentIso();
+  const res=await env.DB.prepare(`UPDATE geo_plot_mapping_drafts_3d
+    SET geo_release_id=?,building_release_id=?,revision=revision+1,
+      verified_revision=NULL,verified_inventory_revision=NULL,verified_alignment_revision=NULL,
+      plots_json=?,updated_by=?,updated_at=?
+    WHERE project_id=? AND experience_id=? AND revision=?
+      AND geo_release_id=? AND building_release_id=?
+      AND EXISTS(SELECT 1 FROM geo_experience_active_releases_3d a
+        JOIN geo_releases_3d g ON g.id=a.geo_release_id AND g.project_id=a.project_id
+        WHERE a.project_id=? AND a.experience_id=? AND a.geo_release_id=?
+          AND g.source_building_release_id=?)`).bind(
+    preflight.nextGeoReleaseId,preflight.nextBuildingReleaseId,
+    preflight.stagedText,actor.email,now,ctx.project.id,ctx.active.experience_id,
+    preflight.expectedRevision,preflight.previousGeoReleaseId,preflight.previousBuildingReleaseId,
+    ctx.project.id,ctx.active.experience_id,preflight.nextGeoReleaseId,preflight.nextBuildingReleaseId).run();
+  if(res.meta?.changes!==1)
+    throw Error("Source or mapping draft changed during preservation; no data overwritten.");
+  await env.DB.prepare(`INSERT INTO engine_admin_audit
+    (id,actor_email,action,project_id,target_id,details_json,created_at)
+    VALUES(?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),actor.email,
+      "geo.model_source_coordinates_preserved_unverified",ctx.project.id,
+      preflight.nextGeoReleaseId,
+      JSON.stringify({oldGeoReleaseId:preflight.previousGeoReleaseId,
+        oldBuildingReleaseId:preflight.previousBuildingReleaseId,
+        plotCount:preflight.plotCount,sourceModelSha256:preflight.nextCanonicalSha256,
+        allSourceAndPlaneApprovalsRevoked:true,publicReleasesUnchanged:true}),now).run();
+  return state(env,ctx);
+}
 async function resetForNewGeo(env,ctx,actor,body) {
   if (body.confirmation !== "RESET MAPPING " + ctx.project.slug)
     throw Error("Explicit RESET MAPPING project confirmation required.");
@@ -242,7 +314,7 @@ async function publicationPreflight(env,ctx){
   if(!draft||draft.geo_release_id!==ctx.active.geo_release_id||
      draft.building_release_id!==ctx.active.source_building_release_id)
     throw Error("Current Geo mapping draft is missing or stale. Rebind and review first.");
-  const live=await env.DB.prepare(`SELECT r.id,r.plots_json,r.sha256,r.version
+  const live=await env.DB.prepare(`SELECT r.id,r.plots_json,r.sha256,r.version,r.geo_release_id,r.building_release_id
     FROM geo_plot_mapping_active_3d a
     JOIN geo_plot_mapping_releases_3d r ON r.id=a.mapping_release_id
       AND r.project_id=a.project_id AND r.experience_id=a.experience_id
@@ -253,6 +325,17 @@ async function publicationPreflight(env,ctx){
   const drafts=validateGeoPlotCollection(JSON.parse(draft.plots_json));
   const published=live?validateGeoPlotCollection(JSON.parse(live.plots_json)):[];
   const diff=compareGeoPlotPublication(drafts,published);
+  // Retain owner-entered status and price facts on the next mapping release.
+  // Replacements never silently inherit an approval from a different source.
+  const commercial=live ? await env.DB.prepare(
+    "SELECT plot_id,status,price_paise,revision,public_approved,evidence_ref FROM geo_plot_commercial_3d WHERE project_id=? AND mapping_release_id=? ORDER BY plot_id COLLATE NOCASE"
+  ).bind(ctx.project.id,live.id).all() : {results:[]};
+  const continuity=planGeoCommercialContinuity(
+    published,drafts,commercial.results||[],
+    Boolean(live && live.geo_release_id===ctx.active.geo_release_id &&
+      live.building_release_id===ctx.active.source_building_release_id)
+  );
+  const commercialSha=await digest(JSON.stringify(commercial.results||[]));
   const inventory=await inventoryState(env,ctx.project.id);
   const alignment=await env.DB.prepare("SELECT revision FROM geo_plot_image_alignment_drafts_3d WHERE project_id=?")
     .bind(ctx.project.id).first();
@@ -262,10 +345,10 @@ async function publicationPreflight(env,ctx){
     project:ctx.project.id,experience:ctx.active.experience_id,
     geoRelease:ctx.active.geo_release_id,buildingRelease:ctx.active.source_building_release_id,
     draftRevision:draft.revision,draftHash:hash,
-    activeReleaseId,activeSha256:live?.sha256||null,
+    activeReleaseId,activeSha256:live?.sha256||null,commercialSha,
     inventoryRevision:inventory.revision,alignmentRevision:Number(alignment?.revision||0)
   }));
-  return {diff,draftRevision:draft.revision,activeReleaseId,activeVersion:live?.version||null,
+  return {diff,continuity,draftRevision:draft.revision,activeReleaseId,activeVersion:live?.version||null,
     activeSha256:live?.sha256||null,draftSha256:hash,
     inventoryRevision:inventory.revision,alignmentRevision:Number(alignment?.revision||0),
     token};
@@ -336,6 +419,42 @@ async function publish(env,ctx,actor,body) {
   if (activeCheck?.active?.geo_release_id!==ctx.active.geo_release_id ||
       activeCheck?.active?.source_building_release_id!==ctx.active.source_building_release_id)
     throw Error("Geo or Building release changed during publish.");
+  // Transfer matched Plot IDs inside the same atomic mapping-publication batch.
+  // No sale, buyer or receipt ledger is copied. All new-source commercial
+  // approvals are PRIVATE until explicitly reviewed by the owner.
+  const continuity=preflight.continuity;
+  const transferStatements=preflight.activeReleaseId && continuity.carriedRows ? [
+    env.DB.prepare(`INSERT INTO geo_plot_commercial_3d
+      (project_id,mapping_release_id,plot_id,status,price_paise,currency,
+       evidence_ref,public_approved,revision,updated_by,updated_at)
+      SELECT c.project_id,?,json_extract(p.value,'$.id'),c.status,c.price_paise,c.currency,
+        c.evidence_ref,
+        CASE WHEN EXISTS(SELECT 1 FROM json_each(?) verified
+          WHERE lower(verified.value)=lower(c.plot_id))
+          THEN c.public_approved ELSE 0 END,
+        1,?,?
+      FROM geo_plot_commercial_3d c
+      JOIN json_each(?) p ON lower(json_extract(p.value,'$.id'))=lower(c.plot_id)
+      WHERE c.project_id=? AND c.mapping_release_id=?
+        AND EXISTS(SELECT 1 FROM geo_plot_mapping_active_3d a
+          WHERE a.project_id=c.project_id AND a.experience_id=?
+            AND a.mapping_release_id=?)`).bind(
+      id,JSON.stringify(continuity.approvedPlotIds),actor.email,now,text,
+      ctx.project.id,preflight.activeReleaseId,ctx.active.experience_id,preflight.activeReleaseId
+    ),
+    env.DB.prepare(`INSERT INTO geo_plot_commercial_events_3d
+      (id,project_id,mapping_release_id,plot_id,revision,event_json,actor_email,created_at)
+      SELECT lower(hex(randomblob(16))),c.project_id,c.mapping_release_id,c.plot_id,1,
+        json_object('action','mapping-release-continuity',
+          'previousMappingReleaseId',?,
+          'status',c.status,'publicApproved',c.public_approved,
+          'reviewRequired',CASE WHEN c.public_approved=0 THEN 1 ELSE 0 END),
+        ?,?
+      FROM geo_plot_commercial_3d c
+      WHERE c.project_id=? AND c.mapping_release_id=?`).bind(
+      preflight.activeReleaseId,actor.email,now,ctx.project.id,id
+    )
+  ] : [];
   try{
   await env.DB.batch([
     // Source and draft revision are rechecked *inside* the atomic D1 batch.
@@ -369,6 +488,7 @@ async function publish(env,ctx,actor,body) {
       ctx.project.id,ctx.active.experience_id,ctx.active.geo_release_id,
       ctx.active.source_building_release_id,draft.revision,inventory.revision,Number(alignment.revision||0),
       preliminary?1:0,inventory.revision,Number(alignment.revision||0),preflight.activeReleaseId||""),
+    ...transferStatements,
     env.DB.prepare(`INSERT INTO geo_plot_mapping_active_3d(experience_id,project_id,mapping_release_id,updated_by,updated_at)
       VALUES (?,?,?,?,?) ON CONFLICT(experience_id) DO UPDATE SET
       mapping_release_id=excluded.mapping_release_id,updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
@@ -377,7 +497,8 @@ async function publish(env,ctx,actor,body) {
       VALUES (?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),actor.email,"geo.plots_published",ctx.project.id,id,
       JSON.stringify({geoReleaseId:ctx.active.geo_release_id,version:versionRow.version,
         publicationMode,inventoryRevision:inventory.revision,alignmentRevision:alignment.revision,
-        plotCount:plots.length,sha}),now)
+        plotCount:plots.length,sha,commercialContinuity:{carriedRows:continuity.carriedRows,
+          reviewRows:continuity.reviewRows,missingRows:continuity.missingRows}}),now)
   ]);
   }catch(error){
     const details=error instanceof Error?error.message:String(error);
@@ -488,6 +609,12 @@ export async function handleGeoPlotMappingAdmin(request,env,url=new URL(request.
     if (ctx.project.status==="archived") return fail("Archived project is read-only.",409);
     const body=await request.json();
     if (request.method==="PUT") return json(await writeDraft(env,ctx,access.actor,body));
+    if(body.action==="preserve-coordinates-preflight"){
+      const {stagedText,...review}=await sameCoordinatePreflight(env,ctx,body);
+      return json(review);
+    }
+    if(body.action==="preserve-coordinates")
+      return json(await rebindSameCoordinates(env,ctx,access.actor,body));
     if (body.action==="remap-preflight"){
       const report=await approvedSourceRemapPlan(env,ctx,body);
       const {stagedText,...safe}=report;
