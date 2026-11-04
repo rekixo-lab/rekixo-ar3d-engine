@@ -88,12 +88,12 @@ test("Status colors use existing GLB-local overlay and preserve map click geomet
   assert.match(viewer,/data\.plotMapping\?\.geoReleaseId===data\.geoRelease\.id/);
   assert.match(viewer,/candidateLayer\.setStatusPresentation\(enabled,filter,statusSummaryRef\.current\.statusById\)/);
   assert.match(viewer,/overlay\?\.requestRedraw\(\)/);
-  assert.match(overlay,/available:tinted\(0x1cd680/);
-  assert.match(overlay,/booked:tinted\(0xf2bf25/);
-  assert.match(overlay,/sold:tinted\(0xf04b58/);
-  assert.match(overlay,/available:tinted\(0x1cd680,\.44/);
-  assert.match(overlay,/booked:tinted\(0xf2bf25,\.52/);
-  assert.match(overlay,/sold:tinted\(0xf04b58,\.58/);
+  assert.match(overlay,/available:tinted\(GEO_PLOT_STATUS_COLORS\.available/);
+  assert.match(overlay,/booked:tinted\(GEO_PLOT_STATUS_COLORS\.booked/);
+  assert.match(overlay,/sold:tinted\(GEO_PLOT_STATUS_COLORS\.sold/);
+  assert.match(overlay,/available:tinted\(GEO_PLOT_STATUS_COLORS\.available,\.44/);
+  assert.match(overlay,/booked:tinted\(GEO_PLOT_STATUS_COLORS\.booked,\.50/);
+  assert.match(overlay,/sold:tinted\(GEO_PLOT_STATUS_COLORS\.sold,\.52/);
   assert.match(overlay,/color:PLOT_COLOR,transparent:true,opacity:0,side:THREE.DoubleSide/);
   assert.match(overlay,/color:PLOT_COLOR,transparent:true,opacity:0,depthTest:true/);
   assert.match(overlay,/dim:tinted\(0x708891,0,0/);

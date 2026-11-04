@@ -3,8 +3,8 @@
 .geo-plot-drawer {
   position:absolute;
   z-index:15;
-  --geo-plot-shape-stroke:#1cd680;
-  --geo-plot-shape-fill:rgba(28,214,128,.19);
+  --geo-plot-shape-stroke:var(--geo-available,#00dc84);
+  --geo-plot-shape-fill:rgba(0,220,132,.19);
   box-sizing:border-box;
   top:0;
   bottom:30px; /* Google copyright remains visible in its own map footer. */
@@ -33,12 +33,12 @@
      No transparent band inside the drawer and no Google branding is hidden. */
 }
 .geo-plot-drawer[data-plot-status="booked"]{
-  --geo-plot-shape-stroke:#f2bf25;
-  --geo-plot-shape-fill:rgba(242,191,37,.20);
+  --geo-plot-shape-stroke:var(--geo-booked,#ffc20a);
+  --geo-plot-shape-fill:rgba(255,194,10,.20);
 }
 .geo-plot-drawer[data-plot-status="sold"]{
-  --geo-plot-shape-stroke:#f04b58;
-  --geo-plot-shape-fill:rgba(240,75,88,.21);
+  --geo-plot-shape-stroke:var(--geo-sold,#ff4052);
+  --geo-plot-shape-fill:rgba(255,64,82,.21);
 }
 .geo-plot-drawer.is-open {
   transform:translate3d(0,0,0);
@@ -81,10 +81,10 @@
 .geo-plot-drawer__eyebrow{font-size:10px;font-weight:900;color:#63e7b8;letter-spacing:.15em}
 .geo-plot-drawer__heading h2{margin:0;font-size:clamp(23px,3.5vw,29px);font-weight:900;line-height:1.03;color:#f3ffff;overflow-wrap:anywhere}
 .geo-plot-drawer__status{display:inline-flex;align-items:center;gap:6px;min-height:23px;padding:2px 9px;border:1px solid rgba(151,178,188,.42);border-radius:999px;font-size:10px;font-weight:850;color:#bdcbd4;background:#253743}
-.geo-plot-drawer__status:before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
-.geo-plot-drawer__status--available{color:#66ebb7;background:#114c3d;border-color:#339e7e}
-.geo-plot-drawer__status--booked{color:#ffe087;background:#514022;border-color:#94763e}
-.geo-plot-drawer__status--sold{color:#ff9ca4;background:#582c39;border-color:#a64e60}
+.geo-plot-drawer__status:before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 10px currentColor}
+.geo-plot-drawer__status--available{color:var(--geo-available,#00dc84);background:rgba(0,220,132,.12);border-color:rgba(0,220,132,.62)}
+.geo-plot-drawer__status--booked{color:var(--geo-booked,#ffc20a);background:rgba(255,194,10,.12);border-color:rgba(255,194,10,.62)}
+.geo-plot-drawer__status--sold{color:var(--geo-sold,#ff4052);background:rgba(255,64,82,.12);border-color:rgba(255,64,82,.62)}
 .geo-plot-drawer__close {
   flex:0 0 auto;
   display:grid;place-items:center;

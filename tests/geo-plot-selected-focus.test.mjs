@@ -61,7 +61,7 @@ test("visual strength is at least 25 percent greater than the previous glass bas
   assert.ok(frame.wallOpacity >= (0.15 + 0.08 * 0.5) * 1.25);
   assert.ok(frame.roofOpacity >= (0.08 + 0.04 * 0.5) * 1.25);
   const shader = read("apps/public/src/geo/geoPlotSelectionFocus.ts");
-  assert.match(shader, /float alpha = clamp\(uOpacity \* \(0\.95 \+ glint \* 0\.55\), 0\.0, 0\.90\)/);
+  assert.match(shader, /float alpha = clamp\(uOpacity \* \(0\.98 \+ glint \* 0\.56\), 0\.0, 0\.86\)/);
 });
 
 test("second 25 percent boost retains visibility and keeps motion bounded", () => {

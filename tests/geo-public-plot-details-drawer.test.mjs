@@ -177,9 +177,9 @@ test("compact shape card uses one status color and prints side sizes beside poly
   // Available is a view-only fallback; a published Booked/Sold status wins.
   assert.match(drawer,/commercial\?\.status==="booked"\|\|commercial\?\.status==="sold"/);
   assert.match(drawer,/data-plot-status=\{displayStatus\}/);
-  assert.match(css,/--geo-plot-shape-stroke:#1cd680/);
-  assert.match(css,/\.geo-plot-drawer\[data-plot-status="booked"\]\s*\{[\s\S]*--geo-plot-shape-stroke:#f2bf25/);
-  assert.match(css,/\.geo-plot-drawer\[data-plot-status="sold"\]\s*\{[\s\S]*--geo-plot-shape-stroke:#f04b58/);
+  assert.match(css,/--geo-plot-shape-stroke:var\(--geo-available,#00dc84\)/);
+  assert.match(css,/\.geo-plot-drawer\[data-plot-status="booked"\]\s*\{[\s\S]*--geo-plot-shape-stroke:var\(--geo-booked,#ffc20a\)/);
+  assert.match(css,/\.geo-plot-drawer\[data-plot-status="sold"\]\s*\{[\s\S]*--geo-plot-shape-stroke:var\(--geo-sold,#ff4052\)/);
   assert.match(css,/\.geo-plot-drawer__poly\{fill:var\(--geo-plot-shape-fill\);stroke:var\(--geo-plot-shape-stroke\)/);
   assert.match(css,/\.geo-plot-drawer__side-edge\{stroke:var\(--geo-plot-shape-stroke\)/);
   assert.match(css,/\.geo-plot-drawer__side-label\{fill:var\(--geo-plot-shape-stroke\)/);

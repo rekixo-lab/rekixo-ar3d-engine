@@ -6,6 +6,13 @@
  * prices. Explicit public statuses always take priority.
  */
 export const GEO_PLOT_STATUS_VALUES=Object.freeze(["available","booked","sold"]);
+// The same saturated Green / Gold / Red feeds Geo WebGL fills, selected prism
+// edges and the CSS customer legend. Keep CSS tokens byte-for-byte in sync.
+export const GEO_PLOT_STATUS_COLORS=Object.freeze({
+  available:0x00dc84,
+  booked:0xffc20a,
+  sold:0xff4052
+});
 
 export function summarizeApprovedGeoPlotStatuses(mapping){
   const plots=Array.isArray(mapping?.plots)?mapping.plots:[];
