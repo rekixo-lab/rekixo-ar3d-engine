@@ -4,8 +4,8 @@ const PUBLIC="http://127.0.0.1:5184";
 const ADMIN="http://127.0.0.1:5173";
 
 async function holdRequest(page:Page,url:string){
- let release=()=>{};
- const blocked=new Promise<void>(resolve=>{release=resolve;});
+ let release:()=>void=()=>{};
+ const blocked=new Promise<void>(resolve=>{release=()=>resolve();});
  await page.route(url,async route=>{
   await blocked;
   await route.abort("failed");
@@ -51,4 +51,10 @@ test("Client Admin startup and legacy Client Portal do not flash Rekixo branding
  await page.goto(ADMIN+"/3Dprojects/client-portal",{waitUntil:"domcontentloaded"});
  await expect(page).toHaveTitle("AR 3D Projects");
  expect((await page.locator("body").innerText())).not.toMatch(/rekixo/i);
+});
+
+
+test("Owner Admin keeps its separate tab title; customer copy is the only change",async({page})=>{
+ await page.goto(ADMIN+"/3Dprojects/login",{waitUntil:"domcontentloaded"});
+ await expect(page).toHaveTitle("Rekixo 3D Projects");
 });
