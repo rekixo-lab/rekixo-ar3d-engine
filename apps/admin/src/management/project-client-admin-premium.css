@@ -270,3 +270,12 @@ button.client-geo-table-row.is-active{background:#1a534d;border-color:#70e5b4;bo
     scroll-behavior:auto!important;transition:none!important;animation:none!important
   }
 }
+
+/* Keep the mobile section picker legible in native select option menus. */
+.engine-client-admin-mobile-switch select option{
+  background:#0b2231;color:#eff9fb
+}
+.engine-client-admin-mobile-switch:focus-within{
+  border-color:#55d5a9;
+  box-shadow:0 0 0 2px rgba(85,213,169,.12)
+}
