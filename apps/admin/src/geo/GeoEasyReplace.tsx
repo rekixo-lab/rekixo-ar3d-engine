@@ -28,7 +28,7 @@ export default function GeoEasyReplace({
         "Building: v"+inspection.fromBuildingVersion+" → v"+inspection.toBuildingVersion+
         "\n"+inspection.plotCount+" mapped plots stay exactly in place."+
         "\n"+(inspection.commercialCount||0)+" status/price records stay intact."+
-        "\n\nThe server proved the 3D coordinates, plot geometry and model transforms are identical. "+
+        "\n\n"+(inspection.proof || "The server verified equivalent visible site geometry.")+" "+
         "Only visual colors/materials may differ. Building Geo alignment will stay unchanged. "+
         "Geo and Plot Mapping publish together with no intermediate blank map. "+
         "Old versions remain available.\n\nUpdate Geo now?"
