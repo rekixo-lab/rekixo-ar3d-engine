@@ -68,7 +68,7 @@ const adminNavigationRoutes = [
 
 for (const route of adminNavigationRoutes) {
   const html = await get(route.path, "text/html");
-  if (!html.includes("<title>Rekixo 3D Projects</title>")) {
+  if (!html.includes("<title>AR 3D Projects</title>")) {
     throw Error(`Admin ${route.label} did not return the SPA document shell.`);
   }
 }
