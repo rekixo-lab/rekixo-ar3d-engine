@@ -44,7 +44,11 @@ test("public contacts opt-in only, private buyer and client directory remain pri
  const pub=read("workers/public-geo-contacts.mjs");
  assert.match(pub,/pr\.status='published' AND p\.public_contacts_enabled=1/);
  assert.doesNotMatch(pub,/project_client_directory_3d|masterplan_sales/);
- assert.match(read("apps/public/src/geo/GeoPublicDemo.tsx"),/geoPublicMapHref/);
+ const view=read("apps/public/src/geo/GeoPublicDemo.tsx");
+ assert.match(view,/geoCallHref\(data\.publicContacts\?\.phone\)/);
+ assert.match(view,/publicPhone=\{data\.publicContacts\?\.phone\}/);
+ assert.match(view,/publicWhatsapp=\{data\.publicContacts\?\.whatsapp\}/);
+ assert.doesNotMatch(view,/geoPublicMapHref|jio-public-customer-contact/);
 });
 test("contact migration defaults public visibility OFF and adds owner/project number",()=>{
  const db=new DatabaseSync(":memory:");
