@@ -4,7 +4,7 @@ const digitsOf=value=>String(value??"").replace(/\D/g,"");
 const safeText=value=>typeof value==="string"?value.trim():"";
 export function geoCallHref(value){
   const raw=safeText(value);
-  if(!raw||!/^[+0-9()\s-]+$/.test(raw))return "";
+  if(!raw||!/^\+?[0-9()\s-]+$/.test(raw))return "";
   let digits=digitsOf(raw);
   if(digits.startsWith("00")&&digits.length>=12){
     digits=digits.slice(2);
@@ -19,7 +19,7 @@ export function geoCallHref(value){
 }
 export function geoWhatsAppHref(value){
   const raw=safeText(value);
-  if(!raw||!/^[+0-9()\s-]+$/.test(raw))return "";
+  if(!raw||!/^\+?[0-9()\s-]+$/.test(raw))return "";
   let digits=digitsOf(raw);
   if(digits.startsWith("00"))digits=digits.slice(2);
   if(digits.length===10&&/^[6-9]/.test(digits))digits="91"+digits;
