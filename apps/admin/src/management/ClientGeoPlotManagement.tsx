@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 type Status="available"|"booked"|"sold";
 type Row={plotId:string;status:Status;draftStatus?:Status|null;revision:number;pricePaise:number|null;
   publicApproved:boolean;evidenceRef:string;hasReview?:boolean;area?:{value:number;unit:string}|null};
@@ -29,6 +29,7 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
  const [query,setQuery]=useState("");const [filter,setFilter]=useState<"all"|Status>("all");
  const [page,setPage]=useState(0);
  const [selected,setSelected]=useState("");
+ const editorHeadingRef=useRef<HTMLHeadingElement|null>(null);
  const [form,setForm]=useState<Draft>({ownerName:"",brokerName:"",bookingAmount:"",notes:""});
  const [baseline,setBaseline]=useState("");
  const [status,setStatus]=useState<Status>("available");const [evidence,setEvidence]=useState("");
@@ -51,11 +52,26 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
    (filter==="all"||r.status===filter)&&r.plotId.toLowerCase().includes(query.trim().toLowerCase())
  ),[commercial.rows,query,filter]);
  const pageSize=100,totalPages=Math.max(1,Math.ceil(filtered.length/pageSize));
+ const visibleRows=filtered.slice(page*pageSize,(page+1)*pageSize);
+ const editingVisible=visibleRows.some(row=>row.plotId===selected);
  const chosen=commercial.rows.find(r=>r.plotId===selected);
  const detail=chosen?byId.get(chosen.plotId.toLowerCase()):undefined;
  const isDirty=JSON.stringify(form)!==baseline;
+ // Show the inline editor as soon as a plot row is selected, without requiring
+ // customers to hunt for a form below the complete paginated list.
+ useEffect(()=>{
+  if(!editingVisible)return;
+  const heading=editorHeadingRef.current;
+  if(!heading)return;
+  const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  heading.scrollIntoView({block:"nearest",inline:"nearest",behavior:reduced?"auto":"smooth"});
+ },[selected,editingVisible]);
  function choose(row:Row){
   if(isDirty&&selected&&!window.confirm("Unsaved booking details discard?"))return;
+  if(row.plotId===selected){
+   setSelected("");setMessage("");setError("");
+   return;
+  }
   setSelected(row.plotId);
   const d=byId.get(row.plotId.toLowerCase());
   const next={ownerName:d?.ownerName||"",brokerName:d?.brokerName||"",
@@ -103,32 +119,31 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
    <button type="button" onClick={()=>void reload().catch(e=>setError(String(e)))}>Refresh</button>
   </div>
   {commercial.notice&&<p className="client-geo-info">{commercial.notice}</p>}
-  {error&&<p className="engine-manage-error" role="alert">{error}</p>}
-  {message&&<p className="engine-manage-ok" role="status">{message}</p>}
+  {!editingVisible&&error&&<p className="engine-manage-error" role="alert">{error}</p>}
+  {!editingVisible&&message&&<p className="engine-manage-ok" role="status">{message}</p>}
   <div className="client-geo-list" aria-label="All published plots">
    <div className="client-geo-table-heading"><span>Plot</span><span>Area</span><span>Owner / Buyer</span>
     <span>Booking amount</span><span>Broker</span><span>Status</span><span/></div>
-   {filtered.slice(page*pageSize,(page+1)*pageSize).map(row=>{
+   {visibleRows.map(row=>{
     const detail=byId.get(row.plotId.toLowerCase());
-    return <button type="button" key={row.plotId} className={"client-geo-table-row"+(selected===row.plotId?" is-active":"")}
-      onClick={()=>choose(row)}>
-     <strong>{row.plotId}</strong>
-     <span>{row.area?.value?row.area.value.toLocaleString("en-IN")+" "+row.area.unit:"—"}</span>
-     <span>{detail?.ownerName||"—"}</span>
-     <span>{rupees(detail?.bookingAmountPaise??null)}</span><span>{detail?.brokerName||"—"}</span>
-     <span className={"client-geo-status "+row.status}>{row.status}</span>
-     <span>{selected===row.plotId?"Editing":"Manage"}</span>
-    </button>;
-   })}
-   {!filtered.length&&<p className="client-geo-empty">No matching plots. Check the active published mapping if all plots are missing.</p>}
-  </div>
-  {totalPages>1&&<div className="client-geo-pagination">
-   <button type="button" disabled={page===0} onClick={()=>setPage(p=>Math.max(0,p-1))}>Previous</button>
-   <span>Page {page+1} / {totalPages} · {filtered.length} results</span>
-   <button type="button" disabled={page>=totalPages-1} onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))}>Next</button>
-  </div>}
-  {chosen&&<section className="client-geo-editor" aria-label={"Manage plot "+chosen.plotId}>
-   <header><h3>Plot {chosen.plotId}</h3><span>Current public status: <b>{chosen.status}</b></span></header>
+    const editing=selected===row.plotId;
+    return <div key={row.plotId} className={"client-geo-entry"+(editing?" is-editing":"")}>
+     <button type="button" className={"client-geo-table-row"+(editing?" is-active":"")}
+       aria-expanded={editing} aria-controls={editing?"client-geo-editor-"+row.plotId:undefined}
+       onClick={()=>choose(row)}>
+      <strong>{row.plotId}</strong>
+      <span>{row.area?.value?row.area.value.toLocaleString("en-IN")+" "+row.area.unit:"—"}</span>
+      <span>{detail?.ownerName||"—"}</span>
+      <span>{rupees(detail?.bookingAmountPaise??null)}</span><span>{detail?.brokerName||"—"}</span>
+      <span className={"client-geo-status "+row.status}>{row.status}</span>
+      <span className="client-geo-edit-indicator">{editing?"Close editor ↑":"Edit ↓"}</span>
+     </button>
+     {editing&&chosen&&<section id={"client-geo-editor-"+row.plotId}
+       className="client-geo-editor client-geo-editor--inline" aria-label={"Edit plot "+chosen.plotId}>
+   <header><h3 ref={editorHeadingRef}>Editing Plot {chosen.plotId}</h3>
+    <span>Current public status: <b>{chosen.status}</b></span></header>
+   {error&&<p className="engine-manage-error" role="alert">{error}</p>}
+   {message&&<p className="engine-manage-ok" role="status">{message}</p>}
    <div className="client-geo-editor-grid">
     <label>Owner / Buyer Name<input value={form.ownerName} maxLength={160} onChange={e=>setForm(v=>({...v,ownerName:e.target.value}))}/></label>
     <label>Broker Name<input value={form.brokerName} maxLength={160} onChange={e=>setForm(v=>({...v,brokerName:e.target.value}))}/></label>
@@ -152,5 +167,15 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
    <button type="button" disabled={busy||!canEdit||evidence.trim().length<3}
      onClick={()=>void saveStatus()}>{busy?"Saving…":"Save plot status"}</button>
   </section>}
+    </div>;
+   })}
+   {!filtered.length&&<p className="client-geo-empty">No matching plots. Check the active published mapping if all plots are missing.</p>}
+  </div>
+  {totalPages>1&&<div className="client-geo-pagination">
+   <button type="button" disabled={page===0} onClick={()=>setPage(p=>Math.max(0,p-1))}>Previous</button>
+   <span>Page {page+1} / {totalPages} · {filtered.length} results</span>
+   <button type="button" disabled={page>=totalPages-1} onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))}>Next</button>
+  </div>}
+
  </section>;
 }
