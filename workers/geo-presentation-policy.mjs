@@ -140,7 +140,9 @@ export function assertGeoPresentationManifestV1(manifest) {
   if (!object(manifest.model) || !token(manifest.model.id) || !text(manifest.model.url, 1000) ||
     manifest.model.mimeType !== "model/gltf-binary" ||
     !["geo-optimized", "building"].includes(manifest.model.variant) ||
-    (manifest.model.sha256 !== undefined && !sha256(manifest.model.sha256)))
+    (manifest.model.sha256 !== undefined && !sha256(manifest.model.sha256)) ||
+    (manifest.model.preferCanonical !== undefined &&
+      typeof manifest.model.preferCanonical !== "boolean"))
     throw Error("Invalid Geo Building model reference.");
   validateAnchor(manifest.modelAnchor);
   validatePlacement(manifest.placement);

@@ -15,6 +15,7 @@ import type {
   Project,
 } from "../studio/domain";
 import PlotSiteHandoff from "./PlotSiteHandoff";
+import GeoEasyReplace from "../geo/GeoEasyReplace";
 import "./building-workspace.css";
 
 const SourcePackReview = lazy(() => import("../source-pack/SourcePackReview"));
@@ -225,6 +226,8 @@ function selectTab(next: BuildingTab) {
                 setProject((current) => current ? { ...current, status: "published" } : current);
               }} />
           ) : <p>{loading ? "Checking Building publication…" : "Select a project to publish."}</p>}
+
+          {hasGeo && activeRelease && <GeoEasyReplace slug={slug} />}
 
           <details className="building-workspace__versions engine-control-card">
             <summary>Previous Building Versions</summary>

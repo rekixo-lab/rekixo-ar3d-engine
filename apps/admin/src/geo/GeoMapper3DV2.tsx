@@ -18,6 +18,7 @@ import GeoGuidedRigidAlignment, {
   type GeoGuidedFineDelta,
   type GeoGuidedPairDraft,
 } from "./GeoGuidedRigidAlignment";
+import GeoEasyReplace from "./GeoEasyReplace";
 import GeoIntegratedAuthoringMap, {
   type GeoAlignmentMapTarget,
   type GeoIntegratedPreviewState,
@@ -743,6 +744,10 @@ export default function GeoMapper3DV2() {
         <article><span>INTEGRATED PREVIEW</span><strong>{previewState === "ready" ? "Ready" : "Pending"}</strong><small>{previewStateLabel(previewState)}</small></article>
         <article><span>LIVE GEO</span><strong>{geoReleaseState?.activeRelease ? `v${geoReleaseState.activeRelease.version}` : "None"}</strong><small>Immutable Geo release</small></article>
       </section>
+
+      {geoReleaseState?.activeRelease && state?.project.activeBuildingReleaseId &&
+       geoReleaseState.activeRelease.sourceBuildingReleaseId !== state.project.activeBuildingReleaseId &&
+       <GeoEasyReplace slug={selectedSlug} onApplied={() => reload(selectedSlug)} />}
 
       {!state?.experience ? (
         <section className="geo3d-form-card">

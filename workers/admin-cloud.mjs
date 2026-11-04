@@ -11,6 +11,7 @@ import { listGeoReleases } from "./geo-release-admin.mjs";
 import { verifyGeoDraftPreview } from "./geo-release-verify.mjs";
 import { publishGeoRelease } from "./geo-release-publish.mjs";
 import { activateGeoRelease } from "./geo-release-activate.mjs";
+import { handleEasyGeoReplacement } from "./geo-cosmetic-replace.mjs";
 import {
   activeDeletionJob,
   deletionJobResponse,
@@ -2360,8 +2361,7 @@ async function routeProjects(request, env, actor, url) {
   if (parts[1] === "geo-draft" && parts.length === 3 && parts[2] === "verify")
     return projectGeoDraftVerification(request, env, actor, project);
 
-  if (parts[1] === "geo-releases")
-    return projectGeoReleases(request, env, actor, project, parts);
+  if (parts[1] === "geo-releases") return parts[2] === "easy-replace" && parts.length === 3 ? handleEasyGeoReplacement(request,env,actor,project) : projectGeoReleases(request,env,actor,project,parts);
 
   if (parts[1] === "geo-placement" && parts.length === 2)
     return projectGeoPlacement(request, env, actor, project);
