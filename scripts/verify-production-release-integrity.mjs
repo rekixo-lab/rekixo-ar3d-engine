@@ -76,14 +76,46 @@ for (const item of catalog.releases) {
   const geoUrl = `${origin}/3Dprojects/api/projects/${slug}/geo-placement`;
   const { response: geoResponse, body: geo } = await json(geoUrl, [200, 404]);
   if (geoResponse.status === 200) {
+    // Building and Geo are independently published immutable releases.
+    // After Building vN+1 is live, Geo may intentionally remain pinned to
+    // Building vN until the owner explicitly reviews/updates the Geo model.
+    // Never call this legitimate state corrupt or silently replace the map.
+    const pinnedBuilding = geo?.buildingRelease;
+    const activeGeo = geo?.geoRelease;
+    const pinnedUrl = geo?.canonicalModel?.url;
+    const checksum = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
     if (
       geo?.project?.slug !== item.slug ||
-      !geo?.release ||
-      !geo?.buildingRelease ||
-      !geo?.geoRelease ||
-      geo.buildingRelease.id !== item.releaseId
+      geo?.release?.id !== pinnedBuilding?.id ||
+      Number(geo?.release?.version) !== Number(pinnedBuilding?.version) ||
+      typeof pinnedBuilding?.id !== "string" ||
+      !Number.isInteger(pinnedBuilding?.version) ||
+      pinnedBuilding.version < 1 ||
+      !checksum(pinnedBuilding.manifestSha256) ||
+      typeof activeGeo?.id !== "string" ||
+      !Number.isInteger(activeGeo?.version) ||
+      activeGeo.version < 1 ||
+      !checksum(activeGeo.manifestSha256) ||
+      !geo?.model?.url ||
+      typeof pinnedUrl !== "string" ||
+      !pinnedUrl.startsWith(
+        `/3Dprojects/api/releases/${encodeURIComponent(pinnedBuilding.id)}/models/`
+      ) ||
+      !pinnedUrl.includes("/model.glb")
     )
-      throw new Error(`Active Geo runtime identity is invalid for ${item.slug}.`);
+      throw new Error(`Active Geo pinned release identity is invalid for ${item.slug}.`);
+
+    // The historic Building model MUST still be streamable through the active
+    // Geo release. This is the actual customer Plot Mapper coordinate source.
+    const geoModelResponse = await fetch(`${origin}${pinnedUrl}`, {
+      method: "HEAD",
+      redirect: "follow",
+      cache: "no-store",
+    });
+    if (!geoModelResponse.ok)
+      throw new Error(
+        `Active Geo's pinned Building GLB is unavailable for ${item.slug} (HTTP ${geoModelResponse.status}).`,
+      );
     checkedGeo += 1;
   }
 }
