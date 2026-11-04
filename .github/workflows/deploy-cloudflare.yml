@@ -497,8 +497,8 @@ jobs:
           PUBLIC_CODE="$HTTP_CODE"
 
           echo "Production shell status summary: admin=$PAGE_CODE status=$STATUS_CODE public=$PUBLIC_CODE"
-          if ! grep -Fq '<title>Rekixo 3D Projects</title>' "$PAGE"; then
-            echo "::error::Admin shell returned HTTP 200 without the expected Rekixo 3D Projects title."
+          if ! grep -Fq '<title>AR 3D Projects</title>' "$PAGE"; then
+            echo "::error::Admin shell returned HTTP 200 without the expected AR 3D Projects title."
             head -c 1000 "$PAGE" || true
             exit 1
           fi
