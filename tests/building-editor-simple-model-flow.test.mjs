@@ -25,12 +25,12 @@ test("recent verified models identified by real SHA and explicit selection",()=>
   assert.match(source,/window\.confirm\("Prepare the NEW 3D model/);
 });
 test("single operator action saves and seals source before private processing",()=>{
-  const save=source.indexOf('action: "save-review", packId: pack.id, files: nextFiles');
-  const verified=source.indexOf('reviewed.latestPack?.geometryAuthorityFileId');
+  const prepared=source.slice(source.indexOf("async function prepareModel()"));
+  const save=prepared.indexOf('action: "save-review", packId: pack.id, files: nextFiles');
   // Check readiness guard includes the sealed pack authority identity.
   assert.match(source,/reviewed\.latestPack\.geometryAuthorityFileId !== candidate\.sourceFileId/);
-  const seal=source.indexOf('action: "seal", packId: pack.id, confirm: "SEAL SOURCE PACK"');
-  const process=source.indexOf('action: "start", sourcePackId: pack.id');
+  const seal=prepared.indexOf('action: "seal", packId: pack.id, confirm: "SEAL SOURCE PACK"');
+  const process=prepared.indexOf('action: "start", sourcePackId: pack.id');
   assert.ok(save>=0 && seal>save && process>seal);
   assert.match(source,/sealed\.latestPack\.status !== "ready"/);
   assert.match(source,/current LIVE Building release, Geo mapping, Plot IDs and customer status/);
