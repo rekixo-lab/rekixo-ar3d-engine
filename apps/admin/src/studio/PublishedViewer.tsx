@@ -46,7 +46,7 @@ export default function PublishedViewer() {
     <main className="studio published-design">
       <header className="studio-head">
         <div>
-          <small>REKIXO · PUBLISHED 3D DESIGN</small>
+          <small>AR 3D · PUBLISHED 3D DESIGN</small>
           <h1>{design.project.name}</h1>
         </div>
         <a href="/3Dprojects/studio">Open Design Admin</a>
