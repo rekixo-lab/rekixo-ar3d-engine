@@ -52,6 +52,7 @@ export function createGeoPlotSelectionFocus() {
     if (fill) (fill.material as THREE.MeshBasicMaterial).color.setHex(hex);
     if (halo) (halo.material as THREE.MeshBasicMaterial).color.setHex(hex);
     if (ripple) (ripple.material as THREE.MeshBasicMaterial).color.setHex(hex);
+    if (edge) (edge.material as THREE.LineBasicMaterial).color.setHex(hex);
     if (walls) (walls.material as THREE.ShaderMaterial).uniforms.uColor.value.setHex(hex);
     if (roof) (roof.material as THREE.ShaderMaterial).uniforms.uColor.value.setHex(hex);
     if (roofEdge) (roofEdge.material as THREE.LineBasicMaterial).color.setHex(hex);
@@ -121,7 +122,7 @@ export function createGeoPlotSelectionFocus() {
     bandGeometry.setAttribute("position", new THREE.Float32BufferAttribute(bandVertices, 3));
     halo = new THREE.Mesh(bandGeometry, new THREE.MeshBasicMaterial({
       color: accent, transparent: true, opacity: 0.82, side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending, depthTest: true, depthWrite: false,
+      blending: THREE.NormalBlending, depthTest: true, depthWrite: false,
     }));
     halo.renderOrder = 25;
     halo.name = "selected-plot-status-glow";
@@ -145,7 +146,7 @@ export function createGeoPlotSelectionFocus() {
       points.flatMap(([x, z]) => [x, height + 0.015, z]), 3,
     ));
     edge = new THREE.LineLoop(boundary, new THREE.LineBasicMaterial({
-      color: 0xffffff, transparent: true, opacity: 0.99,
+      color: accent, transparent: true, opacity: 0.99,
       depthTest: true, depthWrite: false,
     }));
     edge.renderOrder = 26;
@@ -207,11 +208,17 @@ export function createGeoPlotSelectionFocus() {
         uniform float uStrength;
         varying float vSweep;
         void main() {
-          float beam = exp(-95.0 * pow(vSweep - fract(uTime * 0.23), 2.0));
-          float glint = beam * uStrength;
-          vec3 glassColor = mix(uColor, vec3(1.0), clamp(glint * 0.90, 0.0, 1.0));
-          float alpha = clamp(uOpacity * (0.95 + glint * 0.55), 0.0, 0.90);
+          float sweepDistance = vSweep - fract(uTime * 0.23);
+          float softShine = exp(-65.0 * sweepDistance * sweepDistance);
+          float sharpShine = exp(-550.0 * sweepDistance * sweepDistance);
+          float glint = (0.36 * softShine + 0.92 * sharpShine) * uStrength;
+          vec3 glassColor = mix(uColor, vec3(1.0), clamp(glint * 0.78, 0.0, 0.88));
+          float alpha = clamp(uOpacity * (0.98 + glint * 0.56), 0.0, 0.86);
           gl_FragColor = vec4(glassColor, alpha);
+          // Match THREE's regular material color management; unconverted
+          // shader RGB made the selected prism appear a different shade.
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
         }`,
       transparent: true,
       side: THREE.DoubleSide,
