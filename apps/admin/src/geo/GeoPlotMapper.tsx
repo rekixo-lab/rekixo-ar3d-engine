@@ -202,7 +202,8 @@ export default function GeoPlotMapper(){
   const [publishedPreview,setPublishedPreview]=useState<{
     draftRevision:number;activeReleaseId:string|null;token:string;
     diff:{liveCount:number;draftCount:number;added:number;removed:number;changed:number;
-      changes:Array<{plotId:string;kind:string;fields:string[]}>}
+      changes:Array<{plotId:string;kind:string;fields:string[]}>};
+    continuity:{sourceRows:number;carriedRows:number;reviewRows:number;missingRows:number}
   }|null>(null);
   const [cloneFrom,setCloneFrom]=useState("");
   const [cloneX,setCloneX]=useState("");
@@ -892,7 +893,8 @@ export default function GeoPlotMapper(){
         throw Error("Draft revision changed while comparing live publication. Reload.");
       setPublishedPreview(info);
       setMessage("Live/draft preflight ready. "+info.diff.added+" added, "+
-        info.diff.changed+" changed, "+info.diff.removed+" removed plots. Review before publish.");
+        info.diff.changed+" changed, "+info.diff.removed+" removed plots. "+
+        info.continuity.carriedRows+" previous status/price records will be carried to the new release. Review before publish.");
     }catch(error){setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));}
     finally{setBusy(false);}
   };
@@ -927,6 +929,11 @@ export default function GeoPlotMapper(){
           d.changes.slice(0,12).map(p=>p.kind.toUpperCase()+" Plot "+p.plotId+
             " ("+p.fields.join(", ")+")").join("\n")+
           (d.changes.length>12?"\n...plus "+(d.changes.length-12)+" more changes.":"")+
+          "\n\nCOMMERCIAL CONTINUITY: "+approvedPreflight.continuity.carriedRows+
+          " status/price records retained; "+approvedPreflight.continuity.reviewRows+
+          " require NEW source approval; "+approvedPreflight.continuity.missingRows+
+          " unmatched records remain in historical releases."+
+          "\nDifferent 3D/Geo model source: owner must review statuses before they reappear publicly."+
           "\nEvery release is immutable; edit in the Mapper and publish a new version anytime. Continue?";
         if(!window.confirm(summary))return;
       }
@@ -1213,8 +1220,10 @@ export default function GeoPlotMapper(){
         "None / stale"}</b></span>
     </section>
     {state?.draft.stale&&<div className="geo-plot-warning">
-      <p>Geo source has changed. Old polygon coordinates are locked to avoid wrong placement.
-      Historical published releases remain available when the matching Geo release is restored.</p>
+      <p>3D Geo source has changed. Old polygons and commercial history are preserved.
+      Use 1 · CSV / Image → Source replacement to verify the old and new model against
+      the same original image, then remap only affected Plot IDs. Recheck all plot approvals
+      before publishing. Historical releases remain available for recovery.</p>
       <button type="button" disabled={busy} onClick={()=>{
         const exact="RESET MAPPING "+slug;
         if(window.prompt("Create an EMPTY mapping for the new Geo release. Unsaved old draft polygons will be replaced. Type "+exact)===exact)
@@ -1858,6 +1867,10 @@ export default function GeoPlotMapper(){
             <strong>Live {publishedPreview.diff.liveCount} → Draft {publishedPreview.diff.draftCount}</strong>
             <p>{publishedPreview.diff.added} added · {publishedPreview.diff.changed} changed ·
               {publishedPreview.diff.removed} removed. A fresh preflight and confirmation is required to publish.</p>
+            <p>Retain {publishedPreview.continuity.carriedRows} private status/price records ·
+              {publishedPreview.continuity.reviewRows} need new source approval ·
+              {publishedPreview.continuity.missingRows} unmatched remain in historical releases.
+              Customer records will not silently inherit approvals after a 3D model change.</p>
             {publishedPreview.diff.changes.slice(0,12).map((x,i)=><p key={i}>
               {x.kind}: Plot {x.plotId} ({x.fields.join(", ")})</p>)}
             {publishedPreview.diff.changes.length>12&&<p>
