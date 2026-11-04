@@ -789,7 +789,7 @@
 
 
 /* Shared with the Geo drawer and GLB plot palette. */
-.jio-public-shell{--geo-available:#00dc84;--geo-booked:#ffc20a;--geo-sold:#ff4052}
+.jio-public-shell,.geo-plot-status{--geo-available:#00dc84;--geo-booked:#ffc20a;--geo-sold:#ff4052}
 /* Geo-only bottom-left availability; only the switch has a background. */
 .geo-plot-status{position:absolute;left:12px;bottom:58px;z-index:11;width:166px;max-width:calc(100% - 24px);font-size:12px;pointer-events:auto}
 .geo-plot-status-toggle{box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:42px;padding:8px 10px;border:1px solid #7ec1c288;border-radius:12px;background:#061d27ef;color:#f1fffe;box-shadow:0 9px 24px #0005;font:inherit;font-size:11px;font-weight:800;letter-spacing:.09em;cursor:pointer;touch-action:manipulation}
