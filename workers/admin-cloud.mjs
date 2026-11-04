@@ -1224,9 +1224,6 @@ async function projectGeoDraftVerification(request, env, actor, project) {
 }
 
 async function projectGeoReleases(request, env, actor, project, parts) {
-  if(parts.length===3 && parts[2]==="easy-replace")
-    return handleEasyGeoReplacement(request,env,actor,project);
-
   if (parts.length === 2) {
     if (request.method === "GET") {
       try {
@@ -2364,8 +2361,8 @@ async function routeProjects(request, env, actor, url) {
   if (parts[1] === "geo-draft" && parts.length === 3 && parts[2] === "verify")
     return projectGeoDraftVerification(request, env, actor, project);
 
-  if (parts[1] === "geo-releases")
-    return projectGeoReleases(request, env, actor, project, parts);
+  if (parts[1] === "geo-releases") return parts[2]==="easy-replace" && parts.length===3
+    ?handleEasyGeoReplacement(request,env,actor,project):projectGeoReleases(request,env,actor,project,parts);
 
   if (parts[1] === "geo-placement" && parts.length === 2)
     return projectGeoPlacement(request, env, actor, project);
