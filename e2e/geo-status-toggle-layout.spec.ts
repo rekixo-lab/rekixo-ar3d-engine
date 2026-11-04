@@ -57,7 +57,7 @@ test("Geo status opens upward without background cards at mobile and desktop siz
     expect(after.gap).toBeLessThan(10);
     expect(Number(after.opacity)).toBeGreaterThan(.95);
     expect(after.rows.every(r=>r.background==="rgba(0, 0, 0, 0)"&&r.visible==="visible")).toBeTruthy();
-    expect(after.booked).toBe("rgb(255, 211, 91)");
+    expect(after.booked).toBe("rgb(255, 194, 10)");
     expect(after.total).toContain("36");
     expect(after.total).not.toMatch(/pending/i);
   }
