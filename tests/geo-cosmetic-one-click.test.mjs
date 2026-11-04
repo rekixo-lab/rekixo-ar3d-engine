@@ -105,7 +105,7 @@ test("one-click route is private, live Geo+mapping pointers switch in a single D
   assert.match(worker,/preservedApproval.*public_approved/);
   assert.match(worker,/json_extract\('INVALID_REPLACEMENT_STATE','\$'\)/);
   assert.match(routes,/parts\[2\]==="easy-replace"/);
-  assert.match(routes,/request\.method==="POST"&&!sameOrigin\(request\)/);
+  assert.match(worker,/same-origin request/i);
   assert.match(ui,/Auto Update Geo/);
   assert.match(ui,/inspectCosmeticGeoReplacement/);
   assert.match(ui,/applyCosmeticGeoReplacement/);
