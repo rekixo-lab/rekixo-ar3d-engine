@@ -59,6 +59,8 @@ test("Plot diagram, click selection and drawer controls are not changed by conta
   assert.match(drawer,/data-plot-status=\{displayStatus\}/);
   assert.match(drawer,/aria-hidden=\{!plot\} inert=\{!plot\}/);
   assert.match(publicGeo,/setSelectedPlot\(plotIds\.get\(id\)\|\|null\)/);
-  assert.match(publicGeo,/onClose=\{\(\)=>setSelectedPlot\(null\)\}/);
+  assert.match(publicGeo,/onClose=\{\(\)=>setDrawerOpen\(false\)\}/);
+  assert.match(publicGeo,/setDrawerOpen\(true\)/);
+  assert.doesNotMatch(publicGeo,/onClose=\{\(\)=>setSelectedPlot\(null\)\}/);
   assert.match(css,/\.geo-plot-drawer__scroll \{[\s\S]*?overflow-y:auto/);
 });
