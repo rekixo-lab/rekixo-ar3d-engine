@@ -318,7 +318,14 @@ export async function publicGeoExperienceFromState(env, state) {
     derivative?.available !== false &&
     derivative?.url &&
     (!sourceAsset?.sha256 || derivative.sourceSha256 === sourceAsset.sha256);
-  const model = derivativeMatchesSource ? derivative : buildingExperience.model;
+  // A geometry-certified cosmetic replacement must render the same canonical
+  // model-local coordinates that were used to map every Plot ID. Geo-optimized
+  // derivatives intentionally simplify/reorder vertices and are not bitwise
+  // equivalent to the mapping authority. Other Geo releases remain unchanged.
+  const canonicalOnly = state.manifestKind === "v2" &&
+    state.manifest.model?.preferCanonical === true;
+  const model = canonicalOnly ? buildingExperience.model
+    : derivativeMatchesSource ? derivative : buildingExperience.model;
 
   if (
     !model?.url ||
