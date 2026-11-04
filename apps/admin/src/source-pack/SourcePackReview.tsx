@@ -175,6 +175,9 @@ export default function SourcePackReview() {
   }
 
   async function startDraft() {
+    if (data?.latestPack?.status === "ready" &&
+      !window.confirm("REPLACE 3D MODEL · NEW SOURCE VERSION\n\nExisting published Building/Geo releases and Plot IDs will stay unchanged. Upload and verify the new GLB/FBX, select its geometry authority, process and inspect a NEW Building release. An updated Geo release requires separate plot alignment review; changed-source commercial approvals cannot be reused automatically. Continue?"))
+      return;
     const result = await post({ action: "start-draft" }, "start");
     if (result) setMessage(`Source Pack v${result.latestPack?.version} review draft ready.`);
   }
@@ -333,7 +336,9 @@ export default function SourcePackReview() {
             <p>{packReady ? "SEALED SOURCE PACK" : "OPERATOR REVIEW"}</p>
             <h2>{packReady ? `Source Pack v${pack.version} is immutable` : "Create review draft from verified originals"}</h2>
             <span>
-              Automatic classifier suggestions copy honge, lekin geometry-authority role final operator decision ke bina seal nahi hoga.
+              {packReady
+                ? "Safe model replacement: upload a new GLB/FBX above, create the next immutable Source Pack, process and verify a new Building release. The existing Geo source and mapped customer plots stay pinned until a separate reviewed Geo update. Status/price facts are retained privately if the map is republished; changed-source approvals need review."
+                : "Automatic classifier suggestions copy honge, lekin geometry-authority role final operator decision ke bina seal nahi hoga."}
             </span>
           </div>
           <div className="source-review__start-actions">
@@ -341,7 +346,7 @@ export default function SourcePackReview() {
               {busy === "classify" ? "Analyzing…" : "Refresh Analysis"}
             </button>
             <button type="button" onClick={() => void startDraft()} disabled={Boolean(busy) || !data?.suggestions.length}>
-              {busy === "start" ? "Preparing…" : packReady ? "+ Start next Source Pack version" : "Start Source Pack Review"}
+              {busy === "start" ? "Preparing…" : packReady ? "Replace 3D Model · New Version" : "Start Source Pack Review"}
             </button>
           </div>
         </section>
