@@ -103,6 +103,12 @@ test("one-click route is private, live Geo+mapping pointers switch in a single D
   assert.ok(pos("UPDATE geo_plot_mapping_active_3d")>0);
   assert.ok(pos("await env.DB.batch(statements)")>0);
   assert.match(worker,/preservedApproval.*public_approved/);
+  for(const table of ["geo_plot_pricing_sheets_3d","geo_plot_deals_3d",
+    "geo_plot_deal_events_3d","geo_client_plot_details_3d",
+    "geo_client_plot_detail_events_3d","geo_client_notices_3d"])
+    assert.match(worker,new RegExp("INSERT INTO "+table));
+  assert.match(worker,/COUNT\(\*\) AS n\s+FROM geo_client_sales_3d/);
+  assert.doesNotMatch(worker,/INSERT INTO geo_client_sales_3d|INSERT INTO geo_client_receipts_3d/);
   assert.match(worker,/json_extract\('INVALID_REPLACEMENT_STATE','\$'\)/);
   assert.match(routes,/parts\[2\]\s*===\s*"easy-replace"/);
   assert.match(worker,/same-origin request/i);
