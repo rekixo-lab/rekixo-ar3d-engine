@@ -112,6 +112,18 @@ async function preview(env,project) {
     ![previous.releaseId,next.releaseId].includes(experience.source_building_release_id) ||
     ![previous.releaseId,next.releaseId].includes(draft.source_building_release_id))
     throw Error("Geo draft has another Building source. Review it before automatic replacement.");
+  // Do not overwrite a separately edited, unpublished site placement. Cosmetic
+  // replacement reuses the CURRENT LIVE Geo truth, not an unapproved re-fit.
+  const sameGeoValues=[
+    ["longitude",p.anchor.longitude],["latitude",p.anchor.latitude],
+    ["altitude_m",p.anchor.altitudeM??0],["east_offset_m",p.eastOffsetM],
+    ["north_offset_m",p.northOffsetM],["vertical_offset_m",p.verticalOffsetM],
+    ["heading_deg",p.headingDeg],["pitch_deg",p.pitchDeg],
+    ["roll_deg",p.rollDeg],["scale",p.scale]
+  ].every(([column,value])=>Number(draft[column])===Number(value));
+  if(!sameGeoValues||draft.height_mode!==p.heightMode)
+    throw Error("An unpublished Geo placement change exists. The current live site is safe; "+
+      "review or restore that Geo draft before using cosmetic-only Auto Update.");
   const mapping=await env.DB.prepare(`SELECT r.*
     FROM geo_plot_mapping_active_3d a JOIN geo_plot_mapping_releases_3d r
     ON r.id=a.mapping_release_id AND r.project_id=a.project_id AND r.experience_id=a.experience_id
