@@ -94,8 +94,8 @@ test("drawer only changes presentation, preserving click hit testing and camera 
   assert.match(parent,/setSelectedPlot\(plotIds\.get\(id\)\|\|null\)/);
   assert.match(parent,/pickModelGeoPlot\(/);
   assert.match(parent,/<GeoPlotDetailsDrawer/);
-  assert.match(parent,/plot=\{selectedPlot\}/);
-  assert.match(parent,/onClose=\{\(\)=>setSelectedPlot\(null\)\}/);
+  assert.match(parent,/plot=\{drawerOpen\?selectedPlot:null\}/);
+  assert.match(parent,/onClose=\{\(\)=>setDrawerOpen\(false\)\}/);
   assert.match(parent,/commercial=\{selectedPlot\?data\.plotMapping\?\.commercial\?\.\[selectedPlot\.id\]:undefined\}/);
   assert.doesNotMatch(parent,/geo-plot-public-details--status-open/);
   assert.match(drawer,/publicGeoPlotDiagram\(shown\)/);
@@ -131,7 +131,7 @@ test("plot drawer fills left map area and ends above required attribution footer
 
 
 test("tap outside the active plot drawer closes it without picking or editing another plot",()=>{
-  const start=parent.indexOf("{selectedPlot&&<button");
+  const start=parent.indexOf("{selectedPlot&&drawerOpen&&<button");
   const end=parent.indexOf("<GeoPlotDetailsDrawer",start);
   assert.ok(start>=0&&end>start);
   const dismiss=parent.slice(start,end);
@@ -144,10 +144,12 @@ test("tap outside the active plot drawer closes it without picking or editing an
   assert.ok(dismiss.includes("if(!event.isPrimary||event.button!==0)return"));
   assert.ok(dismiss.includes("event.preventDefault()"));
   assert.ok(dismiss.includes("event.stopPropagation()"));
-  assert.ok(dismiss.includes("if(event.detail===0)setSelectedPlot(null)"));
+  assert.ok(dismiss.includes("if(event.detail===0)setDrawerOpen(false)"));
+  assert.ok(dismiss.includes("setDrawerOpen(false)"));
+  assert.ok(!dismiss.includes("setSelectedPlot(null)"),"drawer dismissal keeps the selected GLB focus");
   assert.ok(!dismiss.includes("onClick={()=>setSelectedPlot(null)}"));
   assert.doesNotMatch(dismiss,/pickModelGeoPlot|selectAtScreenPoint/);
-  assert.match(parent,/onClose=\{\(\)=>setSelectedPlot\(null\)\}/);
+  assert.match(parent,/onClose=\{\(\)=>setDrawerOpen\(false\)\}/);
   assert.match(drawer,/event\.key==="Escape"/);
   assert.match(css,/\.geo-plot-drawer__outside-dismiss \{[\s\S]*z-index:14;/);
   assert.match(css,/\.geo-plot-drawer__outside-dismiss \{[\s\S]*inset:0 0 30px;/);
