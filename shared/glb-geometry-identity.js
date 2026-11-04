@@ -90,7 +90,7 @@ export async function glbGeometryIdentity(raw) {
     const size=components[accessor.componentType]*dimensions[expectedType];
     const stride=view.byteStride??size,offset=(view.byteOffset??0)+(accessor.byteOffset??0);
     check(positiveInt(stride) && stride>=size && stride<=252 &&
-      offset>=view.byteOffset??0, "invalid geometry stride");
+      offset >= (view.byteOffset??0), "invalid geometry stride");
     check((accessor.byteOffset??0)+stride*(accessor.count-1)+size<=view.byteLength &&
       offset+stride*(accessor.count-1)+size<=bin.length, "out-of-range geometry buffer");
     // Only the referenced bytes matter. Interleaved COLOR_0 changes do not
