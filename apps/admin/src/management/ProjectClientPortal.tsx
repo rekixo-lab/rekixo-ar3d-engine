@@ -6,6 +6,7 @@ import {ClientGeoGallery,ClientGeoNotices} from "./ClientGeoGalleryNotices";
 import ClientGeoSales from "./ClientGeoSales";
 import "./project-management.css";
 import "./project-client-admin.css";
+import "./project-client-admin-premium.css";
 type Identity={displayName:string;email:string;role:string;projectSlug:string;projectName:string;projectKind?:string;mustChangePassword?:boolean;loginId?:string|null};
 type Session={authenticated:boolean;user:Identity|null};
 type Commercial={plotId:string;status:"available"|"booked"|"sold";
@@ -44,6 +45,16 @@ const contactLabels:ReadonlyArray<[keyof ContactFields,string]>= [
   ["brochureUrl","Brochure URL"]
 ];
 type Panel="overview"|"plots"|"pricing"|"deals"|"contact"|"gallery"|"sales"|"notices";
+const PANEL_META:Record<Panel,{label:string;hint:string;description:string}>={
+ overview:{label:"Overview",hint:"At a glance",description:"Project summary and published customer site."},
+ plots:{label:"Plots",hint:"Inventory & status",description:"Find a plot, update details and manage listing status."},
+ pricing:{label:"Pricing",hint:"Private prices",description:"Review and manage project pricing."},
+ deals:{label:"Deal Progress",hint:"Private records",description:"Review and update the status of private deals."},
+ contact:{label:"Contact",hint:"Public information",description:"Manage customer-facing contact and location details."},
+ gallery:{label:"Gallery",hint:"Project images",description:"Upload and manage project gallery images."},
+ sales:{label:"Sales & Accounts",hint:"Bookings & receipts",description:"Manage buyer records, bookings and payment receipts."},
+ notices:{label:"Plot Updates",hint:"Customer notices",description:"Create and publish updates for individual plots."}
+};
 const nameOfRole=(value:string)=>value==="client_admin"?"Client Admin":
   value==="approver"?"Approver":value==="editor"?"Editor":"Viewer";
 
@@ -94,6 +105,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
   const [commercial,setCommercial]=useState<CommercialState|null>(null);
   const [masterplan,setMasterplan]=useState<MasterplanInventory|null>(null);
   const [contact,setContact]=useState<ContactState|null>(null);
+  const [savedContactFields,setSavedContactFields]=useState("");
   const [panel,setPanel]=useState<Panel>("overview");
   const [showLivePreview,setShowLivePreview]=useState(false);
   const [plotSearch,setPlotSearch]=useState("");
@@ -107,11 +119,11 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     // A cookie for another project must not populate a project's private page.
     if(!s.authenticated||!s.user||(scopedSlug&&s.user.projectSlug!==scopedSlug)){
       setIdentity(null);setOverview(null);setCommercial(null);setMasterplan(null);
-      setContact(null);
+      setContact(null);setSavedContactFields("");
       return;
     }
     if(s.user.mustChangePassword){
-      setIdentity(s.user);setOverview(null);setCommercial(null);setMasterplan(null);setContact(null);
+      setIdentity(s.user);setOverview(null);setCommercial(null);setMasterplan(null);setContact(null);setSavedContactFields("");
       return;
     }
     setIdentity(s.user);
@@ -134,9 +146,13 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       setError(e instanceof Error?"Plot inventory: "+e.message:"Plot inventory unavailable.");
     }
     if(s.user.role==="client_admin"){
-      try{setContact(await api<ContactState>(path+"/contact"));}
-      catch(e){setContact(null);setError(e instanceof Error?"Contact details: "+e.message:"Contact unavailable.");}
-    }else setContact(null);
+      try{
+        const next=await api<ContactState>(path+"/contact");
+        setContact(next);setSavedContactFields(JSON.stringify(next.fields));
+      }catch(e){setContact(null);setSavedContactFields("");
+        setError(e instanceof Error?"Contact details: "+e.message:"Contact unavailable.");
+      }
+    }else {setContact(null);setSavedContactFields("");}
   };
   useEffect(()=>{
     const token=window.location.hash.match(/^#invite=([a-f0-9]{64})$/)?.[1]||"";
@@ -204,8 +220,8 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       const next=await api<ContactState>("/projects/"+
         encodeURIComponent(identity.projectSlug)+"/contact","PUT",
         {expectedRevision:contact.revision,fields:contact.fields});
-      setContact(next);
-      setMessage("Client contact details saved. Project owner approval setting was unchanged.");
+      setContact(next);setSavedContactFields(JSON.stringify(next.fields));
+      setMessage("Contact details saved. Owner-controlled visibility is unchanged.");
     }catch(e){setError(e instanceof Error?e.message:"Contact update failed.");}
     finally{setBusy(false);}
   };
@@ -236,6 +252,13 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
   const filteredMasterplan=(masterplan?.plots||[]).filter(row=>
     row.id.toLowerCase().includes(plotSearch.trim().toLowerCase()));
   const projectLabel=identity?.projectName||projectTitle||"Project";
+  const contactDirty=Boolean(contact&&JSON.stringify(contact.fields)!==savedContactFields);
+  const navigate=(destination:Panel)=>{
+    if(destination===panel||!availablePanels.includes(destination))return;
+    if(panel==="contact"&&contactDirty&&
+      !window.confirm("Contact details have unsaved changes. Leave without saving?"))return;
+    setPanel(destination);
+  };
   const authGate=!identity||Boolean(identity.mustChangePassword);
   const backProjectHref=scopedSlug?"/3Dprojects/"+encodeURIComponent(scopedSlug)+
     (projectKind==="masterplan_geo"?"/masterplan":projectKind==="building"?"":"/geo"):
@@ -377,29 +400,39 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
       <nav className="engine-client-admin-tabs" aria-label="Client admin sections">
         {availablePanels.map(item=><button key={item} type="button"
           aria-current={panel===item?"page":undefined} className={panel===item?"is-active":""}
-          onClick={()=>setPanel(item)}>{item==="overview"?"Overview":
-          item==="plots"?"Plots":item==="pricing"?"Pricing":item==="contact"?"Contact":
-          item==="gallery"?"Gallery":item==="sales"?"Sales & Accounts":item==="notices"?"Plot Updates":"Deal Progress"}</button>)}
+          onClick={()=>navigate(item)}>
+          <span>{PANEL_META[item].label}</span><small>{PANEL_META[item].hint}</small>
+        </button>)}
       </nav>
-      <p className="engine-client-admin-sidebar-hint">Project-scoped management · Your maps and releases are protected</p>
+      <p className="engine-client-admin-sidebar-hint">Only this project · Secure access</p>
       </aside><div className="engine-client-admin-main">
-      <section className="engine-client-admin-meta">
-        <span>{identity.displayName} · {identity.email}</span>
-        <span>Role: {nameOfRole(identity.role)} · {identity.projectSlug}</span>
-      </section>
+      <div className="engine-client-admin-mobile-switch">
+        <label htmlFor="engine-client-section">Go to section</label>
+        <select id="engine-client-section" aria-label="Choose Client Admin section"
+          value={availablePanels.includes(panel)?panel:"overview"}
+          onChange={e=>navigate(e.target.value as Panel)}>
+          {availablePanels.map(item=><option value={item} key={item}>{PANEL_META[item].label}</option>)}
+        </select>
+      </div>
+      <div className="engine-client-admin-page-heading">
+        <div><span className="engine-client-admin-eyebrow">PROJECT WORKSPACE</span>
+          <h2>{PANEL_META[availablePanels.includes(panel)?panel:"overview"].label}</h2>
+          <p>{PANEL_META[availablePanels.includes(panel)?panel:"overview"].description}</p>
+        </div>
+        <span className="engine-client-admin-role">{nameOfRole(identity.role)}</span>
+      </div>
 
       {panel==="overview"&&<>
-        <section className="engine-client-admin-stats" aria-label="Project plot summary">
+        {kind!=="building"&&<section className="engine-client-admin-stats" aria-label="Project plot summary">
           <article><span>Total Plots</span><strong>{mappingCount}</strong></article>
           <article><span>Available</span><strong>{statusCounts.available}</strong></article>
           <article><span>Booked</span><strong>{statusCounts.booked}</strong></article>
           <article><span>{masterplanGeo?"Confirmed":"Sold"}</span><strong>{statusCounts.sold}</strong></article>
-        </section>
+        </section>}
         <div className="engine-client-admin-grid">
           <section className="engine-client-admin-card">
-            <h2>Project overview</h2>
-            <h3>Live masterplan / Geo preview</h3>
-            <p>View the actual published customer site, without changing mapping.</p>
+            <h2>Customer website</h2>
+            <p>Preview the published site without changing its data.</p>
             <div className="engine-client-admin-actions">
               <button type="button" onClick={()=>setShowLivePreview(v=>!v)}>
                 {showLivePreview?"Hide live preview":"Show live preview"}</button>
@@ -411,11 +444,13 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
           <section className="engine-client-admin-card">
             <h2>Quick actions</h2>
             <div className="engine-client-admin-quick">
-              <button type="button" onClick={()=>setPanel("plots")}>Manage plot status & booking</button>
-              {availablePanels.includes("sales")&&<button type="button" onClick={()=>setPanel("sales")}>Sales & Accounts</button>}
-              {availablePanels.includes("gallery")&&<button type="button" onClick={()=>setPanel("gallery")}>Gallery images</button>}
-              <button type="button" onClick={()=>setPanel("contact")}>Contact details</button>
-              <button type="button" disabled={busy} onClick={()=>void load().catch(e=>setError(String(e)))}>Refresh counts</button>
+              {availablePanels.includes("plots")&&<button type="button" onClick={()=>navigate("plots")}>Manage plots</button>}
+              {availablePanels.includes("sales")&&<button type="button" onClick={()=>navigate("sales")}>Bookings & receipts</button>}
+              {availablePanels.includes("pricing")&&<button type="button" onClick={()=>navigate("pricing")}>Update pricing</button>}
+              {availablePanels.includes("gallery")&&<button type="button" onClick={()=>navigate("gallery")}>Gallery images</button>}
+              {availablePanels.includes("contact")&&<button type="button" onClick={()=>navigate("contact")}>Contact details</button>}
+              <button type="button" className="engine-client-admin-secondary" disabled={busy}
+                onClick={()=>void load().catch(e=>setError(String(e)))}>Refresh overview</button>
             </div>
           </section>
         </div>
@@ -455,8 +490,8 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
 
       {panel==="contact"&&identity?.role==="client_admin"&&<section className="engine-client-admin-card">
         <h2>Contact & Location</h2>
-        <p>Only customer-facing details can be edited here. Project Owner name,
-          developer identity, public visibility consent, mapping and releases are owner-controlled.</p>
+        <p>Edit customer-facing details only. The project owner controls public visibility and mapped data.</p>
+        {contactDirty&&<p className="engine-client-admin-unsaved" role="status">Unsaved contact changes</p>}
         {contact?<form className="engine-client-admin-contact" onSubmit={e=>{
           e.preventDefault();void saveContact();
         }}>
@@ -473,7 +508,12 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
             Public display consent: <strong>{contact.ownerApprovedPublic?"Enabled by Owner":"Disabled by Owner"}</strong>
             {" · "}Contact revision: {contact.revision}
           </p>
-          <button disabled={busy||contact.revision<1} type="submit">Save Contact Details</button>
+          <div className="engine-client-admin-contact-actions">
+            <button disabled={busy||contact.revision<1||!contactDirty} type="submit">Save changes</button>
+            <button className="engine-client-admin-secondary" disabled={busy||!contactDirty}
+              type="button" onClick={()=>setContact(previous=>previous?
+                {...previous,fields:JSON.parse(savedContactFields) as ContactFields}:null)}>Discard changes</button>
+          </div>
           {contact.revision===0&&<p>The project owner must configure Project Profile first.</p>}
         </form>:<p>Loading project contact information…</p>}
       </section>}
