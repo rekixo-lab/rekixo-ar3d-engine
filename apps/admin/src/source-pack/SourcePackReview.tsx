@@ -180,6 +180,7 @@ export default function SourcePackReview() {
 
   async function afterModelUpload(uploadedFiles: File[]) {
     const current = await load();
+    if (!current) return;
     // Only a new verified GLB starts a review automatically. An FBX may need
     // local conversion first; opening a draft early would lock that tool.
     if (!uploadedFiles.some((file) => /\.glb$/i.test(file.name)) ||
