@@ -107,7 +107,7 @@ export default function SourceOriginalUploader({
 }: {
   slug: string;
   locked: boolean;
-  onVerified: () => Promise<void>;
+  onVerified: (uploadedFiles: File[]) => Promise<void>;
 }) {
   const [sources, setSources] = useState<SourceOriginal[]>([]);
   const [busy, setBusy] = useState(false);
@@ -148,8 +148,8 @@ export default function SourceOriginalUploader({
         `${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(slug)}/source-classification`,
         "POST",
       );
-      await onVerified();
-      setProgress(`Verified ${files.length} selected file(s). Review the suggested source roles below.`);
+      await onVerified(files);
+      setProgress(`Verified ${files.length} file(s). The model is ready for review.`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Source upload failed.");
       setProgress("Select the same original files again to resume the upload safely.");
@@ -195,8 +195,8 @@ export default function SourceOriginalUploader({
         `${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(slug)}/source-classification`,
         "POST",
       );
-      await onVerified();
-      setProgress(`${converted.name} verified. Start the NEXT Source Pack version and approve this GLB as geometry authority.`);
+      await onVerified([converted]);
+      setProgress(`${converted.name} verified. Select the model below to continue.`);
       setReviewFile(null);
       setFbxAnalysis(null);
       setReviewConfirmed(false);
