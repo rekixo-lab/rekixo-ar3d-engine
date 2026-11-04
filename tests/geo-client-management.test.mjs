@@ -33,8 +33,8 @@ test("All mapped Geo IDs and public-approved counters match customer release",as
   assert.equal(v.rows[2].publicApproved,false);
   assert.equal(v.rows[0].revision,0);
   const preliminary=await listGeoCommercialState({DB:new DB(db)},context,{...source,publicationMode:"preliminary"});
-  assert.deepEqual(preliminary.rows.map(r=>r.status),["available","available","available"]);
-  assert.equal(preliminary.counts.available,3);
+  assert.deepEqual(preliminary.rows.map(r=>r.status),["available","booked","available"]);
+  assert.equal(preliminary.counts.available,2);
   const foreign=await listGeoCommercialState({DB:new DB(db)},{project:{id:"p2"}},source);
   assert.deepEqual(foreign.rows.map(r=>r.status),["available","available","available"]);
  }finally{db.close();}
