@@ -33,7 +33,8 @@ test("Admin remains a four-square dashboard icon, never a gear",()=>{
 });
 
 test("Call uses only published Geo phone, Admin uses authenticated project route",()=>{
-  assert.match(source,/const publicPhone=data\.publicContacts\?\.phone/);
+  assert.match(source,/const callHref=geoCallHref\(data\.publicContacts\?\.phone\)/);
+  assert.match(source,/geoCallHref\(data\.publicContacts\.phoneSecondary\)/);
   assert.match(source,/const adminHref=projectClientAdminUrl\(slug\)/);
   assert.match(header,/role="img" aria-label="Call unavailable"/);
   assert.doesNotMatch(header,/href=\{whatsappHref\}/);
