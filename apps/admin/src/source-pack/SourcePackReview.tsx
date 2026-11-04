@@ -122,6 +122,7 @@ export default function SourcePackReview() {
     setFiles(payload.latestPack?.files ?? []);
     setDirty(false);
     setModelSelection(null);
+    return payload;
   }
 
   useEffect(() => {
@@ -175,6 +176,16 @@ export default function SourcePackReview() {
     } finally {
       setBusy("");
     }
+  }
+
+  async function afterModelUpload(uploadedFiles: File[]) {
+    const current = await load();
+    // Only a new verified GLB starts a review automatically. An FBX may need
+    // local conversion first; opening a draft early would lock that tool.
+    if (!uploadedFiles.some((file) => /\.glb$/i.test(file.name)) ||
+        current.latestPack?.status === "draft") return;
+    const next = await post({ action: "start-draft" }, "start");
+    if (next) setMessage("New model uploaded. Confirm the selected checksum, then prepare it with one click.");
   }
 
   async function startDraft() {
@@ -360,7 +371,7 @@ export default function SourcePackReview() {
       {error && <p className="source-review__alert source-review__alert--error" role="alert">{error}</p>}
       {message && <p className="source-review__alert source-review__alert--ok" role="status">{message}</p>}
 
-      <SourceOriginalUploader slug={slug} locked={pack?.status === "draft"} onVerified={load} />
+      <SourceOriginalUploader slug={slug} locked={pack?.status === "draft"} onVerified={afterModelUpload} />
 
       {!pack || pack.status !== "draft" ? (
         <section className="source-review__simple-card" id="source-step-review">
