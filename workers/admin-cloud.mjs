@@ -11,7 +11,7 @@ import { listGeoReleases } from "./geo-release-admin.mjs";
 import { verifyGeoDraftPreview } from "./geo-release-verify.mjs";
 import { publishGeoRelease } from "./geo-release-publish.mjs";
 import { activateGeoRelease } from "./geo-release-activate.mjs";
-import { previewCosmeticGeoReplacement, applyCosmeticGeoReplacement } from "./geo-cosmetic-replace.mjs";
+import { handleEasyGeoReplacement } from "./geo-cosmetic-replace.mjs";
 import {
   activeDeletionJob,
   deletionJobResponse,
@@ -1224,25 +1224,9 @@ async function projectGeoDraftVerification(request, env, actor, project) {
 }
 
 async function projectGeoReleases(request, env, actor, project, parts) {
-  // Appearance-only GLB updates: the backend independently hashes actual
-  // immutable model geometry. POST switches Geo + Plot Mapping atomically.
-  if (parts.length===3 && parts[2]==="easy-replace") {
-    if(request.method!=="GET" && request.method!=="POST")
-      return json({error:"Method not allowed."},{status:405});
-    if(request.method==="POST"&&!sameOrigin(request))
-      return json({error:"Invalid request origin."},{status:403});
-    try{
-      if(request.method==="GET")
-        return json(await previewCosmeticGeoReplacement(env,project));
-      const body=await request.json().catch(()=>({}));
-      return json(await applyCosmeticGeoReplacement(env,actor,project,
-        String(body.expectedToken||"")));
-    }catch(error){
-      const message=error instanceof Error?error.message:"Automatic Geo replacement failed.";
-      return json({error:message},{status:
-        /integrity|unavailable|missing from private model storage|failed checksum/i.test(message)?503:409});
-    }
-  }
+  if(parts.length===3 && parts[2]==="easy-replace")
+    return handleEasyGeoReplacement(request,env,actor,project);
+
   if (parts.length === 2) {
     if (request.method === "GET") {
       try {
