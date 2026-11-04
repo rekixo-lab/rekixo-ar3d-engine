@@ -1,0 +1,272 @@
+/* Client Admin-only design layer. Owner Admin and public 3D viewers are unchanged. */
+.engine-client-admin:not(.engine-client-admin-auth){
+  --ca-surface:#0b1e2b;--ca-card:#102a38;--ca-line:#2b4c5c;
+  --ca-text:#eff9fb;--ca-muted:#aec7d0;--ca-accent:#64e7b6;
+  width:100%;max-width:1580px;padding:clamp(10px,1.65vw,25px);
+  color:var(--ca-text);color-scheme:dark;
+  background:radial-gradient(ellipse at 96% 0%,rgba(50,179,136,.09),transparent 36rem);
+}
+.engine-client-admin:not(.engine-client-admin-auth) *,
+.engine-client-admin:not(.engine-client-admin-auth) *::before,
+.engine-client-admin:not(.engine-client-admin-auth) *::after{box-sizing:border-box}
+.engine-client-admin:not(.engine-client-admin-auth) :is(button,a,input,select,textarea):focus-visible{
+  outline:2px solid var(--ca-accent);outline-offset:3px
+}
+.engine-client-admin:not(.engine-client-admin-auth) :is(button,a){-webkit-tap-highlight-color:transparent}
+.engine-client-admin-head{
+  gap:12px;min-height:76px;padding:13px clamp(14px,2vw,20px);
+  border:1px solid var(--ca-line);border-radius:15px;
+  background:linear-gradient(110deg,#0c2635 0%,#102c38 62%,#0a3936);
+  box-shadow:0 10px 28px #0002;
+}
+.engine-client-admin-brand{gap:11px}
+.engine-client-admin-brand h1{margin:3px 0;font-size:clamp(18px,2vw,24px);line-height:1.18}
+.engine-client-admin-brand p{font-size:11px;color:var(--ca-muted)}
+.engine-client-admin-mark{width:41px;height:41px;border-radius:12px}
+.engine-client-admin-head-actions{flex:0 0 auto;gap:8px}
+.engine-client-admin-head-actions a,.engine-client-admin-head-actions button{
+  min-height:39px;padding:9px 12px;border-radius:10px;font-size:12px
+}
+.engine-client-admin-head-actions button{background:#152e3c;border-color:#35596a}
+.engine-client-admin-workspace{
+  grid-template-columns:216px minmax(0,1fr);gap:14px;margin:14px 0 0;
+  align-items:start
+}
+.engine-client-admin-sidebar{
+  top:12px;max-height:calc(100dvh - 25px);overflow-y:auto;
+  padding:10px;border-radius:14px;border:1px solid var(--ca-line);
+  background:linear-gradient(180deg,#0d2836,#0a1d2b);
+  box-shadow:0 9px 25px #0002;
+  scrollbar-width:thin;scrollbar-color:#426775 transparent
+}
+.engine-client-admin-sidebar-brand{padding:11px 11px 14px}
+.engine-client-admin-sidebar-brand strong{font-size:15px}
+.engine-client-admin-sidebar-brand small{font-size:11px;line-height:1.45}
+.engine-client-admin-workspace .engine-client-admin-tabs{
+  gap:4px;margin:10px 0 0;padding:0;border:0;background:transparent
+}
+.engine-client-admin-workspace .engine-client-admin-tabs button{
+  position:relative;display:grid;align-content:center;gap:2px;width:100%;
+  min-height:51px;min-width:0;padding:8px 12px 8px 17px;
+  border:1px solid transparent;border-radius:9px;text-align:left;
+  background:transparent;color:#c9dce2;box-shadow:none;
+  transition:background .18s,border-color .18s,color .18s
+}
+.engine-client-admin-workspace .engine-client-admin-tabs button span{font-size:12.5px;font-weight:780;line-height:1.3}
+.engine-client-admin-workspace .engine-client-admin-tabs button small{font-size:10.5px;font-weight:500;color:#8faeb8;line-height:1.3}
+.engine-client-admin-workspace .engine-client-admin-tabs button:hover{background:#183747;border-color:#31596a}
+.engine-client-admin-workspace .engine-client-admin-tabs button.is-active{
+  background:linear-gradient(110deg,#164e46,#1b574c);
+  border-color:#348f78;color:#f8fffb;box-shadow:inset 3px 0 0 #6ef1b9,0 4px 12px #0002
+}
+.engine-client-admin-workspace .engine-client-admin-tabs button.is-active small{color:#b1e9d0}
+.engine-client-admin-sidebar-hint{margin:11px 4px 2px;padding:10px 7px;border-top:1px solid #315261;font-size:10.5px;line-height:1.45}
+.engine-client-admin-main{min-width:0}
+.engine-client-admin-mobile-switch{display:none}
+.engine-client-admin-page-heading{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  min-height:83px;margin:0 0 13px;padding:13px clamp(13px,2vw,19px);
+  background:linear-gradient(105deg,#102d3a,#0d2634);
+  border:1px solid var(--ca-line);border-radius:13px;
+}
+.engine-client-admin-page-heading>div{min-width:0}
+.engine-client-admin-eyebrow{color:var(--ca-accent);font-size:10px;letter-spacing:.12em;font-weight:800}
+.engine-client-admin-page-heading h2{
+  margin:5px 0 3px;font-size:clamp(19px,2.2vw,24px);line-height:1.2;letter-spacing:-.02em
+}
+.engine-client-admin-page-heading p{margin:0;color:#afc6cf;font-size:12px;line-height:1.5}
+.engine-client-admin-role{
+  flex:none;padding:7px 10px;border:1px solid #377968;border-radius:999px;
+  background:#123e38;color:#a1f3cd;font-size:11px;font-weight:750
+}
+.engine-client-admin-workspace .engine-client-admin-stats{
+  grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px
+}
+.engine-client-admin-stats article{
+  min-width:0;gap:6px;padding:13px 15px;
+  border:1px solid var(--ca-line);border-radius:12px;
+  background:linear-gradient(135deg,#102d3d,#0e2534)
+}
+.engine-client-admin-stats article:nth-child(2){border-bottom:2px solid #25c783}
+.engine-client-admin-stats article:nth-child(3){border-bottom:2px solid #e5b847}
+.engine-client-admin-stats article:nth-child(4){border-bottom:2px solid #eb6872}
+.engine-client-admin-stats span{font-size:11px;color:var(--ca-muted)}
+.engine-client-admin-stats strong{font-size:clamp(21px,2.7vw,30px);line-height:1.22}
+.engine-client-admin-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.engine-client-admin-card,.client-geo-manage{
+  min-width:0;padding:clamp(14px,1.65vw,20px);border:1px solid var(--ca-line);
+  border-radius:14px;background:linear-gradient(180deg,#102b3a,#0c2231);
+  box-shadow:0 8px 21px #0002
+}
+.engine-client-admin-card h2,.client-geo-manage h2,
+.client-geo-sales h2,.client-geo-gallery h2,.client-geo-notices h2{
+  margin:0 0 8px;font-size:clamp(16px,1.55vw,19px);line-height:1.35
+}
+.engine-client-admin-card p,.client-geo-manage p,
+.client-geo-sales p,.client-geo-gallery p,.client-geo-notices p{
+  color:var(--ca-muted);font-size:12px;line-height:1.55
+}
+.engine-client-admin-quick{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.engine-client-admin-quick button{text-align:left;min-width:0}
+.engine-client-admin:not(.engine-client-admin-auth) :is(
+  .engine-client-admin-head-actions a,.engine-client-admin-head-actions button,
+  .engine-client-admin-actions button,.engine-client-admin-quick button,
+  .client-geo-manage button:not(.client-geo-table-row),
+  .client-geo-sales button,.client-geo-gallery button,.client-geo-notices button,
+  .engine-client-admin-contact-actions button
+){
+  min-height:40px;border-radius:10px;transition:background .17s,border-color .17s,box-shadow .17s;
+}
+.engine-client-admin:not(.engine-client-admin-auth) :is(
+  .engine-client-admin-actions button,.engine-client-admin-quick button,
+  .client-geo-manage button:not(.client-geo-table-row),
+  .client-geo-sales button,.client-geo-gallery button,.client-geo-notices button
+):not(:disabled):hover{background:#1b755c;border-color:#78eabd}
+.engine-client-admin:not(.engine-client-admin-auth) .engine-client-admin-secondary{
+  background:#142e3c;border-color:#426174;color:#dcecf1
+}
+.engine-client-admin:not(.engine-client-admin-auth) button:disabled{opacity:.48;cursor:not-allowed}
+.engine-client-admin :is(input,select,textarea){
+  min-width:0;max-width:100%;font:inherit;font-size:13px;
+  border-radius:9px;border:1px solid #426475;background:#0b2231;color:#eff9fb
+}
+.engine-client-admin :is(input,select,textarea):not([type="checkbox"]){min-height:40px}
+.engine-client-admin textarea{width:100%;min-height:82px;resize:vertical;padding:10px 11px}
+.engine-client-admin :is(input,textarea)::placeholder{color:#829eaa}
+.engine-client-admin :is(input,select,textarea):focus{border-color:#57d2a7}
+.engine-client-admin-contact{gap:11px}
+.engine-client-admin-contact label,.client-geo-editor-grid label,
+.client-geo-upload label,.client-geo-editor>label{font-size:12px;font-weight:650;color:#c6dce2}
+.engine-client-admin-contact-actions{
+  grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:10px
+}
+.engine-client-admin-contact-actions button{
+  min-height:42px;padding:9px 15px;border:1px solid #4dd4a0;
+  border-radius:10px;background:#14664f;color:#effff9;font-weight:750;cursor:pointer
+}
+.engine-client-admin-unsaved{
+  display:inline-flex;align-items:center;gap:7px;padding:7px 10px;
+  border:1px solid #b18a42;border-radius:9px;background:#453719;color:#ffdfa0!important
+}
+.engine-client-admin-contact-notice{
+  margin:5px 0;padding:11px 12px;border:1px solid #30586a;border-radius:10px;background:#102e3d
+}
+.engine-client-admin-live-preview{max-width:100%;height:clamp(215px,29vw,390px);border-radius:11px}
+.client-geo-toolbar{gap:10px;align-items:end}
+.client-geo-toolbar>div{flex:1 1 250px}
+.client-geo-toolbar input{flex:1 1 145px}
+.client-geo-toolbar select{flex:0 1 155px}
+.client-geo-list{max-height:min(62vh,680px);overflow-y:auto;scrollbar-width:thin}
+.client-geo-table-heading,.client-geo-table-row{gap:9px}
+.client-geo-table-heading{color:#b1ccd3}
+button.client-geo-table-row{
+  min-height:48px;border-radius:9px;background:#122f3e;transition:background .15s,border-color .15s
+}
+button.client-geo-table-row:focus-visible{outline-offset:1px}
+button.client-geo-table-row.is-active{background:#1a534d;border-color:#70e5b4;box-shadow:inset 3px 0 0 #78eab9}
+.client-geo-table-row>span,.client-geo-table-row>strong{min-width:0;overflow-wrap:anywhere}
+.client-geo-editor{margin-top:12px;padding:clamp(12px,1.6vw,19px);background:#0f2b3a;border-radius:13px}
+.client-geo-editor header{gap:8px}
+.client-geo-editor header h3{margin:0}
+.client-geo-editor-grid{gap:11px}
+.client-geo-info{margin:12px 0;line-height:1.5}
+.client-geo-upload{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto}
+.client-geo-gallery-grid{grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:11px}
+.client-geo-gallery-grid article{border-radius:12px;box-shadow:0 4px 10px #0002}
+.client-geo-gallery-grid img{height:142px}
+.client-geo-gallery-grid article>div{display:grid;gap:4px}
+.client-geo-gallery-grid article>button,.client-geo-notice-list article>button{
+  background:#46242f!important;border-color:#8c4c58!important;color:#ffdade!important
+}
+.client-geo-gallery-grid article>button:hover,.client-geo-notice-list article>button:hover{background:#66313e!important}
+.client-geo-notice-list article{min-width:0;border-radius:11px}
+.client-geo-notice-list article p{overflow-wrap:anywhere}
+.client-geo-sales-stats{gap:9px}
+.client-geo-sales-stats>div{min-width:0;border-radius:11px;background:#123240}
+.client-geo-sales-stats strong{font-variant-numeric:tabular-nums}
+.client-geo-sale-list{max-height:460px}
+.client-geo-sale-list button{min-width:0;overflow-wrap:anywhere}
+.client-geo-payment{flex-wrap:wrap}
+@media(max-width:1180px){
+  .engine-client-admin-workspace{grid-template-columns:188px minmax(0,1fr);gap:11px}
+  .engine-client-admin-workspace .engine-client-admin-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .engine-client-admin-grid{grid-template-columns:minmax(0,1fr)}
+  .client-geo-table-heading{display:none}
+  .client-geo-table-row{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .client-geo-table-row>:last-child{text-align:left}
+}
+@media(max-width:850px){
+  .engine-client-admin-workspace{display:block;margin-top:11px}
+  .engine-client-admin-sidebar{display:none}
+  .engine-client-admin-mobile-switch{
+    display:flex;align-items:center;gap:10px;margin:0 0 11px;
+    padding:9px 12px;border:1px solid var(--ca-line);border-radius:12px;
+    background:#102b3a
+  }
+  .engine-client-admin-mobile-switch label{flex:0 0 auto;color:#c4dce3;font-size:12px;font-weight:700}
+  .engine-client-admin-mobile-switch select{flex:1;min-width:0;min-height:43px;font-weight:750}
+  .engine-client-admin-page-heading{min-height:72px;padding:12px 14px}
+  .engine-client-admin-head{min-height:70px}
+  .client-geo-toolbar>div{flex-basis:100%}
+  .client-geo-toolbar input{flex:1 1 45%;width:auto}
+  .client-geo-toolbar select{flex:1 1 34%;width:auto}
+}
+@media(max-width:600px){
+  .engine-client-admin:not(.engine-client-admin-auth){padding:9px}
+  .engine-client-admin-head{padding:11px;border-radius:12px;align-items:center;flex-direction:row;flex-wrap:wrap;gap:10px}
+  .engine-client-admin-brand{flex:1 1 200px}
+  .engine-client-admin-brand h1{font-size:19px;overflow-wrap:anywhere}
+  .engine-client-admin-head-actions{width:100%;justify-content:space-between}
+  .engine-client-admin-head-actions a,.engine-client-admin-head-actions button{flex:1 1 auto;min-width:0}
+  .engine-client-admin-role{font-size:10px;padding:6px 8px}
+  .engine-client-admin-page-heading h2{font-size:20px}
+  .engine-client-admin-page-heading p{font-size:11.5px}
+  .engine-client-admin-workspace .engine-client-admin-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .engine-client-admin-stats article{padding:11px}
+  .engine-client-admin-grid{grid-template-columns:minmax(0,1fr)}
+  .engine-client-admin-card,.client-geo-manage{padding:12px;border-radius:12px}
+  .engine-client-admin-quick{grid-template-columns:minmax(0,1fr)}
+  .engine-client-admin-contact{grid-template-columns:minmax(0,1fr)}
+  .engine-client-admin-contact label:nth-child(2){grid-column:auto}
+  .client-geo-toolbar input,.client-geo-toolbar select{flex:1 1 100%;width:100%}
+  .client-geo-toolbar button{width:100%}
+  .client-geo-table-row{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px}
+  .client-geo-table-row>strong:first-child{grid-column:1/-1;font-size:14px;color:#e8fff4}
+  .client-geo-table-row>span:nth-child(n+2){display:grid;gap:3px;justify-items:start;text-align:left}
+  .client-geo-table-row>span:nth-child(2)::before{content:"Area"}
+  .client-geo-table-row>span:nth-child(3)::before{content:"Owner / Buyer"}
+  .client-geo-table-row>span:nth-child(4)::before{content:"Booking amount"}
+  .client-geo-table-row>span:nth-child(5)::before{content:"Broker"}
+  .client-geo-table-row>span:nth-child(6)::before{content:"Status"}
+  .client-geo-table-row>span:nth-child(7)::before{content:"Action"}
+  .client-geo-table-row>span:nth-child(n+2)::before{font-size:10px;font-weight:600;color:#9eb7c2;text-transform:none}
+  .client-geo-editor-grid{grid-template-columns:minmax(0,1fr);gap:10px}
+  .client-geo-editor-grid .client-geo-wide{grid-column:auto}
+  .client-geo-upload{grid-template-columns:minmax(0,1fr)}
+  .client-geo-upload>button{grid-column:auto}
+  .client-geo-sales-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .client-geo-sales-stats>div:first-child{grid-column:1/-1}
+  .client-geo-notice-list article{flex-wrap:wrap}
+  .client-geo-notice-list article>button{width:100%}
+  .engine-client-admin-contact-actions button{flex:1 1 120px}
+}
+@media(max-width:370px){
+  .engine-client-admin-mobile-switch{align-items:stretch;flex-direction:column}
+  .engine-client-admin-mobile-switch select{width:100%}
+  .engine-client-admin-page-heading{align-items:flex-start;flex-direction:column}
+  .engine-client-admin-role{align-self:flex-start}
+  .client-geo-sales-stats{grid-template-columns:minmax(0,1fr)}
+  .client-geo-sales-stats>div:first-child{grid-column:auto}
+}
+@media(hover:hover){
+  .engine-client-admin:not(.engine-client-admin-auth) :is(.engine-client-admin-head-actions a,.engine-client-admin-head-actions button):not(:disabled):hover{
+    box-shadow:0 3px 12px #0003
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .engine-client-admin:not(.engine-client-admin-auth) *,
+  .engine-client-admin:not(.engine-client-admin-auth) *::before,
+  .engine-client-admin:not(.engine-client-admin-auth) *::after{
+    scroll-behavior:auto!important;transition:none!important;animation:none!important
+  }
+}
