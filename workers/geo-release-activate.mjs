@@ -2,6 +2,7 @@ import {
   geoReleaseSchemaReady,
   geoReleaseInternals,
 } from "./geo-release-admin.mjs";
+import { planGeoMappingTransition } from "./geo-release-mapping-safety.mjs";
 
 const {
   GEO_RELEASE_FORMAT,
@@ -87,6 +88,7 @@ export async function activateGeoRelease(
   actor,
   project,
   releaseId,
+  mappingGapConfirmation = "",
 ) {
   if (!(await geoReleaseSchemaReady(env)))
     throw Error("Immutable Geo release schema is not installed.");
@@ -105,7 +107,16 @@ export async function activateGeoRelease(
   if (context.activeGeoReleaseId === releaseId)
     return { ...release, active: true, unchanged: true };
 
+  const transition=await planGeoMappingTransition(env,project,context.experienceId,
+    releaseId,release.sourceBuildingReleaseId,mappingGapConfirmation);
   const now = new Date().toISOString();
+  const restoreMapping=transition.matchingMappingId ? [
+    env.DB.prepare(`UPDATE geo_plot_mapping_active_3d
+      SET mapping_release_id=?,updated_by=?,updated_at=?
+      WHERE project_id=? AND experience_id=? AND mapping_release_id=?`).bind(
+      transition.matchingMappingId,actor.email,now,project.id,context.experienceId,
+      transition.currentMappingId)
+  ] : [];
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO geo_experience_active_releases_3d
@@ -123,6 +134,7 @@ export async function activateGeoRelease(
       actor.email,
       now,
     ),
+    ...restoreMapping,
     env.DB.prepare(
       `INSERT INTO geo_release_activations_3d
         (id,experience_id,project_id,geo_release_id,previous_geo_release_id,
@@ -150,6 +162,8 @@ export async function activateGeoRelease(
       JSON.stringify({
         version: release.version,
         previousGeoReleaseId: context.activeGeoReleaseId || null,
+        restoredMappingReleaseId: transition.matchingMappingId,
+        mappingReviewGap: Boolean(transition.currentMappingId && !transition.matchingMappingId),
       }),
       now,
     ),
