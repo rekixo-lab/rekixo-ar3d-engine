@@ -48,9 +48,11 @@ test("Viewer sees scoped dashboard and plot list without editing or owner action
  await page.goto("http://127.0.0.1:5184/3Dprojects/demo-a/client-admin#invite="+"a".repeat(64));
  await page.getByLabel("Invited email address").fill("viewer@example.test");
  await page.getByRole("button",{name:"Activate project access"}).click();
- await expect(page.getByRole("heading",{name:"Demo A"})).toBeVisible();
- await expect(page.getByRole("heading",{name:"Overview",exact:true})).toBeVisible();
- await expect(page.locator(".engine-client-admin-role")).toHaveText("Viewer");
+ await expect(page.locator(".engine-client-admin-sidebar-brand strong")).toHaveText("Demo A");
+ await expect(page.locator(".engine-client-admin-head")).toHaveCount(0);
+ await expect(page.locator(".engine-client-admin-page-heading")).toHaveCount(0);
+ await expect(page.getByRole("heading",{name:"Customer website"})).toBeVisible();
+ await expect(page.locator(".engine-client-admin-sidebar-brand small")).toContainText("Viewer");
  await page.getByRole("button",{name:/^Plots/}).click();
  await expect(page.getByRole("heading",{name:"Geo plot management"})).toBeVisible();
  await expect(page.getByRole("button",{name:/Plot 12/})).toBeVisible();
