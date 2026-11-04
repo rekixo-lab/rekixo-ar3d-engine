@@ -53,3 +53,11 @@ test("UI shows only processing status and next action while keeping recovery dia
   assert.doesNotMatch(source,/<nav className="source-review__workflow-nav"/);
   assert.doesNotMatch(source,/<section className="source-review__summary"/);
 });
+
+test("production verifier expects only compact deployed model actions",()=>{
+  const verify=read("scripts/verify-design-admin.mjs");
+  assert.match(verify,/Use This Model & Prepare/);
+  assert.match(verify,/Select verified 3D model/);
+  assert.match(verify,/SEAL SOURCE PACK/);
+  assert.doesNotMatch(verify,/\['Source Pack Review', 'Refresh automatic analysis'/);
+});

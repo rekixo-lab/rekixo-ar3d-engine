@@ -89,7 +89,10 @@ if (!code.includes('/3Dprojects/studio')) {
 const sourcePack = code.match(/(?:\.\/)?(SourcePackReview-[\w-]+\.js)/);
 if (!sourcePack) throw Error('The deployed admin has no Source Pack Review bundle.');
 const sourcePackCode = await get(`/3Dprojects/assets/${sourcePack[1]}`, 'javascript');
-for (const feature of ['Source Pack Review', 'Refresh automatic analysis', 'SEAL SOURCE PACK']) {
+// The old operator stepper and long-form "Refresh automatic analysis" button
+// were intentionally removed in the compact Building Editor. Verify the
+// current safe model selector + private preparation gate instead.
+for (const feature of ['3D Model', 'Select verified 3D model', 'Use This Model & Prepare', 'SEAL SOURCE PACK']) {
   if (!sourcePackCode.includes(feature)) throw Error(`Deployed Automatic Engine is missing ${feature}.`);
 }
 
