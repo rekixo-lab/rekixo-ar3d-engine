@@ -548,6 +548,37 @@ export default function GeoPlotMapper(){
       return {ok:false,reason:message};
     }finally{setBusy(false);}
   };
+  const preserveSameCoordinateModel=async()=>{
+    if(!state||!geo||!state.draft.stale||dirty||working||busy)return;
+    setBusy(true);setMessage("");
+    try{
+      const plan=await callApi<{token:string;plotCount:number;nextCanonicalSha256:string}>(
+        api,{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({action:"preserve-coordinates-preflight",
+            expectedRevision:state.draft.revision})});
+      if(activeProjectRef.current!==slug)throw Error("Project changed. Restart source review.");
+      const exact="PRESERVE 3D COORDINATES "+slug;
+      const accepted=window.prompt("KEEP EXISTING 3D PLOT COORDINATES?\\n\\n"+
+        plan.plotCount+" polygons will remain in their exact OLD model-local X/Z positions on the NEW 3D model. "+
+        "ONLY use this after comparing both models and confirming the same metric scale, origin, orientation and plot layout. "+
+        "Different geometry needs verified image-source remapping instead.\\n\\n"+
+        "All area, side, facing, road, model-plane and source approvals become UNVERIFIED. "+
+        "Historical publications and commercial records remain untouched. Customer site will not change from this draft action.\\n\\n"+
+        "Type "+exact+" to create an unverified preserved draft:");
+      if(accepted!==exact){setMessage("3D replacement preservation cancelled. Old mapping draft is safe.");return;}
+      const next=await callApi<MappingState>(api,{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"preserve-coordinates",expectedRevision:state.draft.revision,
+          expectedPreflightToken:plan.token,confirmation:exact})});
+      if(activeProjectRef.current!==slug)throw Error("Project switched after source rebind. Reload.");
+      setState(next);setPlots(next.draft.plots);setDirty(false);resetWorking(null);
+      setOriginalId(null);setMode("pan");setPublishedPreview(null);
+      setMessage("Preserved "+plan.plotCount+" plotted boundaries and IDs in the NEW source as an UNVERIFIED private draft. "+
+        "Inspect ALL polygons on the new model, confirm plane height, road, sides and survey values, then Verify and Publish explicitly. "+
+        "Prior published mappings and customer statuses have not been overwritten.");
+    }catch(error){setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));}
+    finally{setBusy(false);}
+  };
   const stageCornerFromVerifiedImage=(plotId:string,index:number,uv:Point,
     transform:SimilarityTransform,alignmentRevision:number):{ok:boolean;reason?:string}=>{
     if(!state||!geo||state.draft.stale||busy||state.alignmentRevision!==alignmentRevision)
@@ -1224,6 +1255,10 @@ export default function GeoPlotMapper(){
       Use 1 · CSV / Image → Source replacement to verify the old and new model against
       the same original image, then remap only affected Plot IDs. Recheck all plot approvals
       before publishing. Historical releases remain available for recovery.</p>
+      <button type="button" disabled={busy||dirty||Boolean(working)}
+        onClick={()=>void preserveSameCoordinateModel()}>
+        Keep Existing Plot Coordinates · Unverified Draft
+      </button>
       <button type="button" disabled={busy} onClick={()=>{
         const exact="RESET MAPPING "+slug;
         if(window.prompt("Create an EMPTY mapping for the new Geo release. Unsaved old draft polygons will be replaced. Type "+exact)===exact)
