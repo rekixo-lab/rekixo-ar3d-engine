@@ -12,16 +12,20 @@ test("selection pulse settles and never schedules an unlimited redraw", () => {
   assert.equal(atStart.animate, true);
   assert.equal(during.animate, true);
   assert.equal(settled.animate, false);
-  assert.equal(settled.fillOpacity, 0.16);
-  assert.equal(settled.haloOpacity, 0.40);
-  assert.ok(during.fillOpacity >= 0.16 && during.fillOpacity <= 0.36);
+  assert.equal(settled.fillOpacity, 0.31);
+  assert.equal(settled.haloOpacity, 0.62);
+  assert.ok(during.fillOpacity >= 0.31 && during.fillOpacity <= 0.46);
+  assert.ok(during.rippleOpacity > 0 && during.rippleScale > 1);
+  assert.equal(settled.rippleOpacity, 0);
+  assert.ok(settled.rippleScale > 1);
 });
 
 test("reduced-motion preference keeps static selected outline", () => {
   const motion = geoPlotFocusMotion(150, 100, true);
   assert.equal(motion.animate, false);
-  assert.equal(motion.haloOpacity, 0.40);
-  assert.equal(motion.edgeOpacity, 0.92);
+  assert.equal(motion.haloOpacity, 0.62);
+  assert.equal(motion.edgeOpacity, 0.97);
+  assert.equal(motion.rippleOpacity, 0);
 });
 
 test("selected plot follows GLB-local coordinates with transparent depth-tested overlay", () => {
@@ -31,6 +35,7 @@ test("selected plot follows GLB-local coordinates with transparent depth-tested 
   assert.match(focus, /selected-plot-white-focus-edge/);
   assert.match(focus, /selected-plot-status-glow/);
   assert.match(focus, /selected-plot-corner-markers/);
+  assert.match(focus, /selected-plot-outward-ripple/);
   assert.match(focus, /depthTest: true, depthWrite: false/);
   assert.match(focus, /clear\(\);\s*group\.removeFromParent\(\)/);
   assert.match(layer, /setSelectedPlot:/);
@@ -39,5 +44,8 @@ test("selected plot follows GLB-local coordinates with transparent depth-tested 
   assert.match(viewer, /plotLayer\?\.tickSelection\(/);
   assert.match(viewer, /prefers-reduced-motion: reduce/);
   assert.match(viewer, /setSelectedPlot\(plotIds\.get\(id\)\|\|null\)/);
-  assert.match(viewer, /setSelectedPlot\(null\)/);
+  assert.match(viewer, /setDrawerOpen\(true\)/);
+  assert.match(viewer, /onClose=\{\(\)=>setDrawerOpen\(false\)\}/);
+  assert.match(viewer, /plot=\{drawerOpen\?selectedPlot:null\}/);
+  assert.doesNotMatch(viewer, /onClose=\{\(\)=>setSelectedPlot\(null\)\}/);
 });
