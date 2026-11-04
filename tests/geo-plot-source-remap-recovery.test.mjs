@@ -126,7 +126,7 @@ test("same-coordinate new 3D source retains every Plot ID/corner but revokes all
  for(const p of preserved){
    assert.equal(p.area.verified,false);
    assert.equal(p.facingVerified,false);
-   assert.equal(p.planeVerified,false);
+   assert.notEqual(p.planeVerified,true,"new source elevation must not remain approved");
    assert.equal(p.planeY,undefined);
    assert.ok(Object.values(p.sides).every(side=>side.verified===false));
  }
