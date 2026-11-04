@@ -1,7 +1,7 @@
 /**
  * Customer-facing Geo STATUS view of the active published plot mapping.
  * The Platform uses Available as the default category for mapped plots without
- * an explicit Booked/Sold status. This is a presentation fallback ONLY:
+ * an explicit publicly approved Booked/Sold status. This is a presentation fallback ONLY:
  * it does not create or approve a sale, change a private ledger, or publish
  * prices. Explicit public statuses always take priority.
  */
@@ -13,7 +13,9 @@ export function summarizeApprovedGeoPlotStatuses(mapping){
   const statusById=Object.create(null);
   // The server only sends release-bound, public-approved commercial facts.
   // A preliminary release may have no commercial entries at all.
-  const commercial=mapping?.publicationMode==="verified"&&
+  // A preliminary geometry publication can still carry separately approved
+  // commercial facts; source geometry approval and listing status are distinct.
+  const commercial=(mapping?.publicationMode==="verified"||mapping?.publicationMode==="preliminary")&&
     mapping.commercial&&typeof mapping.commercial==="object"&&
     !Array.isArray(mapping.commercial)?mapping.commercial:null;
   const seen=new Set();
