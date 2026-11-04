@@ -12,9 +12,9 @@ test("selection pulse settles and never schedules an unlimited redraw", () => {
   assert.equal(atStart.animate, true);
   assert.equal(during.animate, true);
   assert.equal(settled.animate, false);
-  assert.equal(settled.fillOpacity, 0.31);
-  assert.equal(settled.haloOpacity, 0.62);
-  assert.ok(during.fillOpacity >= 0.31 && during.fillOpacity <= 0.46);
+  assert.equal(settled.fillOpacity, 0.47);
+  assert.equal(settled.haloOpacity, 0.82);
+  assert.ok(during.fillOpacity >= 0.47 && during.fillOpacity <= 0.61);
   assert.ok(during.rippleOpacity > 0 && during.rippleScale > 1);
   assert.equal(settled.rippleOpacity, 0);
   assert.ok(settled.rippleScale > 1);
@@ -23,8 +23,8 @@ test("selection pulse settles and never schedules an unlimited redraw", () => {
 test("reduced-motion preference keeps static selected outline", () => {
   const motion = geoPlotFocusMotion(150, 100, true);
   assert.equal(motion.animate, false);
-  assert.equal(motion.haloOpacity, 0.62);
-  assert.equal(motion.edgeOpacity, 0.97);
+  assert.equal(motion.haloOpacity, 0.82);
+  assert.equal(motion.edgeOpacity, 0.99);
   assert.equal(motion.rippleOpacity, 0);
 });
 
