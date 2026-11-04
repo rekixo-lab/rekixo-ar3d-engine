@@ -22,9 +22,13 @@ export function createGeoPlotSelectionFocus() {
   let ripple: THREE.Mesh | null = null;
   let edge: THREE.LineLoop | null = null;
   let dots: THREE.Points | null = null;
+  let walls: THREE.Mesh | null = null;
+  let roof: THREE.Mesh | null = null;
+  let roofEdge: THREE.LineLoop | null = null;
+  let pillars: THREE.LineSegments | null = null;
 
   const clear = () => {
-    for (const child of [fill, halo, ripple, edge, dots]) {
+    for (const child of [fill, halo, ripple, edge, dots, walls, roof, roofEdge, pillars]) {
       if (!child) continue;
       child.removeFromParent();
       if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.Points) {
@@ -38,12 +42,20 @@ export function createGeoPlotSelectionFocus() {
     ripple = null;
     edge = null;
     dots = null;
+    walls = null;
+    roof = null;
+    roofEdge = null;
+    pillars = null;
   };
 
   const setAccent = (hex: number) => {
     if (fill) (fill.material as THREE.MeshBasicMaterial).color.setHex(hex);
     if (halo) (halo.material as THREE.MeshBasicMaterial).color.setHex(hex);
     if (ripple) (ripple.material as THREE.MeshBasicMaterial).color.setHex(hex);
+    if (walls) (walls.material as THREE.ShaderMaterial).uniforms.uColor.value.setHex(hex);
+    if (roof) (roof.material as THREE.ShaderMaterial).uniforms.uColor.value.setHex(hex);
+    if (roofEdge) (roofEdge.material as THREE.LineBasicMaterial).color.setHex(hex);
+    if (pillars) (pillars.material as THREE.LineBasicMaterial).color.setHex(hex);
   };
 
   const select = (plot: GeoPlotFocusSource | null, accent: number, now: number) => {
@@ -149,11 +161,101 @@ export function createGeoPlotSelectionFocus() {
     }));
     dots.renderOrder = 27;
     dots.name = "selected-plot-corner-markers";
-    group.add(fill, halo, ripple, edge, dots);
+    // Only the selected plot gets model-local 3D walls and a translucent roof.
+    // Iterate the mapped footprint: irregular parcels must NEVER become a box.
+    const prismHeight = Math.max(0.75, Math.min(6, minSpan * 0.22));
+    const roofY = height + prismHeight;
+    const wallVertices: number[] = [];
+    const postVertices: number[] = [];
+    for (let index = 0; index < points.length; index++) {
+      const [ax, az] = points[index];
+      const [bx, bz] = points[(index + 1) % points.length];
+      if (Math.hypot(bx - ax, bz - az) < 1e-7) continue;
+      wallVertices.push(
+        ax, height, az, bx, height, bz, bx, roofY, bz,
+        ax, height, az, bx, roofY, bz, ax, roofY, az,
+      );
+      postVertices.push(ax, height, az, ax, roofY, az);
+    }
+
+    // Animated shader light sweep. No environment cubemap, GLB mutation or
+    // new plot mapping. Both surfaces stay depth-tested and transparent.
+    const diagonal = points.map(([x, z]) => x + z);
+    const sweepStart = Math.min(...diagonal);
+    const sweepSpan = Math.max(0.001, Math.max(...diagonal) - sweepStart);
+    const makeGlass = (opacity: number) => new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(accent) },
+        uTime: { value: 0 },
+        uOpacity: { value: opacity },
+        uStrength: { value: 0 },
+        uSweepStart: { value: sweepStart },
+        uSweepSpan: { value: sweepSpan },
+      },
+      vertexShader: `precision highp float;
+        uniform float uSweepStart;
+        uniform float uSweepSpan;
+        varying float vSweep;
+        void main() {
+          vSweep = (position.x + position.z - uSweepStart) / uSweepSpan;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `precision highp float;
+        uniform vec3 uColor;
+        uniform float uTime;
+        uniform float uOpacity;
+        uniform float uStrength;
+        varying float vSweep;
+        void main() {
+          float beam = exp(-95.0 * pow(vSweep - fract(uTime * 0.23), 2.0));
+          float glint = beam * uStrength;
+          vec3 glassColor = mix(uColor, vec3(1.0), glint * 0.78);
+          float alpha = clamp(uOpacity * (0.82 + glint * 0.42), 0.0, 0.65);
+          gl_FragColor = vec4(glassColor, alpha);
+        }`,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthTest: true,
+      depthWrite: false,
+    });
+    const wallGeometry = new THREE.BufferGeometry();
+    wallGeometry.setAttribute("position", new THREE.Float32BufferAttribute(wallVertices, 3));
+    walls = new THREE.Mesh(wallGeometry, makeGlass(0.18));
+    walls.name = "selected-plot-prism-glass-walls";
+    walls.renderOrder = 25.6;
+
+    const roofGeometry = new THREE.ShapeGeometry(shape);
+    roofGeometry.rotateX(Math.PI / 2);
+    roofGeometry.translate(0, roofY, 0);
+    roof = new THREE.Mesh(roofGeometry, makeGlass(0.10));
+    roof.name = "selected-plot-prism-glass-roof";
+    roof.renderOrder = 25.7;
+
+    const rimGeometry = new THREE.BufferGeometry();
+    rimGeometry.setAttribute("position", new THREE.Float32BufferAttribute(
+      points.flatMap(([x, z]) => [x, roofY + 0.008, z]), 3,
+    ));
+    roofEdge = new THREE.LineLoop(rimGeometry, new THREE.LineBasicMaterial({
+      color: accent, transparent: true, opacity: 0.84,
+      depthTest: true, depthWrite: false,
+    }));
+    roofEdge.name = "selected-plot-prism-roof-edge";
+    roofEdge.renderOrder = 26.2;
+
+    const postGeometry = new THREE.BufferGeometry();
+    postGeometry.setAttribute("position", new THREE.Float32BufferAttribute(postVertices, 3));
+    pillars = new THREE.LineSegments(postGeometry, new THREE.LineBasicMaterial({
+      color: accent, transparent: true, opacity: 0.78,
+      depthTest: true, depthWrite: false,
+    }));
+    pillars.name = "selected-plot-prism-vertical-edges";
+    pillars.renderOrder = 26.3;
+    group.add(fill, halo, ripple, edge, dots, walls, roof, roofEdge, pillars);
   };
 
   const update = (now: number, reducedMotion: boolean) => {
-    if (!selectedId || !fill || !halo || !ripple || !edge || !dots) return false;
+    if (!selectedId || !fill || !halo || !ripple || !edge || !dots ||
+        !walls || !roof || !roofEdge || !pillars) return false;
     const frame = geoPlotFocusMotion(now, startedAt, reducedMotion);
     (fill.material as THREE.MeshBasicMaterial).opacity = frame.fillOpacity;
     (halo.material as THREE.MeshBasicMaterial).opacity = frame.haloOpacity;
@@ -161,6 +263,14 @@ export function createGeoPlotSelectionFocus() {
     (dots.material as THREE.PointsMaterial).opacity = frame.dotsOpacity;
     (ripple.material as THREE.MeshBasicMaterial).opacity = frame.rippleOpacity;
     ripple.scale.set(frame.rippleScale, 1, frame.rippleScale);
+    for (const mesh of [walls, roof]) {
+      const uniforms = (mesh.material as THREE.ShaderMaterial).uniforms;
+      uniforms.uTime.value = frame.reflectTime;
+      uniforms.uStrength.value = frame.reflectStrength;
+      uniforms.uOpacity.value = mesh === walls ? frame.wallOpacity : frame.roofOpacity;
+    }
+    (roofEdge.material as THREE.LineBasicMaterial).opacity = frame.rimOpacity;
+    (pillars.material as THREE.LineBasicMaterial).opacity = frame.rimOpacity * 0.88;
     return frame.animate;
   };
   const dispose = () => { clear(); group.removeFromParent(); };
