@@ -445,11 +445,22 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
     let loadedModel: THREE.Object3D | undefined;
     let root: THREE.Group | undefined;
     let contextTimer: number | undefined;
+    let selectionRedrawTimer: number | undefined;
     let contextRestored = false;
     let zoomCheckTimer: number | undefined;
     let activeCameraView: GeoCameraView = "overview";
     const reducedMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches??false;
 
+    const clearSelectionRedrawTimer = () => {
+      if (selectionRedrawTimer !== undefined) window.clearTimeout(selectionRedrawTimer);
+      selectionRedrawTimer = undefined;
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) clearSelectionRedrawTimer();
+      else if (plotLayer?.tickSelection(performance.now(), reducedMotion))
+        overlay?.requestRedraw();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     const clearContextTimer = () => {
       if (contextTimer !== undefined) window.clearTimeout(contextTimer);
       contextTimer = undefined;
@@ -699,9 +710,17 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
           const animating=plotLayer?.tickSelection(performance.now(),reducedMotion)??false;
           renderer.render(scene, camera);
           renderer.resetState();
-          if(animating)overlay?.requestRedraw();
+          // Limit the persistent prism reflection to roughly 29 FPS.
+          // Do not redraw while deselected, hidden, or reduced-motion.
+          if(animating && !document.hidden && selectionRedrawTimer===undefined){
+            selectionRedrawTimer=window.setTimeout(()=>{
+              selectionRedrawTimer=undefined;
+              if(!cancelled && !document.hidden)overlay?.requestRedraw();
+            },34);
+          }
         };
         overlay.onContextLost = () => {
+          clearSelectionRedrawTimer();
           contextRestored = false;
           renderer?.dispose();
           renderer = undefined;
@@ -710,6 +729,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
           }
         };
         overlay.onRemove = () => {
+          clearSelectionRedrawTimer();
           contextRestored = false;
           clearContextTimer();
           renderer?.dispose();
@@ -895,6 +915,8 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
     return () => {
       cancelled = true;
       clearContextTimer();
+      clearSelectionRedrawTimer();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
       cameraActionRef.current = null;
       reenterActionRef.current = null;
