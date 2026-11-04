@@ -84,7 +84,7 @@ test("release mode is immutable D1 metadata, owner-only CAS, old verified schema
   assert.match(server,/preliminaryPublishPlotGuard\(plots,inventory.rows\)/);
   assert.match(published,/row\.publication_mode/);
   assert.match(published,/publicGeoPlotFacts\(plot,publicationMode\)/);
-  assert.match(published,/publicationMode==="verified"/);
+  assert.match(published,/const commercial=await publicGeoCommercialForRelease/);
   assert.doesNotMatch(read("apps/public/src/geo/GeoPlotDetailsDrawer.tsx"),/Preliminary boundary|Awaiting source approval|Not published/);
   assert.match(publicUI,/<GeoPlotDetailsDrawer/);
   assert.match(admin,/Publish Preliminary Mapping · Editable Later/);
