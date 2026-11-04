@@ -799,6 +799,37 @@ export async function resetGeoDraft(slug: string, expectedRevision: number) {
   );
 }
 
+export interface CosmeticGeoPreview {
+  alreadyCurrent: boolean;
+  eligible: boolean;
+  token?: string;
+  fromBuildingVersion?: number;
+  toBuildingVersion?: number;
+  plotCount: number;
+  commercialCount?: number;
+  proof?: string;
+}
+export interface CosmeticGeoReplaceResult {
+  updated?: boolean;
+  alreadyCurrent?: boolean;
+  geoReleaseVersion?: number;
+  mappingReleaseVersion?: number | null;
+  plotCount?: number;
+  commercialCount?: number;
+}
+export function inspectCosmeticGeoReplacement(slug: string) {
+  return api<CosmeticGeoPreview>(
+    `${CLOUD_BASE}/projects/${encodeURIComponent(slug)}/geo-releases/easy-replace`,
+  );
+}
+export function applyCosmeticGeoReplacement(slug: string, expectedToken: string) {
+  return api<CosmeticGeoReplaceResult>(
+    `${CLOUD_BASE}/projects/${encodeURIComponent(slug)}/geo-releases/easy-replace`,
+    { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedToken }) },
+  );
+}
+
 export async function geoReleases(slug: string) {
   return api<CloudGeoReleaseState>(
     `${CLOUD_BASE}/projects/${encodeURIComponent(slug)}/geo-releases`,
