@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import {createGeoPlotSelectionFocus, type GeoPlotFocusSource} from "./geoPlotSelectionFocus";
 import {pointInScreenTriangle} from "../../../../shared/geo-plot-screen-hit.js";
-import type {GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
+import {GEO_PLOT_STATUS_COLORS,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 
 /**
  * Render clickable Geo Plot outlines INSIDE the canonical GLB's own local
@@ -25,7 +25,7 @@ export type ModelPlotLayer = {
   dispose:()=>void;
 };
 
-const PLOT_COLOR=0x20d8a5;
+const PLOT_COLOR=GEO_PLOT_STATUS_COLORS.available;
 const SURFACE_OFFSET_M=0.015;
 const DOWN=new THREE.Vector3(0,-1,0);
 
@@ -107,8 +107,8 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
   group.add(focus.group);
   const focusSources=new Map<string,GeoPlotFocusSource>();
   let currentApproved:Readonly<Record<string,GeoPlotStatus>>={};
-  const selectedAccent=(id:string)=>currentApproved[id]==="sold"?0xf04b58
-    :currentApproved[id]==="booked"?0xf2bf25:0x1cd680;
+  const selectedAccent=(id:string)=>currentApproved[id]==="sold"?GEO_PLOT_STATUS_COLORS.sold
+    :currentApproved[id]==="booked"?GEO_PLOT_STATUS_COLORS.booked:GEO_PLOT_STATUS_COLORS.available;
   const bounds=new THREE.Box3().setFromObject(model);
   model.updateMatrixWorld(true);
   const candidateMeshes:Array<{mesh:THREE.Mesh;bounds:THREE.Box3}>=[];
@@ -144,9 +144,9 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
   };
   const palette={
     neutral:{fill:fillMaterial,stroke:strokeMaterial},
-    available:tinted(0x1cd680,.44,.96),
-    booked:tinted(0xf2bf25,.52,.96),
-    sold:tinted(0xf04b58,.58,.97),
+    available:tinted(GEO_PLOT_STATUS_COLORS.available,.44,1),
+    booked:tinted(GEO_PLOT_STATUS_COLORS.booked,.50,1),
+    sold:tinted(GEO_PLOT_STATUS_COLORS.sold,.52,1),
     // When one status filter is selected, hide other fills entirely.
     dim:tinted(0x708891,0,0)
   };
@@ -186,7 +186,7 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
     };
   const setSelectedPlot:ModelPlotLayer["setSelectedPlot"]=(id)=>{
     focus.select(id?focusSources.get(id)||null:null,
-      id?selectedAccent(id):0x1cd680,performance.now());
+      id?selectedAccent(id):GEO_PLOT_STATUS_COLORS.available,performance.now());
   };
   const tickSelection:ModelPlotLayer["tickSelection"]=(now,reducedMotion)=>
     focus.update(now,reducedMotion);
