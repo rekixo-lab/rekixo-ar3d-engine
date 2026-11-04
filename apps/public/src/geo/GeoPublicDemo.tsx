@@ -1114,7 +1114,7 @@ export default function GeoPublicDemo() {
   if (error)
     return (
       <main className="jio-public-state">
-        <p className="eyebrow">REKIXO AR3D ENGINE</p>
+        <p className="eyebrow">AR 3D</p>
         <h1>3D Geo unavailable</h1>
         <p>{error}</p>
       </main>
@@ -1123,7 +1123,7 @@ export default function GeoPublicDemo() {
   if (!data)
     return (
       <main className="jio-public-state">
-        <p className="eyebrow">REKIXO AR3D ENGINE</p>
+        <p className="eyebrow">AR 3D</p>
         <h1>Loading integrated 3D Geo…</h1>
       </main>
     );
@@ -1146,7 +1146,7 @@ export default function GeoPublicDemo() {
           {branding?.logoUrl ? <img className="jio-public-project-logo" src={branding.logoUrl} alt="" /> : null}
           <div>
             <h1>{data.project.name}</h1>
-            <GeoHeaderSubtitle text={data.project.location || "Rekixo AR3D Engine"} />
+            <GeoHeaderSubtitle text={data.project.location || "AR 3D"} />
           </div>
         </div>
         <nav className="jio-public-header-actions" aria-label="Project quick actions">
