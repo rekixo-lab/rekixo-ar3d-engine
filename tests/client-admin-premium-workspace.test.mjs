@@ -8,13 +8,18 @@ const css=read("apps/admin/src/management/project-client-admin-premium.css");
 const oldCss=read("apps/admin/src/management/project-client-admin.css");
 const plot=read("apps/admin/src/management/ClientGeoPlotManagement.tsx");
 
-test("all eight Client Admin pages share one accessible context header and navigation",()=>{
+test("all eight Client Admin pages use simple navigation without redundant header cards",()=>{
  for(const section of ["overview","plots","pricing","deals","contact","gallery","sales","notices"]){
    assert.match(portal,new RegExp(section+':\\{label:'));
  }
  assert.match(portal,/PANEL_META\[item\]\.label/);
  assert.match(portal,/PANEL_META\[item\]\.hint/);
- assert.match(portal,/engine-client-admin-page-heading/);
+ assert.ok(!portal.includes('className="engine-client-admin-page-heading"'));
+ assert.ok(!portal.includes('className="engine-client-admin-head"'));
+ assert.ok(portal.includes('engine-client-admin-sidebar-actions'));
+ assert.ok(portal.includes('engine-client-admin-mobile-actions'));
+ assert.ok(portal.includes('onClick={()=>void logout()}'));
+ assert.ok(portal.includes('View customer site'));
  assert.match(portal,/aria-label="Client admin sections"/);
  assert.match(portal,/aria-current=\{panel===item\?"page":undefined\}/);
  assert.match(portal,/engine-client-admin-mobile-switch/);
@@ -29,6 +34,8 @@ test("responsive layout stays inside Client Admin and works at desktop tablet ph
  for(const width of [1180,850,600,370])
   assert.ok(css.includes("@media(max-width:"+width+"px)"),width+"px breakpoint is required");
  assert.match(css,/\.engine-client-admin-sidebar\{display:none\}/);
+ assert.ok(css.includes(".engine-client-admin-sidebar-actions"));
+ assert.ok(css.includes(".engine-client-admin-mobile-actions"));
  assert.match(css,/\.engine-client-admin-mobile-switch\{[\s\S]*display:flex/);
  assert.match(css,/\.client-geo-table-row>span:nth-child\(3\)::before\{content:"Owner \/ Buyer"\}/);
  assert.match(css,/\.client-geo-editor-grid\{grid-template-columns:minmax\(0,1fr\)/);
