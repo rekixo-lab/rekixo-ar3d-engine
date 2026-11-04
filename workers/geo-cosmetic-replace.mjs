@@ -135,6 +135,19 @@ async function preview(env,project) {
       FROM geo_plot_commercial_3d WHERE project_id=? AND mapping_release_id=?`)
       .bind(project.id,mapping.id).first();
     commercialCount=Number(commercial?.n||0);
+    // A paid sale/receipt is a unique financial ledger entry: never duplicate
+    // it to another Mapping Release, and never silently hide it from Client Admin.
+    const financial=await env.DB.prepare(`SELECT COUNT(*) AS n
+      FROM geo_client_sales_3d WHERE project_id=? AND mapping_release_id=?`)
+      .bind(project.id,mapping.id).first();
+    if(Number(financial?.n||0)>0)
+      throw Error("This project contains client sale or receipt records. Automatic Geo replacement "+
+        "is blocked until its financial-ledger continuity is reviewed. Existing live plots and "+
+        "payment records remain untouched.");
+    const pricing=await env.DB.prepare(`SELECT quotes_json,sha256 FROM geo_plot_pricing_sheets_3d
+      WHERE project_id=? AND mapping_release_id=?`).bind(project.id,mapping.id).first();
+    if(pricing && await digestText(pricing.quotes_json)!==pricing.sha256)
+      throw Error("Pricing sheet checksum mismatch. The current live site was not changed.");
   }else if(mapDraft && validateGeoPlotCollection(JSON.parse(mapDraft.plots_json)).length){
     throw Error("Unpublished plot boundaries cannot be overwritten by automatic replacement.");
   }
@@ -294,6 +307,46 @@ export async function applyCosmeticGeoReplacement(env,actor,project,expectedToke
           ?,?
         FROM geo_plot_commercial_3d WHERE project_id=? AND mapping_release_id=?`).bind(
           newMappingId,mapping.id,p.geometry.sha256,actor.email,now,project.id,mapping.id),
+      // Private records are version-scoped, not duplicated bank transactions.
+      // Preserve their values and source provenance on this new equal-geometry mapping.
+      env.DB.prepare(`INSERT INTO geo_plot_pricing_sheets_3d
+        (project_id,mapping_release_id,revision,quotes_json,sha256,source_ref,updated_by,updated_at)
+        SELECT project_id,?,revision,quotes_json,sha256,source_ref,updated_by,updated_at
+        FROM geo_plot_pricing_sheets_3d WHERE project_id=? AND mapping_release_id=?`)
+        .bind(newMappingId,project.id,mapping.id),
+      env.DB.prepare(`INSERT INTO geo_plot_deals_3d
+        (project_id,mapping_release_id,plot_id,stage,buyer_name,buyer_phone,
+         claimed_payment_paise,payment_reference,agreement_reference,
+         registration_reference,evidence_reference,notes,revision,updated_by,updated_at)
+        SELECT project_id,?,plot_id,stage,buyer_name,buyer_phone,
+         claimed_payment_paise,payment_reference,agreement_reference,
+         registration_reference,evidence_reference,notes,revision,updated_by,updated_at
+        FROM geo_plot_deals_3d WHERE project_id=? AND mapping_release_id=?`)
+        .bind(newMappingId,project.id,mapping.id),
+      env.DB.prepare(`INSERT INTO geo_plot_deal_events_3d
+        (id,project_id,mapping_release_id,plot_id,revision,event_json,actor_email,created_at)
+        SELECT lower(hex(randomblob(16))),project_id,?,plot_id,revision,event_json,actor_email,created_at
+        FROM geo_plot_deal_events_3d WHERE project_id=? AND mapping_release_id=?`)
+        .bind(newMappingId,project.id,mapping.id),
+      env.DB.prepare(`INSERT INTO geo_client_plot_details_3d
+        (project_id,mapping_release_id,plot_id,owner_name,broker_name,
+         booking_amount_paise,notes,revision,updated_by,updated_at)
+        SELECT project_id,?,plot_id,owner_name,broker_name,
+         booking_amount_paise,notes,revision,updated_by,updated_at
+        FROM geo_client_plot_details_3d WHERE project_id=? AND mapping_release_id=?`)
+        .bind(newMappingId,project.id,mapping.id),
+      env.DB.prepare(`INSERT INTO geo_client_plot_detail_events_3d
+        (id,project_id,mapping_release_id,plot_id,revision,actor_email,detail_json,created_at)
+        SELECT lower(hex(randomblob(16))),project_id,?,plot_id,revision,actor_email,detail_json,created_at
+        FROM geo_client_plot_detail_events_3d WHERE project_id=? AND mapping_release_id=?`)
+        .bind(newMappingId,project.id,mapping.id),
+      env.DB.prepare(`INSERT INTO geo_client_notices_3d
+        (id,project_id,mapping_release_id,plot_id,title,body,state,revision,
+         created_by,updated_by,updated_at,published_at)
+        SELECT lower(hex(randomblob(16))),project_id,?,plot_id,title,body,state,revision,
+          created_by,updated_by,updated_at,published_at
+        FROM geo_client_notices_3d WHERE project_id=? AND mapping_release_id=?`)
+        .bind(newMappingId,project.id,mapping.id),
       env.DB.prepare(`UPDATE geo_plot_mapping_drafts_3d SET
         geo_release_id=?,building_release_id=?,revision=revision+1,
         verified_revision=CASE WHEN verified_revision=revision THEN revision+1 ELSE NULL END,
