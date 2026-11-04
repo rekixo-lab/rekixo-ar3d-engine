@@ -414,6 +414,12 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
     data.plotMapping?.geoReleaseId===data.geoRelease.id?data.plotMapping:null
   ),[data.plotMapping,data.geoRelease.id]);
   const statusPresentationRef=useRef<((enabled:boolean,filter:GeoPlotStatus|null)=>void)|null>(null);
+  const selectionPresentationRef=useRef<((id:string|null)=>void)|null>(null);
+  const selectedPlotIdRef=useRef<string|null>(null);
+  useEffect(()=>{
+    selectedPlotIdRef.current=selectedPlot?.id??null;
+    selectionPresentationRef.current?.(selectedPlotIdRef.current);
+  },[selectedPlot]);
   const statusStateRef=useRef({enabled:statusEnabled,filter:statusFilter});
   statusStateRef.current={enabled:statusEnabled,filter:statusFilter};
   useEffect(()=>{
@@ -446,6 +452,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
     let contextRestored = false;
     let zoomCheckTimer: number | undefined;
     let activeCameraView: GeoCameraView = "overview";
+    const reducedMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches??false;
 
     const clearContextTimer = () => {
       if (contextTimer !== undefined) window.clearTimeout(contextTimer);
@@ -556,7 +563,10 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
             !hostRef.current)return;
           const id=pickModelGeoPlot(x,y,hostRef.current.getBoundingClientRect(),
             latestProjection,plotLayer.hitMeshes);
-          if(id)setSelectedPlot(plotIds.get(id)||null);
+          if(id && plotIds.has(id)){
+            selectionPresentationRef.current?.(id);
+            setSelectedPlot(plotIds.get(id)||null);
+          }
         };
         const clickCoordinates=(event:unknown):{x:number;y:number}|null=>{
           if(!event||typeof event!=="object")return null;
@@ -689,8 +699,10 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
           camera.projectionMatrix.fromArray(projection);
           latestProjection=camera.projectionMatrix.clone();
           gl.disable(gl.SCISSOR_TEST);
+          const animating=plotLayer?.tickSelection(performance.now(),reducedMotion)??false;
           renderer.render(scene, camera);
           renderer.resetState();
+          if(animating)overlay?.requestRedraw();
         };
         overlay.onContextLost = () => {
           contextRestored = false;
@@ -757,6 +769,11 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
               // Same original X/Z frame as the model; placement is shared.
               plotLayer=candidateLayer;
               placement.anchorOffset.add(plotLayer.group);
+              selectionPresentationRef.current=(id)=>{
+                candidateLayer.setSelectedPlot(id);
+                overlay?.requestRedraw();
+              };
+              selectionPresentationRef.current(selectedPlotIdRef.current);
               // Match Platform status presentation: unclassified published plots
               // display Available without changing approved commercial records.
               const updateStatus=(enabled:boolean,filter:GeoPlotStatus|null)=>{
@@ -887,6 +904,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
       zoomActionRef.current = null;
       compassResetRef.current = null;
       statusPresentationRef.current = null;
+      selectionPresentationRef.current = null;
       mapZoomChanged?.remove();
       mapHeadingChanged?.remove();
       mapClick?.remove();
