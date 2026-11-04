@@ -93,7 +93,9 @@ test("one-click route is private, live Geo+mapping pointers switch in a single D
   const ui=readFileSync(new URL("../apps/admin/src/geo/GeoEasyReplace.tsx",import.meta.url),"utf8");
   const pos=(x)=>worker.indexOf(x);
   assert.ok(pos("verifyCosmeticModelPair")>=0);
-  assert.ok(pos("verifyRenderableDerivative")>=0);
+  assert.ok(pos("preferCanonical:true")>=0);
+  assert.doesNotMatch(worker,/verifyRenderableDerivative/);
+  assert.match(readFileSync(new URL("../workers/geo-release-runtime.mjs",import.meta.url),"utf8"),/canonicalOnly \? buildingExperience\.model/);
   assert.ok(pos("modelBytes")>=0);
   assert.ok(pos("model_anchor_id=NULL")>=0);
   assert.ok(pos("INSERT INTO geo_releases_3d")>0);
