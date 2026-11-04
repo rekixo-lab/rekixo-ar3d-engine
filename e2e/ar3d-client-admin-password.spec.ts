@@ -68,16 +68,20 @@ test("AR3D-branded personal Client Admin supports ID login, mandatory change and
  await page.getByLabel("Mobile Number or Email ID").fill("+919876543210");
  await page.getByLabel("Password",{exact:true}).fill("ChangedPass789");
  await page.getByRole("button",{name:"Sign in",exact:true}).click();
- await expect(page.getByRole("heading",{name:"Overview",exact:true})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Customer website"})).toBeVisible();
+ await expect(page.locator(".engine-client-admin-head")).toHaveCount(0);
+ await expect(page.locator(".engine-client-admin-page-heading")).toHaveCount(0);
  // On phones the desktop sidebar is replaced by one compact, accessible selector.
  const sections=page.getByRole("combobox",{name:"Choose Client Admin section"});
  await expect(sections).toBeVisible();
  await expect(sections.locator("option",{hasText:"Plots"})).toHaveCount(1);
  await expect(sections.locator("option",{hasText:"Contact"})).toHaveCount(1);
  await sections.selectOption("plots");
- await expect(page.getByRole("heading",{name:"Plots",exact:true})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Plot Management"})).toBeVisible();
  await sections.selectOption("overview");
- await expect(page.getByRole("heading",{name:"Overview",exact:true})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Customer website"})).toBeVisible();
+ await expect(page.locator(".engine-client-admin-head")).toHaveCount(0);
+ await expect(page.locator(".engine-client-admin-page-heading")).toHaveCount(0);
  const dims=await page.evaluate(()=>({width:document.documentElement.scrollWidth,
   screen:window.innerWidth}));
  expect(dims.width-dims.screen).toBeLessThanOrEqual(1);
