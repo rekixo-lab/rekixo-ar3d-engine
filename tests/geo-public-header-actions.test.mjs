@@ -32,17 +32,13 @@ test("Admin remains a four-square dashboard icon, never a gear",()=>{
   assert.match(header,/<GeoHeaderIcon kind="admin" \/>/);
 });
 
-test("Call uses only published Geo phone, Admin uses authenticated project route",()=>{
+test("Call uses only the opt-in primary Geo phone and Admin remains project-scoped",()=>{
   assert.match(source,/const callHref=geoCallHref\(data\.publicContacts\?\.phone\)/);
-  assert.match(source,/geoCallHref\(data\.publicContacts\.phoneSecondary\)/);
   assert.match(source,/const adminHref=projectClientAdminUrl\(slug\)/);
   assert.match(header,/role="img" aria-label="Call unavailable"/);
   assert.doesNotMatch(header,/href=\{whatsappHref\}/);
-  const contactStrip=source.slice(source.indexOf('className="jio-public-customer-contact"'),
-    source.indexOf("</section>}",source.indexOf('className="jio-public-customer-contact"')));
-  assert.doesNotMatch(contactStrip,/aria-label="Call project contact">Call<\/a>/);
-  assert.match(contactStrip,/geoPublicMapHref/);
-  assert.match(contactStrip,/phoneSecondary/);
+  assert.doesNotMatch(source,/jio-public-customer-contact|geoPublicMapHref/);
+  assert.doesNotMatch(css,/\.jio-public-customer-contact/);
 });
 
 test("Compact visual face retains touch target and padded header at all widths",()=>{

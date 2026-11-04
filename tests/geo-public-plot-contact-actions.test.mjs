@@ -64,3 +64,22 @@ test("Plot diagram, click selection and drawer controls are not changed by conta
   assert.doesNotMatch(publicGeo,/onClose=\{\(\)=>setSelectedPlot\(null\)\}/);
   assert.match(css,/\.geo-plot-drawer__scroll \{[\s\S]*?overflow-y:auto/);
 });
+
+
+test("Customer Geo never renders the redundant Developer/Owner/Contact/Directions strip",()=>{
+  const style=read("apps/public/src/geo/geo-public-demo.css");
+  assert.doesNotMatch(publicGeo,/jio-public-customer-contact|jio-public-contact-details|jio-public-contact-actions/);
+  assert.doesNotMatch(publicGeo,/Project contacts and location|Open project in Google Maps|geoPublicMapHref/);
+  assert.doesNotMatch(style,/\.jio-public-customer-contact|\.jio-public-contact-details|\.jio-public-contact-actions/);
+  // The map must immediately follow the compact customer header apart from
+  // technical metadata, which is deliberately hidden with display:none.
+  const start=publicGeo.indexOf('<header className="jio-public-header">');
+  const end=publicGeo.indexOf('</header>',start);
+  const map=publicGeo.indexOf('<div className="geo-public-map-layout">',end);
+  assert.ok(start>=0&&end>start&&map>end);
+  assert.ok(!publicGeo.slice(end,map).includes("Developer:"));
+  assert.match(style,/\.jio-public-meta,[\s\S]*?\.geo-runtime-note\s*\{\s*display:\s*none\s*!important/);
+  assert.match(publicGeo,/aria-label="Call project contact"/);
+  assert.match(publicGeo,/aria-label="Open project admin panel"/);
+  assert.match(publicGeo,/toolbarContainer=\{toolbarContainer\}/);
+});

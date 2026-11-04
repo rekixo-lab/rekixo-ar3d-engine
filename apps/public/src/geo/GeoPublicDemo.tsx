@@ -29,12 +29,6 @@ type GeoPublicContacts={
   address:string;phone:string;phoneSecondary:string;whatsapp:string;email:string;
   websiteUrl:string;mapsUrl:string;
 };
-const geoPublicMapHref=(contacts:GeoPublicContacts)=>{
-  if(contacts.mapsUrl)return contacts.mapsUrl;
-  return contacts.address?"https://www.google.com/maps/search/?api=1&query="+
-    encodeURIComponent(contacts.address):"";
-};
-
 type GeoHeaderIconKind = "call" | "admin";
 function GeoHeaderIcon({kind}:{kind:GeoHeaderIconKind}){
   if(kind==="admin")return (
@@ -1174,25 +1168,6 @@ export default function GeoPublicDemo() {
         </nav>
       </header>
 
-      {data.publicContacts && <section className="jio-public-customer-contact" aria-label="Project contacts and location">
-        <div className="jio-public-contact-details">
-          {data.publicContacts.projectNumber&&<span>Project No. {data.publicContacts.projectNumber}</span>}
-          {data.publicContacts.builderName&&<span>Developer: {data.publicContacts.builderName}</span>}
-          {data.publicContacts.ownerName&&<span>Owner: {data.publicContacts.ownerName}</span>}
-          {data.publicContacts.contactName&&<span>Contact: {data.publicContacts.contactName}</span>}
-          {data.publicContacts.address&&<span>{data.publicContacts.address}</span>}
-        </div>
-        <nav aria-label="Contact project team" className="jio-public-contact-actions">
-          {geoPublicMapHref(data.publicContacts)&&<a target="_blank" rel="noopener noreferrer"
-            href={geoPublicMapHref(data.publicContacts)} aria-label="Open project in Google Maps">
-            {data.publicContacts.mapsUrl?"Directions":"Find on Maps"}</a>}
-          {geoCallHref(data.publicContacts.phoneSecondary)&&<a href={geoCallHref(data.publicContacts.phoneSecondary)}
-            aria-label="Call secondary project contact">Call 2</a>}
-          {data.publicContacts.websiteUrl&&<a target="_blank" rel="noopener noreferrer"
-            href={data.publicContacts.websiteUrl}>Website</a>}
-          {data.publicContacts.email&&<a href={"mailto:"+data.publicContacts.email}>Email</a>}
-        </nav>
-      </section>}
       <section className="jio-public-meta">
         <article>
           <span>GEO RELEASE</span>
