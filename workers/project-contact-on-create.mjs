@@ -22,3 +22,10 @@ export function initialProjectContact(body){
     throw Error("Add a customer contact number before enabling public Geo contact buttons.");
   return {phonePrimary,whatsapp,publicContactsEnabled:body.publicContactsEnabled};
 }
+
+export function projectContactInsert(env,projectId,ownerEmail,now,contact){
+  return env.DB.prepare(`INSERT INTO project_profiles_3d
+    (project_id,phone_primary,whatsapp,public_contacts_enabled,revision,updated_by,updated_at)
+    VALUES(?,?,?,?,1,?,?)`).bind(projectId,contact.phonePrimary,contact.whatsapp,
+      contact.publicContactsEnabled?1:0,ownerEmail,now);
+}
