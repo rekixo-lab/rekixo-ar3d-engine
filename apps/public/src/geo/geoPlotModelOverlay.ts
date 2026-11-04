@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import {createGeoPlotSelectionFocus, type GeoPlotFocusSource} from "./geoPlotSelectionFocus";
 import {pointInScreenTriangle} from "../../../../shared/geo-plot-screen-hit.js";
 import type {GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 
@@ -17,6 +18,8 @@ export type ModelPlotLayer = {
   group:THREE.Group;
   hitMeshes:THREE.Mesh[];
   groupsById:Map<string,THREE.Group>;
+  setSelectedPlot:(id:string|null)=>void;
+  tickSelection:(now:number,reducedMotion:boolean)=>boolean;
   setStatusPresentation:(enabled:boolean,filter:GeoPlotStatus|null,
     approved:Readonly<Record<string,GeoPlotStatus>>)=>void;
   dispose:()=>void;
@@ -100,6 +103,12 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
   group.name="rekixo-geo-model-local-plot-layer";
   const groupsById=new Map<string,THREE.Group>();
   const hitMeshes:THREE.Mesh[]=[];
+  const focus=createGeoPlotSelectionFocus();
+  group.add(focus.group);
+  const focusSources=new Map<string,GeoPlotFocusSource>();
+  let currentApproved:Readonly<Record<string,GeoPlotStatus>>={};
+  const selectedAccent=(id:string)=>currentApproved[id]==="sold"?0xf04b58
+    :currentApproved[id]==="booked"?0xf2bf25:0x1cd680;
   const bounds=new THREE.Box3().setFromObject(model);
   model.updateMatrixWorld(true);
   const candidateMeshes:Array<{mesh:THREE.Mesh;bounds:THREE.Box3}>=[];
@@ -156,11 +165,13 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
     plotGroup.add(mesh,outline);
     group.add(plotGroup);
     groupsById.set(plot.id,plotGroup);
+    focusSources.set(plot.id,{id:plot.id,corners:plot.corners,surfaceY});
     plotVisuals.set(plot.id,{fill:mesh,outline});
     hitMeshes.push(mesh);
   }
   const setStatusPresentation:ModelPlotLayer["setStatusPresentation"]=
     (enabled,filter,approved)=>{
+      currentApproved=approved;
       for(const [id,parts] of plotVisuals){
         const value=Object.prototype.hasOwnProperty.call(approved,id)?approved[id]:undefined;
         const valid=value==="available"||value==="booked"||value==="sold"
@@ -171,8 +182,16 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
         parts.fill.material=style.fill;
         parts.outline.material=style.stroke;
       }
+      if(focus.selectedId)focus.setAccent(selectedAccent(focus.selectedId));
     };
-  return {group,hitMeshes,groupsById,setStatusPresentation,dispose:()=>{
+  const setSelectedPlot:ModelPlotLayer["setSelectedPlot"]=(id)=>{
+    focus.select(id?focusSources.get(id)||null:null,
+      id?selectedAccent(id):0x1cd680,performance.now());
+  };
+  const tickSelection:ModelPlotLayer["tickSelection"]=(now,reducedMotion)=>
+    focus.update(now,reducedMotion);
+  return {group,hitMeshes,groupsById,setSelectedPlot,tickSelection,setStatusPresentation,dispose:()=>{
+    focus.dispose();
     for(const mesh of hitMeshes)mesh.geometry.dispose();
     for(const plotGroup of groupsById.values()){
       const outline=plotGroup.children.find(child=>child instanceof THREE.LineLoop);
