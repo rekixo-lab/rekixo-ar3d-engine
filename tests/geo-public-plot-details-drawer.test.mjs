@@ -104,7 +104,7 @@ test("drawer only changes presentation, preserving click hit testing and camera 
   assert.match(drawer,/geo-plot-drawer__status--"\+displayStatus/);
   assert.doesNotMatch(drawer,/publicationMode==="preliminary"/);
   assert.match(drawer,/publicPhone/);
-  assert.match(drawer,/publicWhatsappHref/);
+  assert.match(drawer,/publicWhatsapp/);
   assert.match(drawer,/aria-hidden=\{!plot\} inert=\{!plot\}/);
   assert.match(drawer,/event\.key==="Escape"/);
 });

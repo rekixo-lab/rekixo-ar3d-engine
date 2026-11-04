@@ -270,7 +270,13 @@ export async function deleteAllProjects(
   });
 }
 
-export async function ensureProject(project: Project, projectKind: EngineProjectKind = "legacy") {
+export interface NewProjectPublicContacts {
+  phonePrimary: string;
+  whatsapp: string;
+  publicContactsEnabled: boolean;
+}
+export async function ensureProject(project: Project, projectKind: EngineProjectKind = "legacy",
+  customerContact?: NewProjectPublicContacts) {
   validateProject(project);
   const slug = projectSlug(project);
   return api<{ project: CloudProjectSummary; created: boolean }>(
@@ -284,6 +290,7 @@ export async function ensureProject(project: Project, projectKind: EngineProject
         name: project.name,
         location: project.location ?? "",
         projectKind,
+        ...(customerContact ? { customerContact } : {}),
       }),
     },
   );

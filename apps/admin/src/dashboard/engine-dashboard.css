@@ -587,3 +587,10 @@
 .engine-overview-kind span{display:grid;gap:4px}
 .engine-overview-kind b{font-size:13px;color:#f3fdff}
 .engine-overview-kind small{font-size:12px;line-height:1.45;color:#abc6d5}
+
+
+.engine-overview-create-public-contact{display:flex!important;align-items:flex-start;gap:10px;
+  margin-top:6px;padding:10px;border:1px solid rgba(71,162,130,.45);
+  border-radius:10px;background:rgba(11,55,46,.45);font-size:12px}
+.engine-overview-create-public-contact input{width:17px;height:17px;flex:0 0 auto;margin:0}
+.engine-overview-modal>small{display:block;font-size:11px;line-height:1.5;color:#a8bbc6}

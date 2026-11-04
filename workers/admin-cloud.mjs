@@ -21,6 +21,7 @@ import {
 import { processDwgArchitecture } from "./dwg-processor-route.mjs";
 import { handleProjectBrandingAdmin } from "./project-branding.mjs";
 import { handleProjectManagementAdmin } from "./project-management.mjs";
+import { initialProjectContact,projectContactInsert } from "./project-contact-on-create.mjs";
 import { readOwnerCredentials, handleOwnerAccount } from "./engine-owner-account.mjs";
 import { handleEngineDomainsAdmin } from "./engine-domains.mjs";
 import { handleMasterplanGeoAdmin } from "./masterplan-geo-admin.mjs";
@@ -592,13 +593,12 @@ async function createCloudProject(request, env, actor) {
       { status: 409 },
     );
   const body = await request.json().catch(() => ({}));
-  const id = String(body.id || "").trim();
-  const slug = String(body.slug || "").trim().toLowerCase();
-  const name = String(body.name || "").trim();
-  const location = String(body.location || "").trim();
-  // Legacy API callers intentionally preserve the pre-v2 workflow; the
-  // new create-project wizard sends an explicit kind.
+  const id=String(body.id||"").trim(),slug=String(body.slug||"").trim().toLowerCase();
+  const name=String(body.name||"").trim(),location=String(body.location||"").trim();
+  // Legacy API callers preserve their previous workflow by default.
   const projectKind = body.projectKind === undefined ? "legacy" : body.projectKind;
+  let customerContact;try { customerContact=initialProjectContact(body.customerContact); }
+  catch(error){return json({error:error.message},{status:400});}
   if (
     !isEngineProjectKind(projectKind) ||
     !validProjectId(id) ||
@@ -607,9 +607,8 @@ async function createCloudProject(request, env, actor) {
     location.length > 180
   )
     return json({ error: "Valid project ID, slug, name and location are required." }, { status: 400 });
-  const existing = await env.DB.prepare(
-    "SELECT id,slug,name,location,status,project_kind,updated_at FROM projects_3d WHERE id=? OR slug=? LIMIT 2",
-  ).bind(id, slug).all();
+  const existing=await env.DB.prepare(
+    "SELECT id,slug,name,location,status,project_kind,updated_at FROM projects_3d WHERE id=? OR slug=? LIMIT 2").bind(id,slug).all();
   if ((existing.results || []).length) {
     const exact = (existing.results || []).find(
       (row) => row.id === id && row.slug === slug,
@@ -627,6 +626,7 @@ async function createCloudProject(request, env, actor) {
           (id,slug,name,location,status,project_kind,created_at,updated_at)
           VALUES (?,?,?,?,'draft',?,?,?)`,
       ).bind(id, slug, name, location || null, projectKind, now, now),
+      ...(customerContact?[projectContactInsert(env,id,actor.email,now,customerContact)]:[]),
       env.DB.prepare(
         `INSERT INTO engine_admin_audit
           (id,actor_email,action,project_id,target_id,details_json,created_at)

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { publicGeoAreaUnits, publicGeoPlotDiagram, type PublicGeoPlotForDiagram } from "../../../../shared/geo-plot-detail-diagram.js";
 import {geoPlotFacingEntries} from "../../../../shared/geo-plot-facing.js";
+import {geoCallHref,geoPlotWhatsAppHref} from "../../../../shared/geo-public-contact-links.js";
 import GeoCompassRose from "./GeoCompassRose";
 import "./geo-plot-details-drawer.css";
 
@@ -24,7 +25,7 @@ type Props = {
   projectName: string;
   geoHeadingDeg: number;
   publicPhone?: string;
-  publicWhatsappHref?: string;
+  publicWhatsapp?: string;
   notices?:{plotId:string;title:string;body:string;publishedAt:string}[];
   onClose: () => void;
 };
@@ -55,7 +56,7 @@ function GeoPlotContactIcon({kind}:{kind:"whatsapp"|"call"}) {
 }
 
 export function GeoPlotDetailsDrawer({
-  plot, commercial, projectName, geoHeadingDeg, publicPhone, publicWhatsappHref, notices=[], onClose,
+  plot, commercial, projectName, geoHeadingDeg, publicPhone, publicWhatsapp, notices=[], onClose,
 }: Props) {
   const [previousPlot,setPreviousPlot] = useState<GeoPlotDrawerPlot | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -96,13 +97,9 @@ export function GeoPlotDetailsDrawer({
   const areas = useMemo(()=>shown?publicGeoAreaUnits(shown.area):[],[shown]);
   const allRoles = shown?.layout==="three" || shown?.corners.length===3
     ? ["front","back","depthA"] : ["front","back","depthA","depthB"];
-  const safePhone=(publicPhone||"").replace(/[^0-9+]/g,"");
-  const callHref=/^\+?[0-9]{7,15}$/.test(safePhone)?"tel:"+safePhone:"";
-  // Use only the explicitly published WhatsApp number, never a private
-  // client contact or an assumed WhatsApp account on the phone number.
-  const whatsappHref=shown&&/^https:\/\/wa\.me\/[0-9]{11,15}$/.test(publicWhatsappHref||"")
-    ? publicWhatsappHref+"?text="+encodeURIComponent("Hello, I would like details about Plot "+shown.id+" in "+projectName+".")
-    : "";
+  // Published contacts only; never infer WhatsApp from a private phone.
+  const callHref=geoCallHref(publicPhone);
+  const whatsappHref=shown?geoPlotWhatsAppHref(publicWhatsapp,shown.id,projectName):"";
   const price=commercial?.pricePaise;
   const approvedPrice=typeof price==="number"&&Number.isSafeInteger(price)&&price>0
     ?new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0})

@@ -27,13 +27,13 @@ test("Geo plot shows two action buttons directly after published plot detail fac
 
 test("Contact actions only use opted-in published contact numbers, never private data",()=>{
   assert.match(publicGeo,/publicPhone=\{data\.publicContacts\?\.phone\}/);
-  assert.match(publicGeo,/publicWhatsappHref=\{geoWhatsAppHref\(data\.publicContacts\?\.whatsapp\|\|""\)\}/);
+  assert.match(publicGeo,/publicWhatsapp=\{data\.publicContacts\?\.whatsapp\}/);
   assert.match(contacts,/if\(!row\|\|row\.public_contacts_enabled!==1\)return null/);
   assert.match(contacts,/WHERE pr\.slug=\? AND pr\.status='published' AND p\.public_contacts_enabled=1/);
-  assert.match(drawer,/const safePhone=\(publicPhone\|\|""\)\.replace\(\/\[\^0-9\+\]\/g,""\)/);
-  assert.match(drawer,/const callHref=\/\^\\\+\?\[0-9\]\{7,15\}\$\/\.test\(safePhone\)\?"tel:"\+safePhone:""/);
-  assert.match(drawer,/https:\\\/\\\/wa\\\.me\\\//);
-  assert.match(drawer,/encodeURIComponent\("Hello, I would like details about Plot "\+shown\.id\+" in "\+projectName/);
+  assert.match(drawer,/const callHref=geoCallHref\(publicPhone\)/);
+  assert.match(drawer,/geoPlotWhatsAppHref\(publicWhatsapp,shown\.id,projectName\)/);
+  assert.match(drawer,/geoPlotWhatsAppHref/);
+  assert.match(read("shared/geo-public-contact-links.js"),/encodeURIComponent\(message\)/);
   assert.match(drawer,/href=\{whatsappHref\} target="_blank" rel="noopener noreferrer"/);
   assert.match(drawer,/href=\{callHref\}/);
   assert.match(drawer,/title="WhatsApp number not published"/);

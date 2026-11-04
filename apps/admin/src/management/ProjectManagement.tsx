@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {projectClientAdminUrl} from "../../../../shared/project-client-admin-url.js";
+import {geoCallHref,geoWhatsAppHref} from "../../../../shared/geo-public-contact-links.js";
 import "./project-management.css";
 
 type Profile = {
@@ -155,6 +156,17 @@ export default function ProjectManagement({section}:{section:Tab}){
           </label>
           <p>OFF by default for privacy. Only the owner can enable it; private client directory,
             commercial evidence and buyer/payment data are never made public.</p>
+          <div className="engine-manage-contact-preview" role="status">
+            <strong>Geo customer contact buttons: {profile.publicContactsEnabled?"Public sharing selected":"Not public"}</strong>
+            <span>Call: {geoCallHref(profile.phonePrimary)?"Valid number ready":"Add a valid Call number"} ·
+              WhatsApp: {geoWhatsAppHref(profile.whatsapp)?"Valid number ready":"Add a valid WhatsApp number"}</span>
+            {profile.publicContactsEnabled&&geoCallHref(profile.phonePrimary)&&
+              <a href={geoCallHref(profile.phonePrimary)}>Test Call link</a>}
+            {profile.publicContactsEnabled&&geoWhatsAppHref(profile.whatsapp)&&
+              <a href={geoWhatsAppHref(profile.whatsapp)} target="_blank" rel="noopener noreferrer">Test WhatsApp link</a>}
+            <small>Save the profile to activate changes on the public Geo site. Call uses the device dialer;
+              WhatsApp opens the selected number's WhatsApp chat.</small>
+          </div>
           <div className="engine-manage-actions"><span>Revision {state?.profile.revision||0} · Owner controlled</span>
             <button disabled={busy||state?.project.status==="archived"} type="submit">{busy?"Saving…":"Save / Update Profile"}</button></div>
         </form>:<p>Loading contact details…</p>}

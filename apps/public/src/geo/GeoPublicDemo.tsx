@@ -15,6 +15,7 @@ import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../s
 import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
 import {closerGeoCameraZoom} from "../../../../shared/geo-camera-zoom.js";
 import {projectClientAdminUrl} from "../../../../shared/project-client-admin-url.js";
+import {geoCallHref} from "../../../../shared/geo-public-contact-links.js";
 import "./geo-public-demo.css";
 
 type GeoCoordinate = {
@@ -28,17 +29,10 @@ type GeoPublicContacts={
   address:string;phone:string;phoneSecondary:string;whatsapp:string;email:string;
   websiteUrl:string;mapsUrl:string;
 };
-const safeContactDigits=(value:string)=>value.replace(/[^0-9]/g,"");
 const geoPublicMapHref=(contacts:GeoPublicContacts)=>{
   if(contacts.mapsUrl)return contacts.mapsUrl;
   return contacts.address?"https://www.google.com/maps/search/?api=1&query="+
     encodeURIComponent(contacts.address):"";
-};
-const geoWhatsAppHref=(value:string)=>{
-  const digits=safeContactDigits(value);
-  // India local 10-digit numbers are accepted only when supplied as 10-digit mobile.
-  const number=digits.length===10&&/^[6-9]/.test(digits)?"91"+digits:digits;
-  return number.length>=11&&number.length<=15?"https://wa.me/"+number:"";
 };
 
 type GeoHeaderIconKind = "call" | "admin";
@@ -1000,7 +994,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
         projectName={data.project.name}
         geoHeadingDeg={data.placement.headingDeg}
         publicPhone={data.publicContacts?.phone}
-        publicWhatsappHref={geoWhatsAppHref(data.publicContacts?.whatsapp||"")}
+        publicWhatsapp={data.publicContacts?.whatsapp}
         notices={notices}
         onClose={()=>setSelectedPlot(null)}
       />
@@ -1121,8 +1115,7 @@ export default function GeoPublicDemo() {
 
 
   // Header links use ONLY the owner's explicitly published Geo contacts.
-  const publicPhone=data.publicContacts?.phone?.replace(/[^+0-9]/g,"")||"";
-  const callHref=safeContactDigits(publicPhone).length>=7?"tel:"+publicPhone:"";
+  const callHref=geoCallHref(data.publicContacts?.phone);
   const adminHref=projectClientAdminUrl(slug);
 
   const mapFallbackReason = !data.maps.apiKey
@@ -1172,7 +1165,7 @@ export default function GeoPublicDemo() {
           {geoPublicMapHref(data.publicContacts)&&<a target="_blank" rel="noopener noreferrer"
             href={geoPublicMapHref(data.publicContacts)} aria-label="Open project in Google Maps">
             {data.publicContacts.mapsUrl?"Directions":"Find on Maps"}</a>}
-          {data.publicContacts.phoneSecondary&&<a href={"tel:"+data.publicContacts.phoneSecondary.replace(/[^+0-9]/g,"")}
+          {geoCallHref(data.publicContacts.phoneSecondary)&&<a href={geoCallHref(data.publicContacts.phoneSecondary)}
             aria-label="Call secondary project contact">Call 2</a>}
           {data.publicContacts.websiteUrl&&<a target="_blank" rel="noopener noreferrer"
             href={data.publicContacts.websiteUrl}>Website</a>}
