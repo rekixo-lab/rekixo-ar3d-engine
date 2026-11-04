@@ -10,6 +10,8 @@ test("Available, Booked, Sold use one saturated Green/Yellow/Red palette everywh
     available:0x00dc84,booked:0xffc20a,sold:0xff4052
   });
   const legend=read("apps/public/src/geo/geo-public-demo.css");
+  assert.ok(legend.includes(".jio-public-shell,.geo-plot-status{"),
+    "Status colors must also work in standalone or portaled legend");
   const drawer=read("apps/public/src/geo/geo-plot-details-drawer.css");
   const overlay=read("apps/public/src/geo/geoPlotModelOverlay.ts");
   for(const [key,value] of Object.entries(GEO_PLOT_STATUS_COLORS)){
