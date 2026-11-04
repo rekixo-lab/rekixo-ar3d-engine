@@ -82,8 +82,8 @@ test("Component Mapper page provides canonical search, semantic targets and opti
 
 test("processing handoff advertises node catalog and links only catalog-ready output to mapper", () => {
   assert.match(processing, /nodeCatalog\?: ProcessingArtifactV1/);
-  assert.match(processing, /NODE CATALOG/);
-  assert.match(processing, /LEGACY OUTPUT/);
+  assert.match(processing, /Model prepared/);
+  assert.match(processing, /Model validated and ready for component review/);
   assert.match(processing, /canonicalOutput\?\.nodeCatalog/);
   assert.match(processing, /\/3Dprojects\/component-mapper\?project=/);
   assert.match(processing, /Review components/);
