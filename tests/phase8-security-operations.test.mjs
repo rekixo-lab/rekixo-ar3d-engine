@@ -54,8 +54,8 @@ test("production deploy performs read-only immutable release integrity checks", 
   assert.match(verifier, /method: "HEAD"/);
   assert.match(verifier, /geo-placement/);
   // Geo and Building can be on different immutable versions after a Building-only update.
-  assert.doesNotMatch(verifier, /buildingRelease\\.id !== item\\.releaseId/);
-  assert.match(verifier, /geo\\?\\.release\\?\\.id !== pinnedBuilding\\?\\.id/);
-  assert.match(verifier, /checksum\\(pinnedBuilding\\.manifestSha256\\)/);
+  assert.doesNotMatch(verifier, /buildingRelease\.id !== item\.releaseId/);
+  assert.match(verifier, /geo\?\.release\?\.id !== pinnedBuilding\?\.id/);
+  assert.match(verifier, /checksum\(pinnedBuilding\.manifestSha256\)/);
   assert.match(verifier, /pinned Building GLB is unavailable/);
 });
