@@ -3,10 +3,10 @@
 // A single atomic D1 batch activates the new Geo + matching Plot Mapping so
 // customers never see a temporary 36-plot gap. Changed geometry fails closed.
 import { activeGeoReleaseState } from "./geo-release-runtime.mjs";
-import { releaseStateById } from "./release-runtime.mjs";
+import { releaseStateById,geoModelDerivativeForReleaseState } from "./release-runtime.mjs";
 import { assertGeoPresentationManifestV1 } from "./geo-presentation-policy.mjs";
 import { validateGeoPlotCollection } from "./geo-plot-geometry.mjs";
-import { verifyCosmeticModelPair } from "../shared/glb-geometry-identity.js";
+import { verifyCosmeticModelPair,glbGeometryIdentity } from "../shared/glb-geometry-identity.js";
 
 const encoder=new TextEncoder();
 const digest=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),
@@ -44,6 +44,26 @@ async function modelBytes(env,ref) {
     throw Error("Immutable Building GLB checksum mismatch. Nothing was replaced.");
   return bytes;
 }
+async function verifyRenderableDerivative(env,building,source,expectedGeometrySha) {
+  // The public Geo runtime may choose a Geo-optimized derivative instead of
+  // the canonical GLB. Prove that derivative uses exactly the SAME model-local
+  // frame before preserving a single mapped vertex automatically.
+  const derivative=await geoModelDerivativeForReleaseState(env,building);
+  if(!derivative?.url)return;
+  const key=`projects/${source.projectSlug}/releases/${source.releaseId}/geo-models/${source.model.id}/model.glb`;
+  if(!validSha(derivative.sha256)||Number(derivative.byteSize)>MAX_GLB)
+    throw Error("Geo derivative model is not safe for automatic comparison.");
+  const object=await env.MODEL_ASSETS.get(key);
+  if(!object)throw Error("Current Geo render derivative is unavailable; live mapping was not changed.");
+  const bytes=new Uint8Array(await object.arrayBuffer());
+  if(bytes.length!==Number(derivative.byteSize) ||
+    await digest(bytes)!==derivative.sha256.toLowerCase())
+    throw Error("Geo render derivative checksum mismatch.");
+  const actual=await glbGeometryIdentity(bytes);
+  if(actual.sha256!==expectedGeometrySha)
+    throw Error("The Geo-optimized render model has a different coordinate frame. "+
+      "Auto replacement is blocked to preserve plotted boundaries.");
+}
 function sourceReference(state,project) {
   const src=modelAsset(state);
   if(state.manifest.release.projectId!==project.id ||
@@ -80,6 +100,8 @@ async function preview(env,project) {
   const geometry=await verifyCosmeticModelPair(oldBytes,newBytes);
   if(!geometry.equal) throw Error("The new 3D model changes plot geometry, scale, origin or node transforms. "+
     "The current live Geo and mapped plots remain untouched. Use reviewed remapping for a changed layout.");
+  await verifyRenderableDerivative(env,oldBuilding,previous,geometry.oldGeometry.sha256);
+  await verifyRenderableDerivative(env,newBuilding,next,geometry.newGeometry.sha256);
   const {p,a}=validPlacement(active.manifest);
   const experience=await env.DB.prepare(`SELECT id,source_building_release_id,lifecycle
     FROM experiences_3d WHERE id=? AND project_id=? AND type='geo'`).bind(
