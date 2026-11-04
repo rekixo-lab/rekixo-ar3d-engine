@@ -39,14 +39,14 @@ test("Satharai-style preliminary 36 published polygons all display Available by 
   assert.equal(result.available+result.booked+result.sold,result.total);
 });
 
-test("missing records default Available; preliminary never trusts commercial not released by server",()=>{
+test("missing facts default Available; preliminary can show explicit published listing facts",()=>{
   const plots=[{id:"17"},{id:"18"},{id:"19"}];
   const preliminary=summarizeApprovedGeoPlotStatuses({
     publicationMode:"preliminary",plots,
     commercial:{"17":{status:"sold"}}
   });
-  assert.deepEqual([preliminary.available,preliminary.booked,preliminary.sold],[3,0,0]);
-  assert.equal(preliminary.statusById["17"],"available");
+  assert.deepEqual([preliminary.available,preliminary.booked,preliminary.sold],[2,0,1]);
+  assert.equal(preliminary.statusById["17"],"sold");
   for(const mapping of [{publicationMode:"verified",plots},{plots,commercial:{"17":{status:"sold"}}}]){
     const result=summarizeApprovedGeoPlotStatuses(mapping);
     assert.deepEqual([result.total,result.available,result.booked,result.sold],[3,3,0,0]);
@@ -86,7 +86,7 @@ test("Status toggle is bottom-left, OFF by default, animated without option back
 test("Status colors use existing GLB-local overlay and preserve map click geometry",()=>{
   assert.match(viewer,/summarizeApprovedGeoPlotStatuses\(/);
   assert.match(viewer,/data\.plotMapping\?\.geoReleaseId===data\.geoRelease\.id/);
-  assert.match(viewer,/candidateLayer\.setStatusPresentation\(enabled,filter,statusSummary\.statusById\)/);
+  assert.match(viewer,/candidateLayer\.setStatusPresentation\(enabled,filter,statusSummaryRef\.current\.statusById\)/);
   assert.match(viewer,/overlay\?\.requestRedraw\(\)/);
   assert.match(overlay,/available:tinted\(0x1cd680/);
   assert.match(overlay,/booked:tinted\(0xf2bf25/);
@@ -107,7 +107,7 @@ test("Status colors use existing GLB-local overlay and preserve map click geomet
 });
 
 test("commercial facts remain approval-gated at the server, no fabricated status or private data",()=>{
-  assert.match(server,/commercial=publicationMode==="verified"/);
+  assert.match(server,/const commercial=await publicGeoCommercialForRelease/);
   assert.match(server,/publicGeoCommercialForRelease/);
   assert.match(commercialServer,/public_approved=1/);
   assert.match(viewer,/<GeoPlotDetailsDrawer/);
