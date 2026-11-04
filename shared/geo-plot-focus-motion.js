@@ -7,10 +7,11 @@ export function geoPlotFocusMotion(now, startedAt, reducedMotion = false) {
   const wave = reducedMotion ? 0 :
     Math.pow(Math.max(0, Math.sin(progress * Math.PI * 3.3)), 2) * (1 - progress);
   return {
-    fillOpacity: 0.31 + wave * 0.15,
-    haloOpacity: 0.62 + wave * 0.28,
-    edgeOpacity: 0.97,
-    dotsOpacity: 0.97,
+    // Stronger persistent tint while retaining clear masterplan texture beneath.
+    fillOpacity: 0.47 + wave * 0.14,
+    haloOpacity: 0.82 + wave * 0.15,
+    edgeOpacity: 0.99,
+    dotsOpacity: 0.99,
     rippleOpacity: reducedMotion ? 0 : 0.68 * Math.pow(1 - progress, 1.45),
     rippleScale: reducedMotion ? 1 : 1 + 0.14 * progress,
     animate: !reducedMotion && elapsed < GEO_PLOT_FOCUS_DURATION_MS,

@@ -62,3 +62,20 @@ test("quick actions only link to authorized visible sections, not absent buildin
  assert.match(portal,/kind!=="building"&&<section className="engine-client-admin-stats"/);
  assert.match(plot,/onCommercialChange/);
 });
+
+test("selected plot opens its editor directly below the row across responsive layouts",()=>{
+ const inline=plot.indexOf('className="client-geo-editor client-geo-editor--inline"');
+ const row=plot.indexOf('return <div key={row.plotId} className={"client-geo-entry"');
+ const end=plot.indexOf('   })}',row);
+ assert.ok(row>=0&&inline>row&&end>inline,"editor must be a child of the mapped row");
+ assert.doesNotMatch(plot.slice(end),/\{chosen&&<section className="client-geo-editor"/);
+ assert.match(plot,/aria-expanded=\{editing\}/);
+ assert.match(plot,/aria-controls=\{editing\?"client-geo-editor-"/);
+ assert.match(plot,/editing\?"Close editor/);
+ assert.match(plot,/ref=\{editorHeadingRef\}/);
+ assert.match(plot,/heading\.scrollIntoView/);
+ assert.match(css,/\.client-geo-entry\.is-editing/);
+ assert.match(css,/\.client-geo-list \.client-geo-editor--inline/);
+ assert.match(css,/@media\(max-width:700px\)/);
+ assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
+});
