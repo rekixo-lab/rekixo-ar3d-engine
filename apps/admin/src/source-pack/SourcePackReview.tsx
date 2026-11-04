@@ -382,11 +382,22 @@ export default function SourcePackReview() {
               ? "Upload a new GLB/FBX above to replace the model safely. Your current live site will remain unchanged."
               : "Upload and verify a 3D file to get started."}</p>
           </div>
-          <button className="source-review__primary" type="button"
-            disabled={Boolean(busy) || !data?.suggestions.length}
-            onClick={() => void startDraft()}>
-            {busy === "start" ? "Preparing…" : packReady ? "Replace 3D Model" : "Prepare 3D Model"}
-          </button>
+          {packReady ? (
+            <details className="source-review__advanced">
+              <summary>Already uploaded a replacement model?</summary>
+              <p>Choose this only when the new GLB is already verified. Uploads are locked while the review draft is open.</p>
+              <button type="button" disabled={Boolean(busy) || !data?.suggestions.length}
+                onClick={() => void startDraft()}>
+                Select Existing Model
+              </button>
+            </details>
+          ) : (
+            <button className="source-review__primary" type="button"
+              disabled={Boolean(busy) || !data?.suggestions.length}
+              onClick={() => void startDraft()}>
+              {busy === "start" ? "Preparing…" : "Prepare 3D Model"}
+            </button>
+          )}
         </section>
       ) : (
         <section className="source-review__simple-card" id="source-step-review">
