@@ -107,6 +107,7 @@ export default function SourcePackReview() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [modelSelection, setModelSelection] = useState<string | null>(null);
 
   async function load() {
     if (!slug) {
@@ -120,6 +121,7 @@ export default function SourcePackReview() {
     setData(payload);
     setFiles(payload.latestPack?.files ?? []);
     setDirty(false);
+    setModelSelection(null);
   }
 
   useEffect(() => {
@@ -144,6 +146,7 @@ export default function SourcePackReview() {
       setData(payload);
       setFiles(payload.latestPack?.files ?? []);
       setDirty(false);
+      setModelSelection(null);
       return payload;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Source Pack operation failed.");
@@ -176,7 +179,7 @@ export default function SourcePackReview() {
 
   async function startDraft() {
     if (data?.latestPack?.status === "ready" &&
-      !window.confirm("REPLACE 3D MODEL · NEW SOURCE VERSION\n\nExisting published Building/Geo releases and Plot IDs will stay unchanged. Upload and verify the new GLB/FBX, select its geometry authority, process and inspect a NEW Building release. An updated Geo release requires separate plot alignment review; changed-source commercial approvals cannot be reused automatically. Continue?"))
+      !window.confirm("Create a new 3D model version? The current live Building, Geo site and mapped plots stay unchanged until you publish a reviewed replacement."))
       return;
     const result = await post({ action: "start-draft" }, "start");
     if (result) setMessage(`Source Pack v${result.latestPack?.version} review draft ready.`);
@@ -249,6 +252,82 @@ export default function SourcePackReview() {
     if (result) setMessage(`Source Pack v${result.latestPack?.version} sealed and immutable.`);
   }
 
+  // The latest verified model by Source Pack sort order is suggested, not
+  // silently approved. Same-name originals remain distinct by their SHA-256.
+  const modelOptions = [...files]
+    .filter((file) => file.uploadState === "verified" &&
+      file.capabilities.includes("geometry") &&
+      (/\.(glb|fbx)$/i.test(file.filename) || /gltf-binary|fbx/i.test(file.mediaType)))
+    .sort((a, b) => b.sortOrder - a.sortOrder);
+  const proposedModel = modelOptions.find((file) => file.sourceFileId === modelSelection) ??
+    modelOptions.find((file) => file.roles.includes("geometry-authority")) ??
+    modelOptions[0];
+
+  async function prepareModel() {
+    const pack = data?.latestPack;
+    const candidate = proposedModel;
+    if (!pack || pack.status !== "draft" || !candidate || busy) return;
+    if (!window.confirm("Prepare the NEW 3D model?\\n\\nFile: " + candidate.filename +
+      "\\nSHA-256: " + candidate.sha256 +
+      "\\n\\nThis saves and seals a new Source Pack and queues private processing. " +
+      "The current LIVE Building release, Geo mapping, Plot IDs and customer status will NOT change. Continue?"))
+      return;
+    setBusy("prepare");
+    setError("");
+    setMessage("");
+    try {
+      const request = async (body: Record<string, unknown>) => readPayload(
+        await fetch(apiPath(slug), {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          credentials: "same-origin",
+        }),
+      );
+      const nextFiles = files.map((file) => ({
+        sourceFileId: file.sourceFileId,
+        roles: file.sourceFileId === candidate.sourceFileId
+          ? [...new Set([...file.roles.filter((role) => role !== "geometry-authority"), "geometry-authority"])]
+          : file.roles.filter((role) => role !== "geometry-authority"),
+        capabilities: file.capabilities,
+        notes: file.notes,
+      }));
+      const reviewed = await request({ action: "save-review", packId: pack.id, files: nextFiles });
+      if (reviewed.latestPack?.id !== pack.id || !reviewed.latestPack.readiness.ready ||
+          reviewed.latestPack.geometryAuthorityFileId !== candidate.sourceFileId)
+        throw Error("The model review was not confirmed by the server. No new version was published.");
+      const sealed = await request({ action: "seal", packId: pack.id, confirm: "SEAL SOURCE PACK" });
+      if (sealed.latestPack?.id !== pack.id || sealed.latestPack.status !== "ready")
+        throw Error("New source pack was not sealed. Check the review before processing.");
+      setData(sealed);
+      setFiles(sealed.latestPack.files);
+      setDirty(false);
+      setModelSelection(null);
+      try {
+        const queued = await fetch(
+          `${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(slug)}/processing`, {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "start", sourcePackId: pack.id }),
+          credentials: "same-origin",
+        });
+        const result = await queued.json() as { error?: string };
+        if (!queued.ok) throw Error(result.error || "Processing could not be queued.");
+        setMessage("New 3D model prepared. Private processing has started. Check the result before publishing.");
+      } catch (reason) {
+        setMessage("New 3D model saved safely. Start Processing below to continue: " +
+          (reason instanceof Error ? reason.message : String(reason)));
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not prepare the model.");
+      // Read the authoritative state after a partial save or seal; never
+      // assume that an earlier successful immutable operation was rolled back.
+      try { await load(); } catch { /* Keep the actionable error visible. */ }
+    } finally {
+      setBusy("");
+    }
+  }
+
   const pack = data?.latestPack;
   const authorityId = useMemo(
     () => files.find((file) => file.roles.includes("geometry-authority"))?.sourceFileId ?? null,
@@ -266,234 +345,121 @@ export default function SourcePackReview() {
   const packReady = pack?.status === "ready";
 
   return (
-    <main className="source-review">
-      <header className="source-review__topbar">
-        <a href={slug ? `/3Dprojects?project=${encodeURIComponent(slug)}` : "/3Dprojects"}>← Projects</a>
+    <main className="source-review source-review--simple">
+      <header className="source-review__simple-head">
         <div>
-          <small>REKIXO AR3D ENGINE</small>
-          <strong>Source Pack Review</strong>
+          <h2>3D Model</h2>
+          <span>{pack ? `Version ${pack.version} · ${pack.status === "ready" ? "Ready" : "Preparing"}` : "No model yet"}</span>
         </div>
-        <button
-          type="button"
-          onClick={() => void refreshClassification()}
-          disabled={Boolean(busy) || !slug || dirty}
-          title={dirty ? "Save review changes before refreshing automatic analysis" : undefined}
-        >
-          {busy === "classify" ? "Analyzing…" : "Refresh automatic analysis"}
+        <button type="button" disabled={Boolean(busy) || !slug || dirty}
+          onClick={() => void refreshClassification()} title="Reload verified files">
+          Refresh
         </button>
       </header>
 
-      <section className="source-review__hero">
-        <div>
-          <p>AUTOMATIC ENGINE · INPUT WORKSPACE</p>
-          <h1>{data?.project.name ?? "Source Pack"}</h1>
-          <span>Verified sources → operator review → scale/processing → component mapping → ready handoff</span>
-        </div>
-        <div className="source-review__rule">
-          <strong>One geometry authority</strong>
-          <span>Finished FBX/GLB geometry is primary when available. DWG/PDF/reference files remain evidence; they never silently replace approved geometry.</span>
-        </div>
-      </section>
-
-      <nav className="source-review__workflow-nav" aria-label="Source Pack workflow">
-        <a href="#source-step-sources"><span>01</span><b>Sources</b><small>Verified originals</small></a>
-        <a href="#source-step-review"><span>02</span><b>Review</b><small>Authority and roles</small></a>
-        <a href="#source-step-processing"><span>03</span><b>Scale & Processing</b><small>Durable canonical output</small></a>
-        <a href={`/3Dprojects/building?project=${encodeURIComponent(slug)}&tab=components`}><span>04</span><b>Components</b><small>Canonical node mapping</small></a>
-        <a href="#source-step-ready"><span>05</span><b>Ready</b><small>Building handoff</small></a>
-      </nav>
-
-      {error ? <div className="source-review__alert source-review__alert--error">{error}</div> : null}
-      {message ? <div className="source-review__alert source-review__alert--ok">{message}</div> : null}
+      {error && <p className="source-review__alert source-review__alert--error" role="alert">{error}</p>}
+      {message && <p className="source-review__alert source-review__alert--ok" role="status">{message}</p>}
 
       <SourceOriginalUploader slug={slug} locked={pack?.status === "draft"} onVerified={load} />
 
-      <section className="source-review__summary" id="source-step-sources">
-        <article>
-          <span>AUTO SUGGESTION</span>
-          <strong>
-            {suggestedAuthorityId
-              ? suggestionById.get(suggestedAuthorityId)?.filename ?? "Candidate ready"
-              : "Operator decision required"}
-          </strong>
-          <small>{data?.authoritySuggestion.reason ?? "Run automatic analysis first"}</small>
-        </article>
-        <article>
-          <span>SOURCE PACK</span>
-          <strong>{pack ? `v${pack.version} · ${pack.status.toUpperCase()}` : data ? "Not started" : "Unavailable"}</strong>
-          <small>{pack?.manifestSha256 ? `Manifest ${pack.manifestSha256.slice(0, 12)}…` : "Seal creates immutable manifest"}</small>
-        </article>
-        <article>
-          <span>VERIFIED FILES</span>
-          <strong>{data ? (pack?.readiness.verifiedSourceCount ?? data.suggestions.length) : "—"}</strong>
-          <small>{dirty ? "Unsaved review changes" : pack?.readiness.ready ? "Review complete" : "Review / authority selection pending"}</small>
-        </article>
-      </section>
-
       {!pack || pack.status !== "draft" ? (
-        <section className="source-review__start" id="source-step-review">
+        <section className="source-review__simple-card" id="source-step-review">
           <div>
-            <p>{packReady ? "SEALED SOURCE PACK" : "OPERATOR REVIEW"}</p>
-            <h2>{packReady ? `Source Pack v${pack.version} is immutable` : "Create review draft from verified originals"}</h2>
-            <span>
-              {packReady
-                ? "Safe model replacement: upload a new GLB/FBX above, create the next immutable Source Pack, process and verify a new Building release. The existing Geo source and mapped customer plots stay pinned until a separate reviewed Geo update. Status/price facts are retained privately if the map is republished; changed-source approvals need review."
-                : "Automatic classifier suggestions copy honge, lekin geometry-authority role final operator decision ke bina seal nahi hoga."}
-            </span>
+            <h3>{packReady ? "Current model is ready" : "Start your 3D model"}</h3>
+            <p>{packReady
+              ? "Upload a new GLB/FBX above to replace the model safely. Your current live site will remain unchanged."
+              : "Upload and verify a 3D file to get started."}</p>
           </div>
-          <div className="source-review__start-actions">
-            <button type="button" onClick={() => void refreshClassification()} disabled={Boolean(busy) || !slug}>
-              {busy === "classify" ? "Analyzing…" : "Refresh Analysis"}
-            </button>
-            <button type="button" onClick={() => void startDraft()} disabled={Boolean(busy) || !data?.suggestions.length}>
-              {busy === "start" ? "Preparing…" : packReady ? "Replace 3D Model · New Version" : "Start Source Pack Review"}
-            </button>
-          </div>
+          <button className="source-review__primary" type="button"
+            disabled={Boolean(busy) || !data?.suggestions.length}
+            onClick={() => void startDraft()}>
+            {busy === "start" ? "Preparing…" : packReady ? "Replace 3D Model" : "Prepare 3D Model"}
+          </button>
         </section>
       ) : (
-        <section id="source-step-review" className="source-review__review-workspace">
-          {suggestedAuthorityId && !authorityId ? (
-            <div className="source-review__suggestion">
-              <div>
-                <strong>Recommended geometry authority</strong>
-                <span>{suggestionById.get(suggestedAuthorityId)?.filename}</span>
-              </div>
-              <button type="button" onClick={() => chooseAuthority(suggestedAuthorityId)}>
-                Use recommendation
-              </button>
-            </div>
-          ) : null}
+        <section className="source-review__simple-card" id="source-step-review">
+          <div>
+            <h3>Choose new model</h3>
+            <p>Latest verified file is suggested. Same filenames are identified by checksum.</p>
+          </div>
+          <label className="source-review__model-choice">
+            Model file
+            <select aria-label="Select verified 3D model" value={proposedModel?.sourceFileId ?? ""}
+              disabled={Boolean(busy)}
+              onChange={(event) => setModelSelection(event.target.value)}>
+              {modelOptions.map((file) => (
+                <option key={file.sourceFileId} value={file.sourceFileId}>
+                  {file.filename} · {file.sha256.slice(0, 12)} · {formatBytes(file.byteSize)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {proposedModel && <p className="source-review__fingerprint">
+            Selected model SHA-256: <code>{proposedModel.sha256}</code>
+          </p>}
+          <div className="source-review__simple-actions">
+            <button className="source-review__primary" type="button"
+              disabled={Boolean(busy) || !proposedModel}
+              onClick={() => void prepareModel()}>
+              {busy === "prepare" ? "Preparing model…" : "Use This Model & Prepare"}
+            </button>
+            <span>Only prepares a private version. Nothing goes live automatically.</span>
+          </div>
 
-          <section className="source-review__files">
-            <div className="source-review__section-head">
-              <div>
-                <p>02 · OPERATOR REVIEW</p>
-                <h2>Review file roles</h2>
-              </div>
-              <span>Geometry authority exactly one hona chahiye.</span>
-            </div>
-
-            {files.map((file) => {
-              const suggestion = suggestionById.get(file.sourceFileId);
-              const isAuthority = file.roles.includes("geometry-authority");
-              return (
-                <article className={isAuthority ? "source-file source-file--authority" : "source-file"} key={file.sourceFileId}>
-                  <div className="source-file__identity">
-                    <label className="source-file__authority">
-                      <input
-                        type="radio"
-                        name="geometry-authority"
-                        checked={isAuthority}
-                        onChange={() => chooseAuthority(file.sourceFileId)}
-                      />
-                      <span>Geometry authority</span>
-                    </label>
-                    <h3>{file.filename}</h3>
-                    <small>{file.mediaType} · {formatBytes(file.byteSize)} · SHA {file.sha256.slice(0, 10)}…</small>
-                    <div className="source-file__chips">
-                      {file.capabilities.map((capability) => <span key={capability}>{capability}</span>)}
-                    </div>
-                  </div>
-
-                  <div className="source-file__analysis">
-                    <strong>{suggestion?.rationaleCode ?? "operator-reviewed"}</strong>
-                    <span>
-                      Auto confidence {Math.round((suggestion?.confidence ?? file.classificationConfidence) * 100)}%
-                      {suggestion?.geometryAuthorityScore ? ` · geometry ${Math.round(suggestion.geometryAuthorityScore * 100)}%` : ""}
-                    </span>
-                  </div>
-
+          <details className="source-review__advanced">
+            <summary>Advanced file roles & manual review</summary>
+            <p>Change supporting roles only when the source evidence requires it.</p>
+            {suggestedAuthorityId && !authorityId && <p>
+              Engine suggestion: {suggestionById.get(suggestedAuthorityId)?.filename}
+            </p>}
+            <div className="source-review__advanced-files">
+              {files.map((file) => (
+                <article key={file.sourceFileId} className="source-review__advanced-file">
+                  <label>
+                    <input type="radio" name="geometry-authority" checked={file.sourceFileId === authorityId}
+                      onChange={() => chooseAuthority(file.sourceFileId)}
+                      disabled={!file.capabilities.includes("geometry") || Boolean(busy)} />
+                    <strong>{file.filename}</strong>
+                  </label>
+                  <small>{file.sha256.slice(0, 16)}… · {formatBytes(file.byteSize)}</small>
                   <fieldset>
                     <legend>Supporting roles</legend>
                     {optionalRoles.map(([role, label]) => (
                       <label key={role}>
-                        <input
-                          type="checkbox"
-                          checked={file.roles.includes(role)}
+                        <input type="checkbox" checked={file.roles.includes(role)}
                           onChange={() => toggleRole(file.sourceFileId, role)}
-                        />
-                        <span>{label}</span>
+                          disabled={Boolean(busy)} />{label}
                       </label>
                     ))}
                   </fieldset>
-
-                  <label className="source-file__notes">
-                    <span>Operator note</span>
-                    <input
-                      value={file.notes ?? ""}
-                      onChange={(event) => updateNotes(file.sourceFileId, event.target.value)}
-                      maxLength={1000}
-                      placeholder="Optional: why this role/authority was chosen"
-                    />
+                  <label>Notes
+                    <input value={file.notes ?? ""} onChange={(event) => updateNotes(file.sourceFileId, event.target.value)}
+                      maxLength={1000} placeholder="Optional" disabled={Boolean(busy)}/>
                   </label>
                 </article>
-              );
-            })}
-          </section>
-
-          <section className="source-review__actions">
-            <div>
-              <strong>
-                {dirty
-                  ? "Unsaved review changes"
-                  : authorityId
-                    ? "Geometry authority selected"
-                    : "Select one geometry authority"}
-              </strong>
-              <span>
-                {dirty
-                  ? "Save Review required hai. Unsaved authority, role ya note changes ko seal nahi kiya jayega."
-                  : "Save keeps draft editable. Seal writes a SHA-256 manifest, approves the operator decision and makes this Source Pack immutable."}
-              </span>
+              ))}
             </div>
-            <button type="button" onClick={() => void saveReview()} disabled={Boolean(busy) || !authorityId || !dirty}>
-              {busy === "save" ? "Saving…" : "Save Review"}
-            </button>
-            <button
-              className="source-review__seal"
-              type="button"
-              onClick={() => void sealPack()}
-              disabled={Boolean(busy) || dirty || !pack.readiness.ready}
-              title={
-                dirty
-                  ? "Save review changes before sealing"
-                  : pack.readiness.ready
-                    ? "Seal immutable Source Pack"
-                    : "Save a complete review before sealing"
-              }
-            >
-              {busy === "seal" ? "Sealing…" : "Seal Source Pack"}
-            </button>
-          </section>
+            <div className="source-review__simple-actions">
+              <button type="button" onClick={() => void saveReview()}
+                disabled={Boolean(busy) || !authorityId || !dirty}>Save Review</button>
+              <button type="button" onClick={() => void sealPack()}
+                disabled={Boolean(busy) || dirty || !pack.readiness.ready}>Seal Source Pack</button>
+            </div>
+          </details>
         </section>
       )}
 
-      <section id="source-step-processing" className="source-review__processing-stage">
-        <div className="source-review__stage-label">
-          <p>03 · SCALE & PROCESSING</p>
-          <h2>Canonical processing</h2>
-          <span>Sealed Source Pack ke baad scale gate aur durable processing yahin continue hota hai.</span>
-        </div>
+      {packReady && <section id="source-step-processing" className="source-review__simple-processing">
         <ProcessingSpine slug={slug} sourcePackSignal={processingSignal} />
-      </section>
-
-      <section className="source-review__ready-stage" id="source-step-ready">
-        <div>
-          <p>05 · BUILDING HANDOFF</p>
-          <h2>{packReady ? "Source decision is immutable" : "Complete and seal Source Pack first"}</h2>
-          <span>
-            {packReady
-              ? "Processing/component review complete hote hi Building workspace se customer-facing release workflow continue karein."
-              : "Source Pack ready hone tak downstream Building release intentionally fail-closed rahega."}
-          </span>
-        </div>
-        <div>
-          <a href={`/3Dprojects/building?project=${encodeURIComponent(slug)}&tab=components`}>Open Components</a>
-          <a className={packReady ? "source-review__ready-primary" : "source-review__ready-disabled"} href={packReady ? `/3Dprojects/building?project=${encodeURIComponent(slug)}&tab=presentation` : "#source-step-review"}>
-            Continue to Building
-          </a>
-        </div>
-      </section>
+      </section>}
+      {packReady && <div className="source-review__next">
+        <a href={`/3Dprojects/building?project=${encodeURIComponent(slug)}&tab=components`}>
+          Review Components
+        </a>
+        <a href={`/3Dprojects/building?project=${encodeURIComponent(slug)}&tab=presentation`}>
+          Open Building Editor
+        </a>
+      </div>}
     </main>
   );
 }
