@@ -251,8 +251,13 @@ export async function glbWorldSurfaceIdentity(raw) {
       cache.set(i,p3.key);return p3.key;
     };
     for(let i=0;i<count;i+=3){
-      const key=[point(ix?ix.read(i):i),point(ix?ix.read(i+1):i+1),
-        point(ix?ix.read(i+2):i+2)].sort().join("|");
+      const vertices=[point(ix?ix.read(i):i),point(ix?ix.read(i+1):i+1),
+        point(ix?ix.read(i+2):i+2)];
+      // Cyclic vertex rotations preserve the facing side. Winding reversal
+      // flips the face and is NOT a cosmetic change.
+      const key=[0,1,2].map(shift=>[
+        vertices[shift],vertices[(shift+1)%3],vertices[(shift+2)%3]
+      ].join("|")).sort()[0];
       triangles.push(key);
     }
   }
@@ -303,11 +308,17 @@ export async function verifyCosmeticModelPair(oldGlb,newGlb) {
     return {equal:true,mode:"exact-source",oldGeometry,newGeometry};
   // Different node numbering and exporter grouping are not proof of a changed
   // site. Confirm the actual visible world-space triangles before rejecting.
-  const [oldWorld,newWorld]=await Promise.all([
-    glbWorldSurfaceIdentity(oldGlb),glbWorldSurfaceIdentity(newGlb)
-  ]);
-  const same=oldWorld.sha256===newWorld.sha256;
-  return {equal:same,mode:same?"world-surface":"different-surface",
-    reason:same?undefined:geometryDifference(oldWorld,newWorld),
-    oldGeometry,newGeometry,oldWorld,newWorld};
+  try {
+    const [oldWorld,newWorld]=await Promise.all([
+      glbWorldSurfaceIdentity(oldGlb),glbWorldSurfaceIdentity(newGlb)
+    ]);
+    const same=oldWorld.sha256===newWorld.sha256;
+    return {equal:same,mode:same?"world-surface":"different-surface",
+      reason:same?undefined:geometryDifference(oldWorld,newWorld),
+      oldGeometry,newGeometry,oldWorld,newWorld};
+  } catch(error) {
+    return {equal:false,mode:"unverified-reexport",
+      reason:error instanceof Error?error.message:"Scene geometry needs separate review.",
+      oldGeometry,newGeometry};
+  }
 }
