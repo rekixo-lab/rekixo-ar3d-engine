@@ -71,7 +71,7 @@ export function createGeoPlotSelectionFocus() {
     shapeGeometry.rotateX(Math.PI / 2);
     shapeGeometry.translate(0, height, 0);
     const fillMaterial = new THREE.MeshBasicMaterial({
-      color: accent, transparent: true, opacity: 0.31,
+      color: accent, transparent: true, opacity: 0.47,
       side: THREE.DoubleSide, depthTest: true, depthWrite: false,
       polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
     });
@@ -83,7 +83,7 @@ export function createGeoPlotSelectionFocus() {
     const xs = points.map(p => p[0]);
     const zs = points.map(p => p[1]);
     const minSpan = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
-    const width = Math.max(0.025, Math.min(0.18, minSpan * 0.014));
+    const width = Math.max(0.035, Math.min(0.24, minSpan * 0.018));
     const area = points.reduce((sum, a, index) => {
       const b = points[(index + 1) % points.length];
       return sum + a[0] * b[1] - b[0] * a[1];
@@ -108,7 +108,7 @@ export function createGeoPlotSelectionFocus() {
     const bandGeometry = new THREE.BufferGeometry();
     bandGeometry.setAttribute("position", new THREE.Float32BufferAttribute(bandVertices, 3));
     halo = new THREE.Mesh(bandGeometry, new THREE.MeshBasicMaterial({
-      color: accent, transparent: true, opacity: 0.62, side: THREE.DoubleSide,
+      color: accent, transparent: true, opacity: 0.82, side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending, depthTest: true, depthWrite: false,
     }));
     halo.renderOrder = 25;
@@ -133,7 +133,7 @@ export function createGeoPlotSelectionFocus() {
       points.flatMap(([x, z]) => [x, height + 0.015, z]), 3,
     ));
     edge = new THREE.LineLoop(boundary, new THREE.LineBasicMaterial({
-      color: 0xffffff, transparent: true, opacity: 0.97,
+      color: 0xffffff, transparent: true, opacity: 0.99,
       depthTest: true, depthWrite: false,
     }));
     edge.renderOrder = 26;
@@ -145,7 +145,7 @@ export function createGeoPlotSelectionFocus() {
     ));
     dots = new THREE.Points(pointGeometry, new THREE.PointsMaterial({
       color: 0xffffff, size: 4, sizeAttenuation: false,
-      transparent: true, opacity: 0.97, depthTest: true, depthWrite: false,
+      transparent: true, opacity: 0.99, depthTest: true, depthWrite: false,
     }));
     dots.renderOrder = 27;
     dots.name = "selected-plot-corner-markers";
