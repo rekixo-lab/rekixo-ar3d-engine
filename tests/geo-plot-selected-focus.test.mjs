@@ -12,9 +12,9 @@ test("selection pulse settles while selected prism reflection keeps moving", () 
   assert.equal(atStart.animate, true);
   assert.equal(during.animate, true);
   assert.equal(settled.animate, true);
-  assert.equal(settled.fillOpacity, 0.20);
-  assert.ok(settled.haloOpacity >= 0.72 && settled.haloOpacity <= 0.87);
-  assert.ok(during.fillOpacity >= 0.20 && during.fillOpacity <= 0.30);
+  assert.equal(settled.fillOpacity, 0.26);
+  assert.ok(settled.haloOpacity >= 0.80 && settled.haloOpacity <= 0.98);
+  assert.ok(during.fillOpacity >= 0.26 && during.fillOpacity <= 0.38);
   assert.ok(settled.reflectTime > during.reflectTime);
   assert.ok(settled.reflectStrength > 0);
   assert.ok(settled.wallOpacity > 0 && settled.roofOpacity > 0);
@@ -26,7 +26,7 @@ test("selection pulse settles while selected prism reflection keeps moving", () 
 test("reduced-motion preference keeps static selected outline", () => {
   const motion = geoPlotFocusMotion(150, 100, true);
   assert.equal(motion.animate, false);
-  assert.equal(motion.haloOpacity, 0.72);
+  assert.equal(motion.haloOpacity, 0.80);
   assert.equal(motion.reflectTime, 0);
   assert.equal(motion.reflectStrength, 0);
   assert.equal(motion.edgeOpacity, 0.99);
@@ -53,6 +53,15 @@ test("selected plot follows GLB-local coordinates with transparent depth-tested 
   assert.match(viewer, /onClose=\{\(\)=>setDrawerOpen\(false\)\}/);
   assert.match(viewer, /plot=\{drawerOpen\?selectedPlot:null\}/);
   assert.doesNotMatch(viewer, /onClose=\{\(\)=>setSelectedPlot\(null\)\}/);
+});
+
+test("visual strength is at least 25 percent greater than the previous glass baseline", () => {
+  const frame = geoPlotFocusMotion(100, 100, true);
+  assert.ok(frame.fillOpacity >= 0.20 * 1.25);
+  assert.ok(frame.wallOpacity >= (0.15 + 0.08 * 0.5) * 1.25);
+  assert.ok(frame.roofOpacity >= (0.08 + 0.04 * 0.5) * 1.25);
+  const shader = read("apps/public/src/geo/geoPlotSelectionFocus.ts");
+  assert.match(shader, /float alpha = clamp\(uOpacity \* \(0\.90 \+ glint \* 0\.48\), 0\.0, 0\.80\)/);
 });
 
 test("glass prism uses the exact mapped footprint and a bounded redraw timer", () => {
