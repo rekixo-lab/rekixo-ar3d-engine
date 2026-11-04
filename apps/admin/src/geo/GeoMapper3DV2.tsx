@@ -710,7 +710,8 @@ export default function GeoMapper3DV2() {
     if (!state?.draft) throw new Error("Geo draft missing.");
     if (!publishReady)
       throw new Error("Current saved revision ko integrated preview me render + verify karke publish karein.");
-    await guardGeoMappingGap((confirmation)=>publishGeoRelease(selectedSlug,state.draft.revision,confirmation));
+    const reviewedRevision=state.draft.revision;
+    await guardGeoMappingGap((confirmation)=>publishGeoRelease(selectedSlug,reviewedRevision,confirmation));
     await reload(selectedSlug);
     setMessage("Immutable Geo V2 release published and activated.");
   }
