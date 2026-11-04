@@ -9,15 +9,15 @@ export function geoPlotFocusMotion(now, startedAt, reducedMotion = false) {
   const shimmer = reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(elapsed / 1000 * 1.65);
   return {
     // Preserve original plan texture and plot number through the glass.
-    fillOpacity: 0.20 + wave * 0.10,
-    haloOpacity: 0.72 + wave * 0.15,
+    fillOpacity: 0.26 + wave * 0.12,
+    haloOpacity: 0.80 + wave * 0.18,
     edgeOpacity: 0.99,
     dotsOpacity: 0.99,
     rippleOpacity: reducedMotion ? 0 : 0.68 * Math.pow(1 - progress, 1.45),
     rippleScale: reducedMotion ? 1 : 1 + 0.14 * progress,
-    wallOpacity: 0.15 + 0.08 * shimmer,
-    roofOpacity: 0.08 + 0.04 * shimmer,
-    rimOpacity: 0.70 + 0.25 * shimmer,
+    wallOpacity: 0.19 + 0.10 * shimmer,
+    roofOpacity: 0.10 + 0.05 * shimmer,
+    rimOpacity: 0.82 + 0.18 * shimmer,
     reflectTime: reducedMotion ? 0 : elapsed / 1000,
     reflectStrength: reducedMotion ? 0 : 0.88,
     animate: !reducedMotion,

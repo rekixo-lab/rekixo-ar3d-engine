@@ -210,7 +210,7 @@ export function createGeoPlotSelectionFocus() {
           float beam = exp(-95.0 * pow(vSweep - fract(uTime * 0.23), 2.0));
           float glint = beam * uStrength;
           vec3 glassColor = mix(uColor, vec3(1.0), glint * 0.78);
-          float alpha = clamp(uOpacity * (0.82 + glint * 0.42), 0.0, 0.65);
+          float alpha = clamp(uOpacity * (0.90 + glint * 0.48), 0.0, 0.80);
           gl_FragColor = vec4(glassColor, alpha);
         }`,
       transparent: true,
@@ -236,7 +236,7 @@ export function createGeoPlotSelectionFocus() {
       points.flatMap(([x, z]) => [x, roofY + 0.008, z]), 3,
     ));
     roofEdge = new THREE.LineLoop(rimGeometry, new THREE.LineBasicMaterial({
-      color: accent, transparent: true, opacity: 0.84,
+      color: accent, transparent: true, opacity: 0.95,
       depthTest: true, depthWrite: false,
     }));
     roofEdge.name = "selected-plot-prism-roof-edge";
@@ -245,7 +245,7 @@ export function createGeoPlotSelectionFocus() {
     const postGeometry = new THREE.BufferGeometry();
     postGeometry.setAttribute("position", new THREE.Float32BufferAttribute(postVertices, 3));
     pillars = new THREE.LineSegments(postGeometry, new THREE.LineBasicMaterial({
-      color: accent, transparent: true, opacity: 0.78,
+      color: accent, transparent: true, opacity: 0.90,
       depthTest: true, depthWrite: false,
     }));
     pillars.name = "selected-plot-prism-vertical-edges";
@@ -270,7 +270,7 @@ export function createGeoPlotSelectionFocus() {
       uniforms.uOpacity.value = mesh === walls ? frame.wallOpacity : frame.roofOpacity;
     }
     (roofEdge.material as THREE.LineBasicMaterial).opacity = frame.rimOpacity;
-    (pillars.material as THREE.LineBasicMaterial).opacity = frame.rimOpacity * 0.88;
+    (pillars.material as THREE.LineBasicMaterial).opacity = frame.rimOpacity * 0.90;
     return frame.animate;
   };
   const dispose = () => { clear(); group.removeFromParent(); };
