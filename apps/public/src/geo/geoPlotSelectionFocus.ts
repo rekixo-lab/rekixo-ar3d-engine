@@ -209,8 +209,8 @@ export function createGeoPlotSelectionFocus() {
         void main() {
           float beam = exp(-95.0 * pow(vSweep - fract(uTime * 0.23), 2.0));
           float glint = beam * uStrength;
-          vec3 glassColor = mix(uColor, vec3(1.0), glint * 0.78);
-          float alpha = clamp(uOpacity * (0.90 + glint * 0.48), 0.0, 0.80);
+          vec3 glassColor = mix(uColor, vec3(1.0), clamp(glint * 0.90, 0.0, 1.0));
+          float alpha = clamp(uOpacity * (0.95 + glint * 0.55), 0.0, 0.90);
           gl_FragColor = vec4(glassColor, alpha);
         }`,
       transparent: true,
@@ -270,7 +270,7 @@ export function createGeoPlotSelectionFocus() {
       uniforms.uOpacity.value = mesh === walls ? frame.wallOpacity : frame.roofOpacity;
     }
     (roofEdge.material as THREE.LineBasicMaterial).opacity = frame.rimOpacity;
-    (pillars.material as THREE.LineBasicMaterial).opacity = frame.rimOpacity * 0.90;
+    (pillars.material as THREE.LineBasicMaterial).opacity = frame.rimOpacity;
     return frame.animate;
   };
   const dispose = () => { clear(); group.removeFromParent(); };
