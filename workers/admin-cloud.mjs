@@ -1251,6 +1251,7 @@ async function projectGeoReleases(request, env, actor, project, parts) {
           actor,
           project,
           expectedDraftRevision,
+          String(body.mappingGapConfirmation || ""),
         ),
       }, { status: 201 });
     } catch (error) {
@@ -1272,6 +1273,7 @@ async function projectGeoReleases(request, env, actor, project, parts) {
       return json({ error: "Method not allowed." }, { status: 405 });
     if (!sameOrigin(request))
       return json({ error: "Invalid request origin." }, { status: 403 });
+    const body = await request.json().catch(() => ({}));
     try {
       return json({
         release: await activateGeoRelease(
@@ -1279,6 +1281,7 @@ async function projectGeoReleases(request, env, actor, project, parts) {
           actor,
           project,
           String(parts[2] || "").trim(),
+          String(body.mappingGapConfirmation || ""),
         ),
       });
     } catch (error) {
