@@ -348,10 +348,10 @@ export async function handleEasyGeoReplacement(request,env,actor,project){
     if(!same)return Response.json({error:"Same-origin request required."},{status:403});
   }
   try{
+    const body=request.method==="POST"?await request.json().catch(()=>({})):null;
     const result=request.method==="GET"
       ?await previewCosmeticGeoReplacement(env,project)
-      :await applyCosmeticGeoReplacement(env,actor,project,
-        String((await request.json().catch(()=>({})).expectedToken||""));
+      :await applyCosmeticGeoReplacement(env,actor,project,String(body?.expectedToken||""));
     return Response.json(result,{headers:{"Cache-Control":"no-store"}});
   }catch(error){
     const message=error instanceof Error?error.message:"Automatic Geo replacement failed.";
