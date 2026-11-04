@@ -265,22 +265,6 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     "/3Dprojects";
 
   return <main className={"engine-client-admin"+(authGate?" engine-client-admin-auth":"")}>
-    {!authGate&&<header className="engine-client-admin-head">
-      <div className="engine-client-admin-brand">
-        <span className="engine-client-admin-mark" aria-hidden="true">
-          <i/><i/><i/><i/>
-        </span>
-        <div>
-          <small>AR3D STUDIO · CLIENT ADMIN</small>
-          <h1>{projectLabel}</h1>
-          {!authGate&&<p>Private workspace · {nameOfRole(identity!.role)}</p>}
-        </div>
-      </div>
-      {identity&&<div className="engine-client-admin-head-actions">
-        <a href={customerSite} target="_blank" rel="noopener noreferrer">View customer site</a>
-        <button type="button" disabled={busy} onClick={()=>void logout()}>Sign out</button>
-      </div>}
-    </header>}
     {error&&<p className="engine-manage-error" role="alert">{error}</p>}
     {message&&<p className="engine-manage-ok" role="status">{message}</p>}
     {!identity?<section className="engine-client-admin-signin" aria-label="Builder Admin sign in">
@@ -396,7 +380,7 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
     </section>:<>
       <div className="engine-client-admin-workspace">
       <aside className="engine-client-admin-sidebar">
-        <div className="engine-client-admin-sidebar-brand"><strong>Builder Admin</strong><small>{projectLabel}</small></div>
+        <div className="engine-client-admin-sidebar-brand"><strong>{projectLabel}</strong><small>Builder Admin · {nameOfRole(identity.role)}</small></div>
       <nav className="engine-client-admin-tabs" aria-label="Client admin sections">
         {availablePanels.map(item=><button key={item} type="button"
           aria-current={panel===item?"page":undefined} className={panel===item?"is-active":""}
@@ -404,22 +388,22 @@ export default function ProjectClientPortal({projectSlug=""}:{projectSlug?:strin
           <span>{PANEL_META[item].label}</span><small>{PANEL_META[item].hint}</small>
         </button>)}
       </nav>
-      <p className="engine-client-admin-sidebar-hint">Only this project · Secure access</p>
+      <div className="engine-client-admin-sidebar-actions">
+        <a href={customerSite} target="_blank" rel="noopener noreferrer">View customer site</a>
+        <button type="button" disabled={busy} onClick={()=>void logout()}>Sign out</button>
+      </div>
       </aside><div className="engine-client-admin-main">
       <div className="engine-client-admin-mobile-switch">
-        <label htmlFor="engine-client-section">Go to section</label>
+        <label htmlFor="engine-client-section">Section</label>
         <select id="engine-client-section" aria-label="Choose Client Admin section"
           value={availablePanels.includes(panel)?panel:"overview"}
           onChange={e=>navigate(e.target.value as Panel)}>
           {availablePanels.map(item=><option value={item} key={item}>{PANEL_META[item].label}</option>)}
         </select>
-      </div>
-      <div className="engine-client-admin-page-heading">
-        <div><span className="engine-client-admin-eyebrow">PROJECT WORKSPACE</span>
-          <h2>{PANEL_META[availablePanels.includes(panel)?panel:"overview"].label}</h2>
-          <p>{PANEL_META[availablePanels.includes(panel)?panel:"overview"].description}</p>
+        <div className="engine-client-admin-mobile-actions">
+          <a href={customerSite} target="_blank" rel="noopener noreferrer" aria-label="View customer site">Customer site</a>
+          <button type="button" disabled={busy} onClick={()=>void logout()}>Sign out</button>
         </div>
-        <span className="engine-client-admin-role">{nameOfRole(identity.role)}</span>
       </div>
 
       {panel==="overview"&&<>
