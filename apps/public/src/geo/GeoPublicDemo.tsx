@@ -404,6 +404,8 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
   // Published plot boundaries are always interactive. Public chrome can be
   // minimal without removing the canonical GLB plot picker or detail panel.
   const [selectedPlot, setSelectedPlot] = useState<GeoMappedPlot|null>(null);
+  // Closing the details drawer does not deselect the highlighted map footprint.
+  const [drawerOpen,setDrawerOpen]=useState(false);
   const [cameraView, setCameraView] = useState<GeoCameraView>("overview");
   const [satelliteMaxZoom, setSatelliteMaxZoom] = useState<number | null>(null);
   const [zoomNotice, setZoomNotice] = useState("");
@@ -566,6 +568,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
           if(id && plotIds.has(id)){
             selectionPresentationRef.current?.(id);
             setSelectedPlot(plotIds.get(id)||null);
+            setDrawerOpen(true);
           }
         };
         const clickCoordinates=(event:unknown):{x:number;y:number}|null=>{
@@ -987,7 +990,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
           <span className="geo-plot-status-switch" aria-hidden="true"><i/></span>
         </button>
       </section>}
-      {selectedPlot&&<button
+      {selectedPlot&&drawerOpen&&<button
         type="button"
         className="geo-plot-drawer__outside-dismiss"
         aria-label="Close plot details by tapping outside"
@@ -1000,21 +1003,21 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
           if(!event.isPrimary||event.button!==0)return;
           event.preventDefault();
           event.stopPropagation();
-          setSelectedPlot(null);
+          setDrawerOpen(false);
         }}
         onClick={event=>{
-          if(event.detail===0)setSelectedPlot(null);
+          if(event.detail===0)setDrawerOpen(false);
         }}
       />}
       <GeoPlotDetailsDrawer
-        plot={selectedPlot}
+        plot={drawerOpen?selectedPlot:null}
         commercial={selectedPlot?data.plotMapping?.commercial?.[selectedPlot.id]:undefined}
         projectName={data.project.name}
         geoHeadingDeg={data.placement.headingDeg}
         publicPhone={data.publicContacts?.phone}
         publicWhatsapp={data.publicContacts?.whatsapp}
         notices={notices}
-        onClose={()=>setSelectedPlot(null)}
+        onClose={()=>setDrawerOpen(false)}
       />
       {zoomNotice ? <div className="geo-zoom-notice" role="status">{zoomNotice}</div> : null}
       {toolbarContainer ? createPortal(<nav className="geo-camera-toolbar geo-camera-toolbar--normal-row" aria-label="Geo map navigation">

@@ -19,11 +19,12 @@ export function createGeoPlotSelectionFocus() {
   let startedAt = 0;
   let fill: THREE.Mesh | null = null;
   let halo: THREE.Mesh | null = null;
+  let ripple: THREE.Mesh | null = null;
   let edge: THREE.LineLoop | null = null;
   let dots: THREE.Points | null = null;
 
   const clear = () => {
-    for (const child of [fill, halo, edge, dots]) {
+    for (const child of [fill, halo, ripple, edge, dots]) {
       if (!child) continue;
       child.removeFromParent();
       if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.Points) {
@@ -34,6 +35,7 @@ export function createGeoPlotSelectionFocus() {
     selectedId = null;
     fill = null;
     halo = null;
+    ripple = null;
     edge = null;
     dots = null;
   };
@@ -41,6 +43,7 @@ export function createGeoPlotSelectionFocus() {
   const setAccent = (hex: number) => {
     if (fill) (fill.material as THREE.MeshBasicMaterial).color.setHex(hex);
     if (halo) (halo.material as THREE.MeshBasicMaterial).color.setHex(hex);
+    if (ripple) (ripple.material as THREE.MeshBasicMaterial).color.setHex(hex);
   };
 
   const select = (plot: GeoPlotFocusSource | null, accent: number, now: number) => {
@@ -68,7 +71,7 @@ export function createGeoPlotSelectionFocus() {
     shapeGeometry.rotateX(Math.PI / 2);
     shapeGeometry.translate(0, height, 0);
     const fillMaterial = new THREE.MeshBasicMaterial({
-      color: accent, transparent: true, opacity: 0.16,
+      color: accent, transparent: true, opacity: 0.31,
       side: THREE.DoubleSide, depthTest: true, depthWrite: false,
       polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
     });
@@ -105,18 +108,32 @@ export function createGeoPlotSelectionFocus() {
     const bandGeometry = new THREE.BufferGeometry();
     bandGeometry.setAttribute("position", new THREE.Float32BufferAttribute(bandVertices, 3));
     halo = new THREE.Mesh(bandGeometry, new THREE.MeshBasicMaterial({
-      color: accent, transparent: true, opacity: 0.40, side: THREE.DoubleSide,
+      color: accent, transparent: true, opacity: 0.62, side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending, depthTest: true, depthWrite: false,
     }));
     halo.renderOrder = 25;
     halo.name = "selected-plot-status-glow";
+
+    // A status-colored ribbon expands around the actual plot center, not the map origin.
+    const centerX = points.reduce((sum, p) => sum + p[0], 0) / points.length;
+    const centerZ = points.reduce((sum, p) => sum + p[1], 0) / points.length;
+    const rippleGeometry = bandGeometry.clone();
+    rippleGeometry.translate(-centerX, 0, -centerZ);
+    ripple = new THREE.Mesh(rippleGeometry, new THREE.MeshBasicMaterial({
+      color: accent, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      depthTest: true, depthWrite: false,
+    }));
+    ripple.position.set(centerX, 0, centerZ);
+    ripple.renderOrder = 25.5;
+    ripple.name = "selected-plot-outward-ripple";
 
     const boundary = new THREE.BufferGeometry();
     boundary.setAttribute("position", new THREE.Float32BufferAttribute(
       points.flatMap(([x, z]) => [x, height + 0.015, z]), 3,
     ));
     edge = new THREE.LineLoop(boundary, new THREE.LineBasicMaterial({
-      color: 0xffffff, transparent: true, opacity: 0.92,
+      color: 0xffffff, transparent: true, opacity: 0.97,
       depthTest: true, depthWrite: false,
     }));
     edge.renderOrder = 26;
@@ -128,20 +145,22 @@ export function createGeoPlotSelectionFocus() {
     ));
     dots = new THREE.Points(pointGeometry, new THREE.PointsMaterial({
       color: 0xffffff, size: 4, sizeAttenuation: false,
-      transparent: true, opacity: 0.9, depthTest: true, depthWrite: false,
+      transparent: true, opacity: 0.97, depthTest: true, depthWrite: false,
     }));
     dots.renderOrder = 27;
     dots.name = "selected-plot-corner-markers";
-    group.add(fill, halo, edge, dots);
+    group.add(fill, halo, ripple, edge, dots);
   };
 
   const update = (now: number, reducedMotion: boolean) => {
-    if (!selectedId || !fill || !halo || !edge || !dots) return false;
+    if (!selectedId || !fill || !halo || !ripple || !edge || !dots) return false;
     const frame = geoPlotFocusMotion(now, startedAt, reducedMotion);
     (fill.material as THREE.MeshBasicMaterial).opacity = frame.fillOpacity;
     (halo.material as THREE.MeshBasicMaterial).opacity = frame.haloOpacity;
     (edge.material as THREE.LineBasicMaterial).opacity = frame.edgeOpacity;
     (dots.material as THREE.PointsMaterial).opacity = frame.dotsOpacity;
+    (ripple.material as THREE.MeshBasicMaterial).opacity = frame.rippleOpacity;
+    ripple.scale.set(frame.rippleScale, 1, frame.rippleScale);
     return frame.animate;
   };
   const dispose = () => { clear(); group.removeFromParent(); };

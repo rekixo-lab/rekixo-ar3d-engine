@@ -4,5 +4,7 @@ export declare function geoPlotFocusMotion(now: number, startedAt: number, reduc
   haloOpacity: number;
   edgeOpacity: number;
   dotsOpacity: number;
+  rippleOpacity: number;
+  rippleScale: number;
   animate: boolean;
 };
