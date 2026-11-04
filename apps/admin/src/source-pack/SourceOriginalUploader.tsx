@@ -107,7 +107,7 @@ export default function SourceOriginalUploader({
 }: {
   slug: string;
   locked: boolean;
-  onVerified: () => Promise<void>;
+  onVerified: (uploadedFiles: File[]) => Promise<void>;
 }) {
   const [sources, setSources] = useState<SourceOriginal[]>([]);
   const [busy, setBusy] = useState(false);
@@ -148,8 +148,8 @@ export default function SourceOriginalUploader({
         `${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(slug)}/source-classification`,
         "POST",
       );
-      await onVerified();
-      setProgress(`Verified ${files.length} selected file(s). Review the suggested source roles below.`);
+      await onVerified(files);
+      setProgress(`Verified ${files.length} file(s). The model is ready for review.`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Source upload failed.");
       setProgress("Select the same original files again to resume the upload safely.");
@@ -195,8 +195,8 @@ export default function SourceOriginalUploader({
         `${ADMIN_BASE_PATH}/api/cloud/projects/${encodeURIComponent(slug)}/source-classification`,
         "POST",
       );
-      await onVerified();
-      setProgress(`${converted.name} verified. Start the NEXT Source Pack version and approve this GLB as geometry authority.`);
+      await onVerified([converted]);
+      setProgress(`${converted.name} verified. Select the model below to continue.`);
       setReviewFile(null);
       setFbxAnalysis(null);
       setReviewConfirmed(false);
@@ -217,12 +217,11 @@ export default function SourceOriginalUploader({
     <section className="source-originals" aria-label="Upload source originals">
       <div className="source-originals__header">
         <div>
-          <p>01 · SOURCE INTAKE</p>
-          <h2>Upload original source files</h2>
-          <span>FBX / GLB model, DAE, DXF / DWG CAD, PDF and other references. Each file is verified before review.</span>
+          <h2>Model File</h2>
+          <span>Upload a GLB or FBX. Old versions remain safe.</span>
         </div>
         <label className={locked || busy ? "source-originals__pick source-originals__pick--disabled" : "source-originals__pick"}>
-          {busy ? "Uploading…" : "Choose source files"}
+          {busy ? "Uploading…" : "Upload 3D Model"}
           <input
             type="file"
             multiple
@@ -236,27 +235,27 @@ export default function SourceOriginalUploader({
           />
         </label>
       </div>
-      {locked ? <p className="source-originals__note">Finish and seal the open review draft before verifying new originals.</p> : null}
+      {locked ? <p className="source-originals__note">New model review is open below. Finish preparing it to upload another file.</p> : null}
       {progress ? <p className="source-originals__progress" role="status">{progress}</p> : null}
       {error ? <p className="source-originals__error" role="alert">{error}</p> : null}
-      <ul className="source-originals__list">
-        {sources.map((source) => (
-          <li key={source.id}>
-            <span title={source.filename}>{source.filename}</span>
-            <small>{(source.byteSize / 1024 / 1024).toFixed(1)} MB</small>
-            <b className={source.uploadState === "verified" ? "source-originals__verified" : ""}>
-              {source.uploadState}
-            </b>
-          </li>
-        ))}
-      </ul>
-      {!sources.length && !error ? <p className="source-originals__note">No originals registered for this project yet.</p> : null}
-      <div className="source-originals__fallback">
-        <h3>FBX processor unavailable? Convert to GLB in this browser</h3>
-        <p className="source-originals__note">
-          No Cloudflare Containers required. Select the same FBX again, verify real-world scale,
-          and create a separate GLB. Your sealed FBX Source Pack and live releases stay untouched.
-        </p>
+      {sources.length > 0 && <details className="source-originals__history">
+        <summary>{sources.length} uploaded files · View history</summary>
+        <ul className="source-originals__list">
+          {sources.map((source) => (
+            <li key={source.id}>
+              <span title={source.filename}>{source.filename}</span>
+              <small>SHA {source.sha256.slice(0, 12)} · {(source.byteSize / 1024 / 1024).toFixed(1)} MB</small>
+              <b className={source.uploadState === "verified" ? "source-originals__verified" : ""}>
+                {source.uploadState}
+              </b>
+            </li>
+          ))}
+        </ul>
+      </details>}
+      {!sources.length && !error ? <p className="source-originals__note">No model uploaded yet.</p> : null}
+      <details className="source-originals__fallback">
+        <summary>Need to convert FBX to GLB?</summary>
+        <p className="source-originals__note">Only convert when necessary. The original and the live model stay unchanged.</p>
         <label className="source-originals__pick source-originals__pick--secondary">
           Choose FBX for local conversion
           <input type="file" accept=".fbx" disabled={locked || busy || !slug}
@@ -291,8 +290,7 @@ export default function SourceOriginalUploader({
             </button>
           </div>
         ) : null}
-      </div>
-
+      </details>
     </section>
   );
 }

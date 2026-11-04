@@ -23,15 +23,14 @@ test("admin routes keep workflows behind the shared shell", () => {
   assert.match(main, /window\.location\.replace\(`\/3Dprojects\/source-pack/);
 });
 
-test("Source Pack presents the approved five-step operator workflow", () => {
+test("Source Pack exposes one model selection and keeps advanced review protected", () => {
   const source = read("apps/admin/src/source-pack/SourcePackReview.tsx");
-  assert.match(source, /01<\/span><b>Sources/);
-  assert.match(source, /02<\/span><b>Review/);
-  assert.match(source, /03<\/span><b>Scale & Processing/);
-  assert.match(source, /04<\/span><b>Components/);
-  assert.match(source, /05<\/span><b>Ready/);
+  assert.match(source, /Use This Model & Prepare/);
+  assert.match(source, /Select verified 3D model/);
+  assert.match(source, /<details className="source-review__advanced">/);
   assert.match(source, /ProcessingSpine/);
-  assert.match(source, /Seal Source Pack/);
+  assert.match(source, /SEAL SOURCE PACK/);
+  assert.doesNotMatch(source, /source-review__workflow-nav/);
 });
 
 test("Geo uses exactly one mapping editor without duplicate outer step menus", () => {
@@ -49,7 +48,7 @@ test("Building, Releases and Advanced separate operator concerns", () => {
   const releases = read("apps/admin/src/releases/EngineReleases.tsx");
   const advanced = read("apps/admin/src/advanced/EngineAdvanced.tsx");
 
-  for (const marker of ["SourcePackReview", "ComponentMapper", "Building Editor", "Publish & History", "Restore Version"]) {
+  for (const marker of ["SourcePackReview", "ComponentMapper", "3D Model", "Design", "Publish", "Restore Version"]) {
     assert.match(building, new RegExp(marker));
   }
   assert.doesNotMatch(building, /building-workspace__flow/);

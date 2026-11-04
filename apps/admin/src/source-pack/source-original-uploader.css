@@ -37,3 +37,43 @@
 .source-originals__confirmation { display: flex; align-items: start; gap: 10px; font-size: 13px; color: #cad7e8; }
 .source-originals__convert { justify-self: start; padding: 10px 14px; background: #177c56; color: white; font-weight: 700; border: 0; border-radius: 8px; cursor: pointer; }
 .source-originals__convert:disabled { opacity: .45; cursor: not-allowed; }
+
+
+/* Building Editor: one upload button, optional history and conversion. */
+.source-review--simple .source-originals {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #263951;
+  border-radius: 13px;
+  padding: 16px 18px;
+  background: #0b1728;
+}
+.source-review--simple .source-originals__header h2 { margin: 0 0 4px; font-size: 16px; }
+.source-review--simple .source-originals__header span { font-size: 12px; }
+.source-review--simple .source-originals__pick {
+  border-radius: 9px;
+  background: #1165ca;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.source-review--simple .source-originals__history,
+.source-review--simple .source-originals__fallback {
+  border-top: 1px solid #283e59;
+  padding-top: 10px;
+  margin-top: 3px;
+}
+.source-review--simple .source-originals__fallback h3 { display: none; }
+.source-review--simple .source-originals__history summary,
+.source-review--simple .source-originals__fallback summary {
+  cursor: pointer;
+  color: #9db3cf;
+  font-size: 12px;
+  font-weight: 750;
+}
+.source-review--simple .source-originals__history .source-originals__list { margin-top: 8px; }
+.source-review--simple .source-originals__list li { flex-wrap: wrap; font-size: 12px; }
+.source-review--simple .source-originals__list small { font-size: 11px; }
+@media (max-width: 660px) {
+  .source-review--simple .source-originals { padding: 13px; }
+}

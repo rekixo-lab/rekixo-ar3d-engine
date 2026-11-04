@@ -82,9 +82,9 @@ test("legacy Studio URL enters the Automatic Engine without exposing authoring U
   await page.goto("/3Dprojects/studio?project=e2e-project");
 
   await expect(page).toHaveURL(/\/3Dprojects\/source-pack\?project=e2e-project$/);
-  await expect(page.getByRole("heading", { name: "Source Pack", exact: true })).toBeVisible();
-  await expect(page.getByText("AUTOMATIC ENGINE · INPUT WORKSPACE")).toBeVisible();
-  await expect(page.getByText("One geometry authority", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "3D Model", exact: true })).toBeVisible();
+  await expect(page.getByText("Start your 3D model")).toBeVisible();
+  await expect(page.getByText("Upload a GLB or FBX. Old versions remain safe.")).toBeVisible();
 
   await expect(page.getByLabel("Smart 3D project builder")).toHaveCount(0);
   await expect(page.getByLabel("3D editor tools")).toHaveCount(0);

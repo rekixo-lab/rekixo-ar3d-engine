@@ -21,10 +21,10 @@ const SourcePackReview = lazy(() => import("../source-pack/SourcePackReview"));
 const ComponentMapper = lazy(() => import("../source-pack/ComponentMapper"));
 type BuildingTab = "source" | "components" | "presentation" | "publish";
 const buildingTabs: ReadonlyArray<{id: BuildingTab; label: string}> = [
-  { id: "source", label: "01 · Source & Processing" },
-  { id: "components", label: "02 · Component Mapper" },
-  { id: "presentation", label: "03 · Building Editor" },
-  { id: "publish", label: "04 · Publish & History" },
+  { id: "source", label: "3D Model" },
+  { id: "components", label: "Components" },
+  { id: "presentation", label: "Design" },
+  { id: "publish", label: "Publish" },
 ];
 function initialBuildingTab(): BuildingTab {
   const requested = new URLSearchParams(window.location.search).get("tab");
@@ -151,18 +151,15 @@ function selectTab(next: BuildingTab) {
   return (
     <div className="building-workspace">
       {error ? <div className="building-workspace__alert" role="alert">{error}</div> : null}
-      <section className="building-workspace__hero engine-control-card">
-        <div>
-          <p>3D BUILDING EDITOR</p>
-          <h2>{project?.name || (loading ? "Loading project…" : "3D Building")}</h2>
-          <span>{activeRelease ? `Published v${activeRelease.version}` : "Draft"} · {draftRevision !== null ? `Draft r${draftRevision}` : "No draft yet"}</span>
-        </div>
-        <div className="building-workspace__hero-status">
+      <section className="building-workspace__compact-header">
+        <div className="building-workspace__compact-project">
+          <strong>{project?.name || (loading ? "Loading…" : "3D Building")}</strong>
           <span className={buildingLive ? "building-workspace__badge building-workspace__badge--live" : "building-workspace__badge"}>
-            {buildingLive ? "LIVE" : "NOT PUBLISHED"}
+            {buildingLive ? `LIVE · v${activeRelease?.version}` : "DRAFT"}
           </span>
-          {buildingLive && <a className="engine-control-link" href={publicProjectPath(slug)} target="_blank" rel="noreferrer">Open Building Website</a>}
         </div>
+        {buildingLive && <a className="engine-control-link" href={publicProjectPath(slug)}
+          target="_blank" rel="noreferrer">Open Live Site</a>}
       </section>
 
       <nav className="building-workspace__tabs" aria-label="3D Building editor steps">
@@ -190,9 +187,7 @@ function selectTab(next: BuildingTab) {
         <section className="building-workspace__panel building-workspace__panel--presentation" aria-label="Building presentation editor">
           <section className="building-workspace__environment engine-control-card">
             <div>
-              <p>BUILDING PRESENTATION</p>
-              <h3>Customer surroundings</h3>
-              <span>Choose the environment for the next Building version. Original source geometry stays unchanged.</span>
+              <h3>Scene Environment</h3>
               {landscapeMessage && <small className="building-workspace__environment-message" role="status">{landscapeMessage}</small>}
               {landscapeError && <small className="building-workspace__environment-error" role="alert">{landscapeError}</small>}
             </div>
@@ -207,7 +202,7 @@ function selectTab(next: BuildingTab) {
                   <option value="rural-farm">Rural Farm / Fields</option>
                   <option value="hillside">Hillside / Natural</option>
                 </select>
-                <small>Changes save to the draft, not the live site. Open Publish & History to publish updates.</small>
+                <small>Saved to draft. Live site updates only when you publish.</small>
               </label>
             ) : (
               <div className="building-workspace__environment-unavailable">
@@ -215,11 +210,7 @@ function selectTab(next: BuildingTab) {
               </div>
             )}
           </section>
-          {activeRelease && <section className="engine-control-card building-workspace__preview">
-            <h3>Current Building Website</h3>
-            <p>View the active published 3D model and check the result on desktop and mobile before sharing.</p>
-            <a href={publicProjectPath(slug)} target="_blank" rel="noreferrer">Open Live Preview</a>
-          </section>}
+
         </section>
       )}
 
@@ -235,9 +226,8 @@ function selectTab(next: BuildingTab) {
               }} />
           ) : <p>{loading ? "Checking Building publication…" : "Select a project to publish."}</p>}
 
-          <section className="building-workspace__versions engine-control-card">
-            <h3>Building version history</h3>
-            <p>Previous versions are preserved. Only the selected active version appears on the Building customer site.</p>
+          <details className="building-workspace__versions engine-control-card">
+            <summary>Previous Building Versions</summary>
             {historyError && <p role="alert" className="building-workspace__alert">{historyError}</p>}
             {historyMessage && <p role="status" className="building-workspace__ok">{historyMessage}</p>}
             {releaseItems.map((item) => (
@@ -250,8 +240,8 @@ function selectTab(next: BuildingTab) {
               </article>
             ))}
             {!releaseItems.length && <p>No Building versions have been published.</p>}
-            {hasGeo && <p>Geo site versions are controlled separately in the 3D Building Geo Editor.</p>}
-          </section>
+            {hasGeo && <p>Geo site versions are managed separately in the Geo Editor.</p>}
+          </details>
         </section>
       )}
     </div>
