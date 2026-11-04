@@ -593,12 +593,9 @@ async function createCloudProject(request, env, actor) {
       { status: 409 },
     );
   const body = await request.json().catch(() => ({}));
-  const id = String(body.id || "").trim();
-  const slug = String(body.slug || "").trim().toLowerCase();
-  const name = String(body.name || "").trim();
-  const location = String(body.location || "").trim();
-  // Legacy API callers intentionally preserve the pre-v2 workflow; the
-  // new create-project wizard sends an explicit kind.
+  const id=String(body.id||"").trim(),slug=String(body.slug||"").trim().toLowerCase();
+  const name=String(body.name||"").trim(),location=String(body.location||"").trim();
+  // Legacy API callers preserve their previous workflow by default.
   const projectKind = body.projectKind === undefined ? "legacy" : body.projectKind;
   let customerContact;
   try { customerContact=initialProjectContact(body.customerContact); }
@@ -611,9 +608,8 @@ async function createCloudProject(request, env, actor) {
     location.length > 180
   )
     return json({ error: "Valid project ID, slug, name and location are required." }, { status: 400 });
-  const existing = await env.DB.prepare(
-    "SELECT id,slug,name,location,status,project_kind,updated_at FROM projects_3d WHERE id=? OR slug=? LIMIT 2",
-  ).bind(id, slug).all();
+  const existing=await env.DB.prepare(
+    "SELECT id,slug,name,location,status,project_kind,updated_at FROM projects_3d WHERE id=? OR slug=? LIMIT 2").bind(id,slug).all();
   if ((existing.results || []).length) {
     const exact = (existing.results || []).find(
       (row) => row.id === id && row.slug === slug,
