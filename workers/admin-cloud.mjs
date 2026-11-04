@@ -21,6 +21,7 @@ import {
 import { processDwgArchitecture } from "./dwg-processor-route.mjs";
 import { handleProjectBrandingAdmin } from "./project-branding.mjs";
 import { handleProjectManagementAdmin } from "./project-management.mjs";
+import { initialProjectContact } from "./project-contact-on-create.mjs";
 import { readOwnerCredentials, handleOwnerAccount } from "./engine-owner-account.mjs";
 import { handleEngineDomainsAdmin } from "./engine-domains.mjs";
 import { handleMasterplanGeoAdmin } from "./masterplan-geo-admin.mjs";
@@ -599,6 +600,9 @@ async function createCloudProject(request, env, actor) {
   // Legacy API callers intentionally preserve the pre-v2 workflow; the
   // new create-project wizard sends an explicit kind.
   const projectKind = body.projectKind === undefined ? "legacy" : body.projectKind;
+  let customerContact;
+  try { customerContact=initialProjectContact(body.customerContact); }
+  catch(error){return json({error:error.message},{status:400});}
   if (
     !isEngineProjectKind(projectKind) ||
     !validProjectId(id) ||
@@ -627,6 +631,12 @@ async function createCloudProject(request, env, actor) {
           (id,slug,name,location,status,project_kind,created_at,updated_at)
           VALUES (?,?,?,?,'draft',?,?,?)`,
       ).bind(id, slug, name, location || null, projectKind, now, now),
+      ...(customerContact?[env.DB.prepare(
+        `INSERT INTO project_profiles_3d
+          (project_id,phone_primary,whatsapp,public_contacts_enabled,revision,updated_by,updated_at)
+          VALUES(?,?,?,?,1,?,?)`
+      ).bind(id,customerContact.phonePrimary,customerContact.whatsapp,
+        customerContact.publicContactsEnabled?1:0,actor.email,now)]:[]),
       env.DB.prepare(
         `INSERT INTO engine_admin_audit
           (id,actor_email,action,project_id,target_id,details_json,created_at)
