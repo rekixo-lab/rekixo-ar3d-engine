@@ -203,7 +203,7 @@ export default function GeoPlotMapper(){
     draftRevision:number;activeReleaseId:string|null;token:string;
     diff:{liveCount:number;draftCount:number;added:number;removed:number;changed:number;
       changes:Array<{plotId:string;kind:string;fields:string[]}>};
-    continuity:{sourceRows:number;carriedRows:number;reviewRows:number;missingRows:number}
+    continuity?:{sourceRows:number;carriedRows:number;reviewRows:number;missingRows:number}
   }|null>(null);
   const [cloneFrom,setCloneFrom]=useState("");
   const [cloneX,setCloneX]=useState("");
@@ -925,7 +925,8 @@ export default function GeoPlotMapper(){
       setPublishedPreview(info);
       setMessage("Live/draft preflight ready. "+info.diff.added+" added, "+
         info.diff.changed+" changed, "+info.diff.removed+" removed plots. "+
-        info.continuity.carriedRows+" previous status/price records will be carried to the new release. Review before publish.");
+        (info.continuity ? info.continuity.carriedRows+" status/price records eligible for carry-forward." :
+          "Commercial continuity preview unavailable on this API.")+" Review before publish.");
     }catch(error){setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));}
     finally{setBusy(false);}
   };
@@ -960,11 +961,13 @@ export default function GeoPlotMapper(){
           d.changes.slice(0,12).map(p=>p.kind.toUpperCase()+" Plot "+p.plotId+
             " ("+p.fields.join(", ")+")").join("\n")+
           (d.changes.length>12?"\n...plus "+(d.changes.length-12)+" more changes.":"")+
-          "\n\nCOMMERCIAL CONTINUITY: "+approvedPreflight.continuity.carriedRows+
-          " status/price records retained; "+approvedPreflight.continuity.reviewRows+
-          " require NEW source approval; "+approvedPreflight.continuity.missingRows+
-          " unmatched records remain in historical releases."+
-          "\nDifferent 3D/Geo model source: owner must review statuses before they reappear publicly."+
+          (approvedPreflight.continuity ?
+            "\n\nCOMMERCIAL CONTINUITY: "+approvedPreflight.continuity.carriedRows+
+            " status/price records retained; "+approvedPreflight.continuity.reviewRows+
+            " require NEW source approval; "+approvedPreflight.continuity.missingRows+
+            " unmatched remain in historical releases."+
+            "\nDifferent 3D/Geo model source: owner must reapprove statuses before publication." :
+            "\n\nCommercial continuity is not reported by this API; independently verify statuses before publication.")+
           "\nEvery release is immutable; edit in the Mapper and publish a new version anytime. Continue?";
         if(!window.confirm(summary))return;
       }
@@ -1902,10 +1905,12 @@ export default function GeoPlotMapper(){
             <strong>Live {publishedPreview.diff.liveCount} → Draft {publishedPreview.diff.draftCount}</strong>
             <p>{publishedPreview.diff.added} added · {publishedPreview.diff.changed} changed ·
               {publishedPreview.diff.removed} removed. A fresh preflight and confirmation is required to publish.</p>
-            <p>Retain {publishedPreview.continuity.carriedRows} private status/price records ·
+            {publishedPreview.continuity&&<p>
+              Retain {publishedPreview.continuity.carriedRows} private status/price records ·
               {publishedPreview.continuity.reviewRows} need new source approval ·
               {publishedPreview.continuity.missingRows} unmatched remain in historical releases.
-              Customer records will not silently inherit approvals after a 3D model change.</p>
+              Customer records will not silently inherit approvals after a 3D model change.
+            </p>}
             {publishedPreview.diff.changes.slice(0,12).map((x,i)=><p key={i}>
               {x.kind}: Plot {x.plotId} ({x.fields.join(", ")})</p>)}
             {publishedPreview.diff.changes.length>12&&<p>
