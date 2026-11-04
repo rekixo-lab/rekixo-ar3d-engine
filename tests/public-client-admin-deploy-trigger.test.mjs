@@ -15,6 +15,7 @@ test("Public deploy follows AR3D Client Admin JSX, CSS and imported Geo modules"
   "apps/admin/src/management/ClientGeoGalleryNotices.tsx",
   "apps/admin/src/management/ClientGeoSales.tsx",
   "apps/admin/src/management/project-client-admin.css",
+  "apps/admin/src/management/project-client-admin-premium.css",
   "apps/admin/src/management/project-management.css",
   "apps/admin/src/geo/GeoBulkPricingPanel.tsx",
   "apps/admin/src/geo/GeoDealRecordsPanel.tsx",
