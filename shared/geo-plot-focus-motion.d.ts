@@ -6,5 +6,10 @@ export declare function geoPlotFocusMotion(now: number, startedAt: number, reduc
   dotsOpacity: number;
   rippleOpacity: number;
   rippleScale: number;
+  wallOpacity: number;
+  roofOpacity: number;
+  rimOpacity: number;
+  reflectTime: number;
+  reflectStrength: number;
   animate: boolean;
 };
