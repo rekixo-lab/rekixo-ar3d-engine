@@ -401,3 +401,68 @@
   .building-workspace__tabs { grid-template-columns: 1fr; }
   .building-workspace__version { align-items: stretch; flex-direction: column; }
 }
+
+
+/* Small Building workspace shell: one project line, four clear actions. */
+.building-workspace { gap: 10px; }
+.building-workspace__compact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #253954;
+  border-radius: 12px;
+  background: #0c192b;
+  padding: 12px 15px;
+}
+.building-workspace__compact-project {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+.building-workspace__compact-project > strong {
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.building-workspace__compact-header .building-workspace__badge {
+  padding: 5px 8px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.building-workspace__compact-header .engine-control-link {
+  white-space: nowrap;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  font-size: 11px;
+}
+.building-workspace__tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 3px 0 8px;
+}
+.building-workspace__tabs button { min-width: 0; min-height: 38px; padding: 8px 9px; text-align: center; }
+.building-workspace__environment {
+  gap: 15px;
+  padding: 15px 17px;
+}
+.building-workspace__environment h3 { font-size: 15px; }
+.building-workspace__versions { padding: 15px; }
+.building-workspace__versions summary {
+  color: #c0d3e8;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.building-workspace__versions[open] summary { margin-bottom: 12px; }
+@media (max-width: 680px) {
+  .building-workspace__compact-header { flex-wrap: wrap; padding: 11px; }
+  .building-workspace__tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .building-workspace__tabs button { font-size: 11px; padding: 8px 4px; text-align: center; }
+  .building-workspace__environment { padding: 12px; }
+}
