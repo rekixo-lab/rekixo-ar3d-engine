@@ -5,7 +5,7 @@ import {mkdtempSync,readFileSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {DatabaseSync} from "node:sqlite";
-import {geoSourceChangePlan,stageSelectedGeoSourceRemap} from "../shared/geo-plot-source-remap.js";
+import {geoSourceChangePlan,stageSelectedGeoSourceRemap,stageUnverifiedSameCoordinateModel} from "../shared/geo-plot-source-remap.js";
 import {verifyGeoRecoveryManifest,restoreGeoManifestIntoIsolatedSQLite} from "../scripts/geo-restore-isolated.mjs";
 const sha=x=>createHash("sha256").update(x).digest("hex");
 const alignment=(kind)=>{
@@ -114,4 +114,33 @@ test("Recovery and source-rebind operations are always owner-scoped, revision-ga
  assert.match(recovery,/await sha256\(row.plots_json\)!==row.sha256/);
  assert.match(recovery,/METADATA_AND_R2_REFERENCES_ONLY/);
  assert.doesNotMatch(recovery,/UPDATE .*geo_plot_mapping_releases|DELETE FROM/);
+});
+
+test("same-coordinate new 3D source retains every Plot ID/corner but revokes all source approvals",()=>{
+ const plots=[plot("1",[[0,0],[10,0],[10,10],[0,10]]),
+   plot("2",[[10,0],[20,0],[20,10],[10,10]])];
+ const original=structuredClone(plots);
+ const preserved=stageUnverifiedSameCoordinateModel(plots);
+ assert.deepEqual(preserved.map(p=>p.corners),plots.map(p=>p.corners));
+ assert.deepEqual(preserved.map(p=>p.id),["1","2"]);
+ for(const p of preserved){
+   assert.equal(p.area.verified,false);
+   assert.equal(p.facingVerified,false);
+   assert.equal(p.planeVerified,false);
+   assert.equal(p.planeY,undefined);
+   assert.ok(Object.values(p.sides).every(side=>side.verified===false));
+ }
+ assert.deepEqual(plots,original,"original sealed source objects must never be mutated");
+});
+test("same-coordinate model replacement has CAS, checksum preflight and no auto-publication",()=>{
+ const worker=readFileSync(new URL("../workers/geo-plot-mapping.mjs",import.meta.url),"utf8");
+ const editor=readFileSync(new URL("../apps/admin/src/geo/GeoPlotMapper.tsx",import.meta.url),"utf8");
+ assert.match(worker,/sameCoordinatePreflight/);
+ assert.match(worker,/stageUnverifiedSameCoordinateModel/);
+ assert.match(worker,/expectedPreflightToken!==preflight.token/);
+ assert.match(worker,/PRESERVE 3D COORDINATES /);
+ assert.match(worker,/geo_release_id=\?,building_release_id=\?,revision=revision\+1/);
+ assert.match(worker,/verified_revision=NULL,verified_inventory_revision=NULL,verified_alignment_revision=NULL/);
+ assert.match(editor,/Keep Existing Plot Coordinates · Unverified Draft/);
+ assert.match(editor,/same metric scale, origin, orientation and plot layout/);
 });
