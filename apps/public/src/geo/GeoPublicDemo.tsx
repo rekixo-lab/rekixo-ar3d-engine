@@ -148,6 +148,8 @@ type GeoPayload = {
 };
 
 type GeoMappedPlot = GeoPlotDrawerPlot;
+type GeoStatusSnapshot={geoReleaseId:string;version:number;publicationMode:"verified"|"preliminary";
+  commercial:NonNullable<GeoPayload["plotMapping"]>["commercial"]};
 
 type GeoCameraView = "overview" | "front" | "corner" | "entry" | "aerial";
 type MapsListener = { remove(): void };
@@ -388,7 +390,7 @@ function geoPlotWorldPath(plot:GeoMappedPlot,data:GeoPayload,groundY:number) {
   });
 }
 
-function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: { data: GeoPayload; toolbarContainer?: HTMLElement | null; modelSiteHref: string; notices:{plotId:string;title:string;body:string;publishedAt:string}[] }) {
+function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, liveStatus }: { data: GeoPayload; toolbarContainer?: HTMLElement | null; modelSiteHref: string; notices:{plotId:string;title:string;body:string;publishedAt:string}[];liveStatus?:GeoStatusSnapshot|null }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const cameraActionRef = useRef<((view: GeoCameraView) => void) | null>(null);
@@ -406,9 +408,19 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
   const [failure, setFailure] = useState("");
   const [statusEnabled,setStatusEnabled]=useState(false);
   const [statusFilter,setStatusFilter]=useState<GeoPlotStatus|null>(null);
+  // Status updates are isolated from the immutable GLB/mapping data prop:
+  // a status refresh must not tear down the camera or WebGL scene.
+  const alignedLiveStatus=liveStatus?.geoReleaseId===data.geoRelease.id&&
+    liveStatus.version===data.plotMapping?.version?liveStatus:null;
+  const commercial=alignedLiveStatus?.commercial??data.plotMapping?.commercial;
   const statusSummary=useMemo(()=>summarizeApprovedGeoPlotStatuses(
-    data.plotMapping?.geoReleaseId===data.geoRelease.id?data.plotMapping:null
-  ),[data.plotMapping,data.geoRelease.id]);
+    data.plotMapping?.geoReleaseId===data.geoRelease.id
+      ?{...data.plotMapping,commercial,
+        publicationMode:alignedLiveStatus?.publicationMode??data.plotMapping.publicationMode}
+      :null
+  ),[data.plotMapping,data.geoRelease.id,commercial,alignedLiveStatus?.publicationMode]);
+  const statusSummaryRef=useRef(statusSummary);
+  statusSummaryRef.current=statusSummary;
   const statusPresentationRef=useRef<((enabled:boolean,filter:GeoPlotStatus|null)=>void)|null>(null);
   const selectionPresentationRef=useRef<((id:string|null)=>void)|null>(null);
   const selectedPlotIdRef=useRef<string|null>(null);
@@ -420,7 +432,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
   statusStateRef.current={enabled:statusEnabled,filter:statusFilter};
   useEffect(()=>{
     statusPresentationRef.current?.(statusEnabled,statusFilter);
-  },[statusEnabled,statusFilter]);
+  },[statusEnabled,statusFilter,statusSummary]);
 
   useEffect(() => {
     if (!hostRef.current || !data.maps.apiKey || !data.maps.mapId) return;
@@ -794,7 +806,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
               // Match Platform status presentation: unclassified published plots
               // display Available without changing approved commercial records.
               const updateStatus=(enabled:boolean,filter:GeoPlotStatus|null)=>{
-                candidateLayer.setStatusPresentation(enabled,filter,statusSummary.statusById);
+                candidateLayer.setStatusPresentation(enabled,filter,statusSummaryRef.current.statusById);
                 overlay?.requestRedraw();
               };
               statusPresentationRef.current=updateStatus;
@@ -1027,7 +1039,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices }: 
       />}
       <GeoPlotDetailsDrawer
         plot={drawerOpen?selectedPlot:null}
-        commercial={selectedPlot?data.plotMapping?.commercial?.[selectedPlot.id]:undefined}
+        commercial={selectedPlot?commercial?.[selectedPlot.id]:undefined}
         projectName={data.project.name}
         geoHeadingDeg={data.placement.headingDeg}
         publicPhone={data.publicContacts?.phone}
@@ -1093,6 +1105,8 @@ export function slugFromGeoPathname(pathname: string) {
 export default function GeoPublicDemo() {
   const slug = useMemo(() => slugFromGeoPathname(window.location.pathname), []);
   const [data, setData] = useState<GeoPayload>();
+  const [liveStatus,setLiveStatus]=useState<GeoStatusSnapshot|null>(null);
+  const [mappingChanged,setMappingChanged]=useState(false);
   const [branding, setBranding] = useState<PublicProjectBranding | null>(null);
   const [notices,setNotices]=useState<{plotId:string;title:string;body:string;publishedAt:string}[]>([]);
   const [toolbarContainer, setToolbarContainer] = useState<HTMLDivElement | null>(null);
@@ -1132,6 +1146,46 @@ export default function GeoPublicDemo() {
       });
     return () => controller.abort();
   }, [slug]);
+
+  // Poll only approved status facts: no model reload, camera reset or geometry
+  // mutation. Also refresh immediately when a customer returns to the tab.
+  useEffect(()=>{
+    const version=data?.plotMapping?.version, geoReleaseId=data?.geoRelease.id;
+    if(!slug||version===undefined||!geoReleaseId)return;
+    const controller=new AbortController();
+    let active=true,requesting=false;
+    const refresh=async()=>{
+      if(requesting||document.hidden)return;
+      requesting=true;
+      try{
+        const response=await fetch(`/3Dprojects/api/projects/${encodeURIComponent(slug)}/geo-status`,{
+          cache:"no-store",headers:{Accept:"application/json"},signal:controller.signal
+        });
+        if(!response.ok)return;
+        const next=await response.json() as GeoStatusSnapshot;
+        if(!active)return;
+        if(next.geoReleaseId!==geoReleaseId||next.version!==version){
+          setMappingChanged(true);
+          return;
+        }
+        setMappingChanged(false);setLiveStatus(next);
+      }catch{
+        // A transient offline/error response must not clear the last known status.
+      }finally{requesting=false;}
+    };
+    setLiveStatus(null);setMappingChanged(false);
+    void refresh();
+    const interval=window.setInterval(()=>void refresh(),15000);
+    const onFocus=()=>{void refresh();};
+    const onVisibility=()=>{if(!document.hidden)void refresh();};
+    window.addEventListener("focus",onFocus);
+    document.addEventListener("visibilitychange",onVisibility);
+    return()=>{
+      active=false;controller.abort();window.clearInterval(interval);
+      window.removeEventListener("focus",onFocus);
+      document.removeEventListener("visibilitychange",onVisibility);
+    };
+  },[slug,data?.plotMapping?.version,data?.geoRelease.id]);
 
   if (error)
     return (
@@ -1190,6 +1244,9 @@ export default function GeoPublicDemo() {
         </nav>
       </header>
 
+      {mappingChanged&&<p role="status" className="geo-status-refresh-notice">Plot mapping was updated.
+        <button type="button" onClick={()=>window.location.reload()}>Refresh map</button>
+      </p>}
       <section className="jio-public-meta">
         <article>
           <span>GEO RELEASE</span>
@@ -1215,7 +1272,7 @@ export default function GeoPublicDemo() {
 
       {data.maps.configured && data.maps.apiKey && data.maps.mapId ? (
         <div className="geo-public-map-layout">
-          <IntegratedGeoScene data={data} toolbarContainer={toolbarContainer} modelSiteHref={`/3Dprojects/${encodeURIComponent(slug)}`} notices={notices}/>
+          <IntegratedGeoScene data={data} toolbarContainer={toolbarContainer} modelSiteHref={`/3Dprojects/${encodeURIComponent(slug)}`} notices={notices} liveStatus={liveStatus}/>
           <div ref={setToolbarContainer} className="geo-public-toolbar-slot" aria-label="Map camera controls" />
         </div>
       ) : (
