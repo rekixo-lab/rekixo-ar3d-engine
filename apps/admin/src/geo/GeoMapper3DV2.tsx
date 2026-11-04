@@ -685,17 +685,38 @@ export default function GeoMapper3DV2() {
     setMessage("Current saved revision verified from the integrated same-map Building preview.");
   }
 
+  async function guardGeoMappingGap(action:(confirmation:string)=>Promise<unknown>) {
+    try {await action("");}
+    catch(error){
+      const message=error instanceof Error?error.message:String(error);
+      if(!message.includes("Geo source replacement would temporarily hide published Plot Mapping"))
+        throw error;
+      const exact="ALLOW GEO MAPPING GAP "+selectedSlug;
+      const entered=window.prompt(
+        "LIVE GEO PLOT MAPPING PROTECTION\\n\\n"+
+        "Switching this Geo source now would temporarily remove published mapped plots and "+
+        "Available/Booked/Sold from the customer Geo view. Old releases and records remain safe.\\n\\n"+
+        "For 3D model replacement, first prepare the new Building release, compare 3D model coordinates, "+
+        "and keep a verified backup. After switching, use 3D Geo Plot Mapper → "+
+        "Keep Existing Plot Coordinates (same metric frame) or verified image-source remap. "+
+        "Review and republish mappings and commercial approvals.\\n\\n"+
+        "Cancel to KEEP THE CURRENT LIVE GEO MAP unchanged. "+
+        "Only if you explicitly accept a temporary mapping gap, type: "+exact);
+      if(entered!==exact)throw Error("Geo source switch cancelled. Existing live Geo mapping retained.");
+      await action(exact);
+    }
+  }
   async function publish() {
     if (!state?.draft) throw new Error("Geo draft missing.");
     if (!publishReady)
       throw new Error("Current saved revision ko integrated preview me render + verify karke publish karein.");
-    await publishGeoRelease(selectedSlug, state.draft.revision);
+    await guardGeoMappingGap((confirmation)=>publishGeoRelease(selectedSlug,state.draft.revision,confirmation));
     await reload(selectedSlug);
     setMessage("Immutable Geo V2 release published and activated.");
   }
 
   async function activate(id: string) {
-    await activateGeoRelease(selectedSlug, id);
+    await guardGeoMappingGap((confirmation)=>activateGeoRelease(selectedSlug,id,confirmation));
     await reload(selectedSlug);
     setMessage("Selected immutable Geo release activated.");
   }
