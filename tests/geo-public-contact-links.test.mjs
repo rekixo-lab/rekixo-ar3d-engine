@@ -58,8 +58,9 @@ test("new project number storage uses explicit consent and never accepts private
     publicContactsEnabled:false}),/Invalid customer/);
   const api=read("workers/admin-cloud.mjs");
   assert.match(api,/initialProjectContact\(body\.customerContact\)/);
-  assert.match(api,/INSERT INTO project_profiles_3d/);
-  assert.match(api,/public_contacts_enabled/);
+  assert.match(api,/projectContactInsert\(env,id,actor\.email,now,customerContact\)/);
+  assert.match(read("workers/project-contact-on-create.mjs"),/INSERT INTO project_profiles_3d/);
+  assert.match(read("workers/project-contact-on-create.mjs"),/public_contacts_enabled/);
   assert.match(api,/env\.DB\.batch\(\[/);
   const dashboard=read("apps/admin/src/dashboard/EngineDashboard.tsx");
   assert.match(dashboard,/Customer Call number/);
