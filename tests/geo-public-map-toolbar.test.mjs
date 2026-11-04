@@ -14,7 +14,7 @@ test("Geo customer header keeps project branding and icon-only quick actions", (
   assert.match(header, /className="jio-public-branding"/);
   assert.match(header, /className="jio-public-project-logo"/);
   assert.match(header, /<h1>\{data\.project\.name\}<\/h1>/);
-  assert.match(header, /<GeoHeaderSubtitle text=\{data\.project\.location \|\| "Rekixo AR3D Engine"\}/);
+  assert.match(header, /<GeoHeaderSubtitle text=\{data\.project\.location \|\| "AR 3D"\}/);
   assert.match(header, /className="jio-public-header-actions"/);
   assert.doesNotMatch(header, /INTEGRATED 3D GEO EXPERIENCE|Enter building|Open location/);
   assert.doesNotMatch(header, />\s*(?:Call|WhatsApp|Admin Panel)\s*<\/a>/);

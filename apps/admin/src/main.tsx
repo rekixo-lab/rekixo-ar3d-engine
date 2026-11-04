@@ -24,11 +24,11 @@ const ProjectClientPortal = lazy(() => import("./management/ProjectClientPortal"
 const OwnerAccountSettings = lazy(() => import("./management/OwnerAccountSettings"));
 const ProjectDomains = lazy(() => import("./management/ProjectDomains"));
 
-function RouteLoading({ label }: { label: string }) {
+function RouteLoading({ label, customer = false }: { label: string; customer?: boolean }) {
   return (
     <div className="route-loading">
       <small>AUTOMATIC ENGINE</small>
-      <p className="eyebrow">REKIXO AR3D ENGINE</p>
+      <p className="eyebrow">{customer ? "AR 3D" : "REKIXO AR3D ENGINE"}</p>
       <h1>{label}</h1>
     </div>
   );
@@ -69,7 +69,7 @@ function AdminRouter() {
 
   if (path.startsWith("/3Dprojects/showcase/")) {
     return (
-      <Suspense fallback={<RouteLoading label="Loading published design…" />}>
+      <Suspense fallback={<RouteLoading label="Loading published design…" customer />}>
         <PublishedViewer />
       </Suspense>
     );
@@ -80,7 +80,7 @@ function AdminRouter() {
   if(projectClientAdmin)return <ClientAdminRedirect slug={projectClientAdmin[1]} />;
 
   if (path === "/3Dprojects/client-portal") {
-    return <Suspense fallback={<RouteLoading label="Opening secure client portal…" />}>
+    return <Suspense fallback={<RouteLoading label="Opening secure client portal…" customer />}>
       <ProjectClientPortal />
     </Suspense>;
   }
@@ -191,6 +191,14 @@ function AdminRouter() {
     </AdminShellRoute>
   );
 }
+
+// The first HTML paint is neutral AR 3D. Keep the separate Owner Admin tab
+// title only on Owner routes; never flash Rekixo branding on customer pages.
+const currentPath = window.location.pathname.replace(/\/$/, "");
+const isCustomerRoute = currentPath === "/3Dprojects/client-portal" ||
+  /^\/3Dprojects\/showcase\/[^/]+$/.test(currentPath) ||
+  /^\/3Dprojects\/[a-z0-9-]+\/client-admin$/.test(currentPath);
+if (!isCustomerRoute) document.title = "Rekixo 3D Projects";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root mount node");

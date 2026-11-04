@@ -177,7 +177,7 @@ export default function MasterplanPublic(){
     if(!showPlots)setSelected(null);},[showPlots,mapReady]);
   const sizes=useMemo(()=>data?.calibration.sizeM||null,[data]);
   return <main className="masterplan-public">
-    <header><div><p>REKIXO · GEO MASTERPLAN</p><h1>{data?.project.name||"Published Geo Masterplan"}</h1>
+    <header><div><p>AR 3D · GEO MASTERPLAN</p><h1>{data?.project.name||"Published Geo Masterplan"}</h1>
       {data?.project.location&&<span>{data.project.location}</span>}</div>
       <div className="masterplan-public-header-actions">
         {data&&<a className="masterplan-public-client-admin" href={projectClientAdminUrl(data.project.slug)}
