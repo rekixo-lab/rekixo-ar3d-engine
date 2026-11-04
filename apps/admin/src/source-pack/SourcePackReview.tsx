@@ -319,10 +319,10 @@ export default function SourcePackReview() {
           (reason instanceof Error ? reason.message : String(reason)));
       }
     } catch (reason) {
+      // Read authoritative state after a partial save or seal and retain the
+      // original failure message instead of hiding it with a successful reload.
+      try { await load(); } catch { /* The operator can refresh explicitly. */ }
       setError(reason instanceof Error ? reason.message : "Could not prepare the model.");
-      // Read the authoritative state after a partial save or seal; never
-      // assume that an earlier successful immutable operation was rolled back.
-      try { await load(); } catch { /* Keep the actionable error visible. */ }
     } finally {
       setBusy("");
     }
@@ -452,14 +452,7 @@ export default function SourcePackReview() {
       {packReady && <section id="source-step-processing" className="source-review__simple-processing">
         <ProcessingSpine slug={slug} sourcePackSignal={processingSignal} />
       </section>}
-      {packReady && <div className="source-review__next">
-        <a href={`/3Dprojects/building?project=${encodeURIComponent(slug)}&tab=components`}>
-          Review Components
-        </a>
-        <a href={`/3Dprojects/building?project=${encodeURIComponent(slug)}&tab=presentation`}>
-          Open Building Editor
-        </a>
-      </div>}
+
     </main>
   );
 }
