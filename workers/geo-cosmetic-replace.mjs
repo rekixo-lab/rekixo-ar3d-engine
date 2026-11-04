@@ -78,8 +78,10 @@ async function preview(env,project) {
   const previous=sourceReference(oldBuilding,project),next=sourceReference(newBuilding,project);
   const [oldBytes,newBytes]=await Promise.all([modelBytes(env,previous),modelBytes(env,next)]);
   const geometry=await verifyCosmeticModelPair(oldBytes,newBytes);
-  if(!geometry.equal) throw Error("The new 3D model changes plot geometry, scale, origin or node transforms. "+
-    "The current live Geo and mapped plots remain untouched. Use reviewed remapping for a changed layout.");
+  if(!geometry.equal) throw Error("Auto comparison could not confirm identical plotted geometry: "+
+    (geometry.reason || "the visible 3D surfaces differ.")+
+    " Old Geo and mapped plots were NOT changed. If you edited colors only, "+
+    "re-export from the original source without changing layout.");
   // Cosmetic releases explicitly render the unchanged canonical GLB, not a
   // separately simplified Geo derivative whose vertex topology may differ.
   const {p,a}=validPlacement(active.manifest);
@@ -172,7 +174,9 @@ export async function previewCosmeticGeoReplacement(env,project){
   return {alreadyCurrent:false,eligible:true,token:plan.token,
     fromBuildingVersion:plan.oldBuilding.version,toBuildingVersion:plan.newBuilding.version,
     plotCount:plan.plotCount,commercialCount:plan.commercialCount,
-    proof:"Exact GLB local geometry and node transforms verified; only visual attributes may differ."};
+    proof:plan.geometry.mode==="world-surface"
+      ?"Visible 3D triangles and real-world coordinates match despite different GLB node or mesh ordering."
+      :"Exact original GLB geometry, transforms and model-local coordinates match."};
 }
 
 export async function applyCosmeticGeoReplacement(env,actor,project,expectedToken){

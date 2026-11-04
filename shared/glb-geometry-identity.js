@@ -137,10 +137,188 @@ export async function glbGeometryIdentity(raw) {
     meshCount:meshes.length,primitiveCount:primitives,vertexCount:vertices};
 }
 
+
+// Re-export-tolerant proof: compare actual visible world-space triangles,
+// not glTF node IDs, mesh order, accessor byte packing or material partitions.
+// The proof remains strict about position/scale/layout. The 10-micrometre
+// quantization handles tiny floating-point serialization noise only.
+const WORLD_GRID = 100_000;
+const MAX_TRIANGLES = 400_000;
+const IDENTITY = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+
+function matrixMultiply(a,b) {
+  const out=new Array(16).fill(0);
+  for(let c=0;c<4;c++)for(let row=0;row<4;row++)
+    for(let k=0;k<4;k++)out[c*4+row]+=a[k*4+row]*b[c*4+k];
+  return out;
+}
+function nodeMatrix(node) {
+  if(node.matrix!==undefined) {
+    check(node.translation===undefined && node.rotation===undefined && node.scale===undefined,
+      "conflicting matrix and TRS");
+    return numericVector(node.matrix,16,null,"matrix");
+  }
+  const t=numericVector(node.translation,3,[0,0,0],"translation");
+  const s=numericVector(node.scale,3,[1,1,1],"scale");
+  const [x,y,z,w]=numericVector(node.rotation,4,[0,0,0,1],"rotation");
+  const norm=x*x+y*y+z*z+w*w;
+  check(Math.abs(norm-1)<0.001, "invalid rotation quaternion");
+  const m=[
+    (1-2*(y*y+z*z))*s[0],(2*(x*y+z*w))*s[0],(2*(x*z-y*w))*s[0],0,
+    (2*(x*y-z*w))*s[1],(1-2*(x*x+z*z))*s[1],(2*(y*z+x*w))*s[1],0,
+    (2*(x*z+y*w))*s[2],(2*(y*z-x*w))*s[2],(1-2*(x*x+y*y))*s[2],0,
+    t[0],t[1],t[2],1
+  ];
+  return m;
+}
+function readNumeric(g,bin,index,expectedType,allowedTypes) {
+  const accessor=at(g.accessors,index,"geometry accessor");
+  check(accessor && accessor.type===expectedType && !accessor.sparse &&
+    allowedTypes.includes(accessor.componentType) && !accessor.normalized &&
+    positiveInt(accessor.count) && accessor.count>0 &&
+    positiveInt(accessor.bufferView), "unsupported geometry accessor encoding");
+  const view=at(g.bufferViews,accessor.bufferView,"geometry bufferView");
+  check(view.buffer===0 && positiveInt(view.byteOffset??0) &&
+    positiveInt(view.byteLength) && positiveInt(accessor.byteOffset??0),
+    "invalid geometry buffer view");
+  const bytes=components[accessor.componentType];
+  const unit=dimensions[expectedType];
+  const size=bytes*unit,stride=view.byteStride??size;
+  const offset=(view.byteOffset??0)+(accessor.byteOffset??0);
+  check(positiveInt(stride) && stride>=size && stride<=252 &&
+    (accessor.byteOffset??0)+stride*(accessor.count-1)+size<=view.byteLength &&
+    offset+stride*(accessor.count-1)+size<=bin.byteLength,
+    "geometry accessor buffer overrun");
+  const d=new DataView(bin.buffer,bin.byteOffset,bin.byteLength);
+  const read=(i,k=0)=>{
+    const pos=offset+i*stride+k*bytes;
+    if(accessor.componentType===5126)return d.getFloat32(pos,true);
+    if(accessor.componentType===5125)return d.getUint32(pos,true);
+    if(accessor.componentType===5123)return d.getUint16(pos,true);
+    if(accessor.componentType===5121)return d.getUint8(pos);
+    throw Error("Unsupported component type");
+  };
+  return {count:accessor.count,read};
+}
+function quantizedPoint(matrix,x,y,z) {
+  const coords=[
+    matrix[0]*x+matrix[4]*y+matrix[8]*z+matrix[12],
+    matrix[1]*x+matrix[5]*y+matrix[9]*z+matrix[13],
+    matrix[2]*x+matrix[6]*y+matrix[10]*z+matrix[14],
+  ];
+  check(coords.every(c=>Number.isFinite(c)&&Math.abs(c)<=100_000),
+    "nonfinite or implausible scene coordinate");
+  const q=coords.map(c=>Math.round(c*WORLD_GRID));
+  return {key:q.join(","),q};
+}
+export async function glbWorldSurfaceIdentity(raw) {
+  const {json:g,bin}=readGlb(raw);
+  check(!g.skins?.length && !g.animations?.length, "animated/skinned geometry");
+  for(const ext of [...(g.extensionsUsed||[]),...(g.extensionsRequired||[])])
+    check(cosmeticExtensions.has(ext), "unverified geometry extension");
+  check(Array.isArray(g.nodes) && Array.isArray(g.meshes) && g.meshes.length,
+    "missing model nodes or meshes");
+  const scenes=g.scenes;
+  check(Array.isArray(scenes) && scenes.length>0 &&
+    positiveInt(g.scene??0) && (g.scene??0)<scenes.length,
+    "no valid default scene");
+  const roots=scenes[g.scene??0]?.nodes;
+  check(Array.isArray(roots) && roots.length,"missing default scene roots");
+  const triangles=[];
+  let totalVertices=0;
+  const bounds={min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]};
+  const seen=new Set();
+  function addPrimitive(p,matrix) {
+    check(!p.extensions && !p.targets && p.attributes &&
+      positiveInt(p.attributes.POSITION),"geometry primitive deformation");
+    check((p.mode??4)===4,"nontriangle geometry needs separate review");
+    const pos=readNumeric(g,bin,p.attributes.POSITION,"VEC3",[5126]);
+    const ix=p.indices===undefined?null:readNumeric(g,bin,p.indices,"SCALAR",[5121,5123,5125]);
+    const count=ix?.count??pos.count;
+    check(count%3===0,"incomplete triangle indices");
+    totalVertices+=pos.count;
+    check(totalVertices<=1_200_000 && triangles.length+count/3<=MAX_TRIANGLES,
+      "model exceeds safe one-click comparison budget");
+    const cache=new Map();
+    const point=(i)=>{
+      check(positiveInt(i)&&i<pos.count,"invalid vertex index");
+      if(cache.has(i))return cache.get(i);
+      const p3=quantizedPoint(matrix,pos.read(i,0),pos.read(i,1),pos.read(i,2));
+      for(let axis=0;axis<3;axis++){
+        bounds.min[axis]=Math.min(bounds.min[axis],p3.q[axis]);
+        bounds.max[axis]=Math.max(bounds.max[axis],p3.q[axis]);
+      }
+      cache.set(i,p3.key);return p3.key;
+    };
+    for(let i=0;i<count;i+=3){
+      const vertices=[point(ix?ix.read(i):i),point(ix?ix.read(i+1):i+1),
+        point(ix?ix.read(i+2):i+2)];
+      // Cyclic vertex rotations preserve the facing side. Winding reversal
+      // flips the face and is NOT a cosmetic change.
+      const key=[0,1,2].map(shift=>[
+        vertices[shift],vertices[(shift+1)%3],vertices[(shift+2)%3]
+      ].join("|")).sort()[0];
+      triangles.push(key);
+    }
+  }
+  function visit(index,parent) {
+    const node=at(g.nodes,index,"node");
+    // Reject cycles, shared node parenting and geometry not in the scene.
+    check(!seen.has(index),"cyclic/reused node in default scene");
+    seen.add(index);
+    check(!node.skin && !node.extensions && node.weights===undefined,
+      "skinned or extended node");
+    const matrix=matrixMultiply(parent,nodeMatrix(node));
+    check(matrix.every(Number.isFinite),"invalid scene transform");
+    if(node.mesh!==undefined) {
+      const mesh=at(g.meshes,node.mesh,"mesh");
+      check(!mesh.weights && Array.isArray(mesh.primitives)&&mesh.primitives.length,
+        "morph geometry or empty mesh");
+      for(const p of mesh.primitives)addPrimitive(p,matrix);
+    }
+    if(node.children!==undefined) {
+      check(Array.isArray(node.children),"invalid node children");
+      for(const child of node.children)visit(child,matrix);
+    }
+  }
+  for(const root of roots)visit(root,IDENTITY);
+  check(triangles.length>0,"no visible triangles in default scene");
+  triangles.sort();
+  const geometrySha256=await sha(encode.encode(triangles.join("\n")));
+  return {
+    sha256:geometrySha256,triangleCount:triangles.length,
+    boundsMinM:bounds.min.map(v=>v/WORLD_GRID),
+    boundsMaxM:bounds.max.map(v=>v/WORLD_GRID)
+  };
+}
+function geometryDifference(previous,current) {
+  if(previous.triangleCount!==current.triangleCount)
+    return "Visible triangle count differs ("+previous.triangleCount+" vs "+current.triangleCount+").";
+  const viewBounds=(b)=>[...b.boundsMinM,...b.boundsMaxM].map(n=>n.toFixed(4)).join(", ");
+  if(viewBounds(previous)!==viewBounds(current))
+    return "Visible geometry bounds differ (old: "+viewBounds(previous)+
+      "; new: "+viewBounds(current)+").";
+  return "Visible triangle coordinates/topology differ despite equal triangle counts and bounds.";
+}
 export async function verifyCosmeticModelPair(oldGlb,newGlb) {
   const [oldGeometry,newGeometry]=await Promise.all([
     glbGeometryIdentity(oldGlb),glbGeometryIdentity(newGlb)
   ]);
-  return {equal:oldGeometry.sha256===newGeometry.sha256,
-    oldGeometry,newGeometry};
+  if(oldGeometry.sha256===newGeometry.sha256)
+    return {equal:true,mode:"exact-source",oldGeometry,newGeometry};
+  // Different node numbering and exporter grouping are not proof of a changed
+  // site. Confirm the actual visible world-space triangles before rejecting.
+  try {
+    const [oldWorld,newWorld]=await Promise.all([
+      glbWorldSurfaceIdentity(oldGlb),glbWorldSurfaceIdentity(newGlb)
+    ]);
+    const same=oldWorld.sha256===newWorld.sha256;
+    return {equal:same,mode:same?"world-surface":"different-surface",
+      reason:same?undefined:geometryDifference(oldWorld,newWorld),
+      oldGeometry,newGeometry,oldWorld,newWorld};
+  } catch(error) {
+    return {equal:false,mode:"unverified-reexport",
+      reason:error instanceof Error?error.message:"Scene geometry needs separate review.",
+      oldGeometry,newGeometry};
+  }
 }
