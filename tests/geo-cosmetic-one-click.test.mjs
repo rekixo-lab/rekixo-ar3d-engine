@@ -60,6 +60,74 @@ function makeGlb({height=0,indices=[0,1,2],color=[0.1,0.2,0.3],
   return new Uint8Array(out);
 }
 
+function repackGlb(raw, mutate) {
+  const from=Buffer.from(raw);
+  const oldJsonLength=from.readUInt32LE(12);
+  const json=JSON.parse(from.subarray(20,20+oldJsonLength).toString("utf8").trim());
+  const binStart=20+oldJsonLength;
+  const oldBinLength=from.readUInt32LE(binStart);
+  const bin=Buffer.from(from.subarray(binStart+8,binStart+8+oldBinLength));
+  mutate(json,bin);
+  const jsonText=Buffer.from(JSON.stringify(json),"utf8");
+  const jsonLength=(jsonText.length+3)&~3;
+  const binLength=(bin.length+3)&~3;
+  const next=Buffer.alloc(12+8+jsonLength+8+binLength);
+  next.writeUInt32LE(0x46546c67,0);
+  next.writeUInt32LE(2,4);
+  next.writeUInt32LE(next.length,8);
+  next.writeUInt32LE(jsonLength,12);
+  next.writeUInt32LE(0x4e4f534a,16);
+  jsonText.copy(next,20);
+  next.fill(32,20+jsonText.length,20+jsonLength);
+  next.writeUInt32LE(binLength,20+jsonLength);
+  next.writeUInt32LE(0x004e4942,24+jsonLength);
+  bin.copy(next,28+jsonLength);
+  return new Uint8Array(next);
+}
+
+test("safe re-export: changed node hierarchy and cyclic index order retain visible triangles",async()=>{
+  const original=makeGlb();
+  const exported=repackGlb(original,(g,bin)=>{
+    g.nodes=[{children:[1],name:"Grouping after export"},{mesh:0,name:"Renamed site"}];
+    // A cyclic index permutation is the same front-facing triangle.
+    bin.writeUInt16LE(1,36);bin.writeUInt16LE(2,38);bin.writeUInt16LE(0,40);
+    g.materials=[{pbrMetallicRoughness:{baseColorFactor:[1,0,0,1]}}];
+  });
+  const oldExact=await glbGeometryIdentity(original);
+  const newExact=await glbGeometryIdentity(exported);
+  assert.notEqual(oldExact.sha256,newExact.sha256,"byte-level strict proof MUST differ");
+  const result=await verifyCosmeticModelPair(original,exported);
+  assert.equal(result.equal,true);
+  assert.equal(result.mode,"world-surface");
+  assert.equal(result.oldWorld.triangleCount,1);
+});
+
+test("re-export: baked translation may be rearranged without changing world triangles",async()=>{
+  const original=makeGlb();
+  const exported=repackGlb(original,(g,bin)=>{
+    g.nodes[0].translation=[-10,0,0];
+    for(const offset of [0,12,24])bin.writeFloatLE(bin.readFloatLE(offset)+10,offset);
+  });
+  const result=await verifyCosmeticModelPair(original,exported);
+  assert.equal(result.equal,true);
+  assert.equal(result.mode,"world-surface");
+});
+test("same triangle positions with reversed winding are not a cosmetic-only match",async()=>{
+  const original=makeGlb();
+  const reversed=repackGlb(original,(g,bin)=>{
+    bin.writeUInt16LE(1,36);bin.writeUInt16LE(0,38);bin.writeUInt16LE(2,40);
+  });
+  const result=await verifyCosmeticModelPair(original,reversed);
+  assert.equal(result.equal,false);
+  assert.match(result.reason,/topology differ|bounds differ/);
+});
+test("re-export difference includes useful diagnosis without modifying live releases",async()=>{
+  const result=await verifyCosmeticModelPair(makeGlb(),makeGlb({height:0.02}));
+  assert.equal(result.equal,false);
+  assert.equal(result.mode,"different-surface");
+  assert.match(result.reason,/bounds differ/);
+});
+
 test("material and vertex-color changes keep EXACT geometry identity",async()=>{
   const a=makeGlb({metalness:0,color:[0.1,0.2,0.3]});
   const b=makeGlb({metalness:1,color:[0.9,0.5,0.3]});
