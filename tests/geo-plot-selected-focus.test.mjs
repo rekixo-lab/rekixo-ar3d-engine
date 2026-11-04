@@ -5,16 +5,19 @@ import {geoPlotFocusMotion, GEO_PLOT_FOCUS_DURATION_MS} from "../shared/geo-plot
 
 const read = path => readFileSync(new URL("../" + path, import.meta.url), "utf8");
 
-test("selection pulse settles and never schedules an unlimited redraw", () => {
+test("selection pulse settles while selected prism reflection keeps moving", () => {
   const atStart = geoPlotFocusMotion(100, 100);
   const during = geoPlotFocusMotion(300, 100);
   const settled = geoPlotFocusMotion(100 + GEO_PLOT_FOCUS_DURATION_MS, 100);
   assert.equal(atStart.animate, true);
   assert.equal(during.animate, true);
-  assert.equal(settled.animate, false);
-  assert.equal(settled.fillOpacity, 0.47);
-  assert.equal(settled.haloOpacity, 0.82);
-  assert.ok(during.fillOpacity >= 0.47 && during.fillOpacity <= 0.61);
+  assert.equal(settled.animate, true);
+  assert.equal(settled.fillOpacity, 0.20);
+  assert.ok(settled.haloOpacity >= 0.72 && settled.haloOpacity <= 0.87);
+  assert.ok(during.fillOpacity >= 0.20 && during.fillOpacity <= 0.30);
+  assert.ok(settled.reflectTime > during.reflectTime);
+  assert.ok(settled.reflectStrength > 0);
+  assert.ok(settled.wallOpacity > 0 && settled.roofOpacity > 0);
   assert.ok(during.rippleOpacity > 0 && during.rippleScale > 1);
   assert.equal(settled.rippleOpacity, 0);
   assert.ok(settled.rippleScale > 1);
@@ -23,7 +26,9 @@ test("selection pulse settles and never schedules an unlimited redraw", () => {
 test("reduced-motion preference keeps static selected outline", () => {
   const motion = geoPlotFocusMotion(150, 100, true);
   assert.equal(motion.animate, false);
-  assert.equal(motion.haloOpacity, 0.82);
+  assert.equal(motion.haloOpacity, 0.72);
+  assert.equal(motion.reflectTime, 0);
+  assert.equal(motion.reflectStrength, 0);
   assert.equal(motion.edgeOpacity, 0.99);
   assert.equal(motion.rippleOpacity, 0);
 });
@@ -48,4 +53,21 @@ test("selected plot follows GLB-local coordinates with transparent depth-tested 
   assert.match(viewer, /onClose=\{\(\)=>setDrawerOpen\(false\)\}/);
   assert.match(viewer, /plot=\{drawerOpen\?selectedPlot:null\}/);
   assert.doesNotMatch(viewer, /onClose=\{\(\)=>setSelectedPlot\(null\)\}/);
+});
+
+test("glass prism uses the exact mapped footprint and a bounded redraw timer", () => {
+  const focus = read("apps/public/src/geo/geoPlotSelectionFocus.ts");
+  const viewer = read("apps/public/src/geo/GeoPublicDemo.tsx");
+  for (const name of ["selected-plot-prism-glass-walls", "selected-plot-prism-glass-roof",
+    "selected-plot-prism-roof-edge", "selected-plot-prism-vertical-edges"]) {
+    assert.ok(focus.includes(name));
+  }
+  assert.match(focus, /new THREE\.ShaderMaterial\(/);
+  assert.match(focus, /new THREE\.ShapeGeometry\(shape\)/);
+  assert.match(focus, /points\[\(index \+ 1\) % points\.length\]/);
+  assert.match(focus, /depthTest: true,\s*depthWrite: false/);
+  assert.match(focus, /\[fill, halo, ripple, edge, dots, walls, roof, roofEdge, pillars\]/);
+  assert.match(viewer, /selectionRedrawTimer=window\.setTimeout/);
+  assert.match(viewer, /clearSelectionRedrawTimer\(\)/);
+  assert.match(viewer, /document\.hidden/);
 });
