@@ -86,7 +86,7 @@ test("processing handoff advertises node catalog and links only catalog-ready ou
   assert.match(processing, /Model validated and ready for component review/);
   assert.match(processing, /canonicalOutput\?\.nodeCatalog/);
   assert.match(processing, /\/3Dprojects\/component-mapper\?project=/);
-  assert.match(processing, /Review components/);
+  assert.match(processing, /Review Components/);
 });
 
 test("Admin router exposes component mapper as a lazy route and mapper is responsive", () => {
