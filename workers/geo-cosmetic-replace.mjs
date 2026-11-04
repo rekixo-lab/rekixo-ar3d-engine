@@ -337,3 +337,26 @@ export async function applyCosmeticGeoReplacement(env,actor,project,expectedToke
     plotCount:p.plotCount,commercialCount:p.commercialCount,geoReleaseId:newGeoId,
     mappingReleaseId:newMappingId,geometrySha256:p.geometry.sha256};
 }
+
+export async function handleEasyGeoReplacement(request,env,actor,project){
+  if(request.method!=="GET" && request.method!=="POST")
+    return Response.json({error:"Method not allowed."},{status:405});
+  if(request.method==="POST"){
+    let same=false;
+    try{same=new URL(request.headers.get("Origin")||"").origin===new URL(request.url).origin;}
+    catch{same=false;}
+    if(!same)return Response.json({error:"Same-origin request required."},{status:403});
+  }
+  try{
+    const result=request.method==="GET"
+      ?await previewCosmeticGeoReplacement(env,project)
+      :await applyCosmeticGeoReplacement(env,actor,project,
+        String((await request.json().catch(()=>({})).expectedToken||""));
+    return Response.json(result,{headers:{"Cache-Control":"no-store"}});
+  }catch(error){
+    const message=error instanceof Error?error.message:"Automatic Geo replacement failed.";
+    return Response.json({error:message},{status:
+      /integrity|unavailable|missing from private model storage|failed checksum/i.test(message)?503:409,
+      headers:{"Cache-Control":"no-store"}});
+  }
+}
