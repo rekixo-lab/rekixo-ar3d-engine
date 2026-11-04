@@ -8,6 +8,7 @@ import {
   requireProductionVectorMapId,
 } from "./geo-release-verify.mjs";
 import { buildGeoPresentationManifestV1 } from "./geo-presentation-policy.mjs";
+import { planGeoMappingTransition } from "./geo-release-mapping-safety.mjs";
 
 const {
   digestHex,
@@ -21,6 +22,7 @@ export async function publishGeoRelease(
   actor,
   project,
   expectedDraftRevision,
+  mappingGapConfirmation = "",
 ) {
   if (!(await geoReleaseSchemaReady(env)))
     throw Error("Immutable Geo release schema is not installed.");
@@ -78,6 +80,10 @@ export async function publishGeoRelease(
   const manifestJson = JSON.stringify(manifest);
   const manifestSha256 = await digestHex(manifestJson);
   const previousReleaseId = context.activeGeoReleaseId || null;
+  // A newly published Geo release gets a different immutable identity. Never
+  // silently detach an existing live Plot Mapping without owner acknowledgement.
+  const mappingTransition=await planGeoMappingTransition(
+    env,project,context.experienceId,releaseId,source.id,mappingGapConfirmation);
 
   await env.DB.batch([
     env.DB.prepare(
@@ -151,6 +157,8 @@ export async function publishGeoRelease(
         coordinateReferenceSystem: manifest.placement.coordinateReferenceSystem,
         localFrame: manifest.placement.localFrame,
         previousGeoReleaseId: previousReleaseId,
+        previousPlotMappingId: mappingTransition.currentMappingId,
+        mappingReviewGap: Boolean(mappingTransition.currentMappingId),
       }),
       createdAt,
     ),
