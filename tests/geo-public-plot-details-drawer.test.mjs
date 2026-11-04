@@ -96,7 +96,7 @@ test("drawer only changes presentation, preserving click hit testing and camera 
   assert.match(parent,/<GeoPlotDetailsDrawer/);
   assert.match(parent,/plot=\{drawerOpen\?selectedPlot:null\}/);
   assert.match(parent,/onClose=\{\(\)=>setDrawerOpen\(false\)\}/);
-  assert.match(parent,/commercial=\{selectedPlot\?data\.plotMapping\?\.commercial\?\.\[selectedPlot\.id\]:undefined\}/);
+  assert.match(parent,/commercial=\{selectedPlot\?commercial\?\.\[selectedPlot\.id\]:undefined\}/);
   assert.doesNotMatch(parent,/geo-plot-public-details--status-open/);
   assert.match(drawer,/publicGeoPlotDiagram\(shown\)/);
   assert.match(drawer,/publicGeoAreaUnits\(shown\.area\)/);

@@ -8,6 +8,7 @@ test("Client Geo plot editing appears immediately beneath its row across desktop
     publicApproved:false,evidenceRef:"Booking evidence"},
    {plotId:"3",status:"sold",revision:3,pricePaise:null,
     publicApproved:true,evidenceRef:"Sale evidence"}]};
+ let latestStatusWrite:{plotId:string;status:"available"|"booked"|"sold";publicApproved:boolean;evidenceRef:string}|null=null;
  const json=(route:import("@playwright/test").Route,body:unknown)=>
   route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
  await page.route("**/3Dprojects/api/client-portal/**",route=>{
@@ -20,7 +21,19 @@ test("Client Geo plot editing appears immediately beneath its row across desktop
    slug:"demo-a",name:"Demo",status:"published",kind:"building_geo"},role:"client_admin",
    permissions:{commercialRead:true,commercialPrepare:true,commercialApprove:true,
     dealsRead:false,dealsWrite:false}});
-  if(pathname.endsWith("/commercial"))return json(route,commercial);
+  if(pathname.endsWith("/commercial")){
+   if(route.request().method()==="PUT"){
+    const submitted=route.request().postDataJSON() as {
+     plotId:string;status:"available"|"booked"|"sold";publicApproved:boolean;evidenceRef:string};
+    latestStatusWrite=submitted;
+    const row=commercial.rows.find(r=>r.plotId===submitted.plotId);
+    if(!row)return route.fulfill({status:404,contentType:"application/json",body:'{"error":"Unknown plot"}'});
+    Object.assign(row,{status:submitted.status,draftStatus:submitted.status,
+     publicApproved:submitted.publicApproved,evidenceRef:submitted.evidenceRef,revision:row.revision+1,
+     hasReview:true});
+   }
+   return json(route,commercial);
+  }
   if(pathname.endsWith("/plot-details"))return json(route,{mappingReleaseId:"map-inline-1",rows:[
    {plotId:"1",ownerName:"",brokerName:"",bookingAmountPaise:null,notes:"",revision:1},
    {plotId:"2",ownerName:"Buyer Two",brokerName:"",bookingAmountPaise:350000,notes:"",revision:1}
@@ -56,6 +69,21 @@ test("Client Geo plot editing appears immediately beneath its row across desktop
   await expect(second.getByLabel("Owner / Buyer Name")).toHaveValue("Buyer Two");
   await second.locator("button.client-geo-table-row").click();
   await expect(page.locator(".client-geo-editor--inline")).toHaveCount(0);
+  if(width===320){
+   await firstRow.click();
+   await first.getByLabel("Plot status").selectOption("sold");
+   await first.getByLabel("Source / signed evidence reference").fill("Signed sale register 1");
+   page.once("dialog",dialog=>void dialog.accept());
+   await first.getByRole("button",{name:"Save & Publish Status"}).click();
+   await expect(firstRow).toContainText("sold");
+   await expect(first.locator(".engine-manage-ok")).toContainText("is now SOLD");
+   expect(latestStatusWrite).toMatchObject({plotId:"1",status:"sold",publicApproved:true,
+    evidenceRef:"Signed sale register 1"});
+   // Re-reading the client-admin commercial endpoint must retain the status.
+   await page.reload();
+   await page.getByRole("combobox",{name:"Choose Client Admin section"}).selectOption("plots");
+   await expect(page.locator(".client-geo-table-row").first()).toContainText("sold");
+  }
   const dims=await page.evaluate(()=>{
    const list=document.querySelector(".client-geo-list");
    return {screen:innerWidth,page:document.documentElement.scrollWidth,

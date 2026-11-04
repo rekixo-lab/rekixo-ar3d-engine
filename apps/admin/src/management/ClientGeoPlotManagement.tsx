@@ -14,6 +14,7 @@ async function api<T>(url:string,method="GET",data?:object):Promise<T>{
  const j=await r.json() as T&{error?:string};if(!r.ok)throw Error(j.error||"Request failed");return j;
 }
 const rupees=(paise:number|null)=>paise===null?"—":"₹"+(paise/100).toLocaleString("en-IN",{maximumFractionDigits:2});
+const savedStatus=(row:Row):Status=>row.draftStatus||row.status;
 function toPaise(value:string){
  if(!value.trim())return null;
  if(!/^\d{1,10}(?:\.\d{1,2})?$/.test(value.trim()))throw Error("Enter amount in rupees, up to two decimal places.");
@@ -33,13 +34,16 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
  const [form,setForm]=useState<Draft>({ownerName:"",brokerName:"",bookingAmount:"",notes:""});
  const [baseline,setBaseline]=useState("");
  const [status,setStatus]=useState<Status>("available");const [evidence,setEvidence]=useState("");
- const [approved,setApproved]=useState(false);
  const [busy,setBusy]=useState(false);const [error,setError]=useState("");const [message,setMessage]=useState("");
  const path="/projects/"+encodeURIComponent(slug);
  const reload=async()=>{
-  const v=await api<{mappingReleaseId:string|null;rows:Details[]}>(path+"/plot-details");
-  if(v.mappingReleaseId!==commercial.mappingReleaseId)throw Error("Mapping release changed. Reload the page.");
-  setDetails(v.rows);
+  const [v,next]=await Promise.all([
+   api<{mappingReleaseId:string|null;rows:Details[]}>(path+"/plot-details"),
+   api<GeoCommercialState>(path+"/commercial")
+  ]);
+  if(v.mappingReleaseId!==next.mappingReleaseId||next.mappingReleaseId!==commercial.mappingReleaseId)
+   throw Error("Mapping release changed. Reload the page.");
+  setDetails(v.rows);onCommercialChange(next);
  };
  useEffect(()=>{let live=true;
   void api<{mappingReleaseId:string|null;rows:Details[]}>(path+"/plot-details")
@@ -49,7 +53,7 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
  },[slug,commercial.mappingReleaseId]);
  const byId=useMemo(()=>new Map(details.map(d=>[d.plotId.toLowerCase(),d])),[details]);
  const filtered=useMemo(()=>commercial.rows.filter(r=>
-   (filter==="all"||r.status===filter)&&r.plotId.toLowerCase().includes(query.trim().toLowerCase())
+   (filter==="all"||savedStatus(r)===filter)&&r.plotId.toLowerCase().includes(query.trim().toLowerCase())
  ),[commercial.rows,query,filter]);
  const pageSize=100,totalPages=Math.max(1,Math.ceil(filtered.length/pageSize));
  const visibleRows=filtered.slice(page*pageSize,(page+1)*pageSize);
@@ -78,7 +82,7 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
    bookingAmount:d?.bookingAmountPaise==null?"":String(d.bookingAmountPaise/100),notes:d?.notes||""};
   setForm(next);setBaseline(JSON.stringify(next));
   setStatus(row.draftStatus||row.status);
-  setEvidence(row.evidenceRef||"");setApproved(row.publicApproved);
+  setEvidence(row.evidenceRef||"");
   setError("");setMessage("");
  }
  async function saveDetails(){
@@ -93,17 +97,20 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
   finally{setBusy(false);}
  }
  async function saveStatus(){
-  if(!chosen||!canEdit)return;
+  if(!chosen||!canEdit||!canApprove)return;
   if(evidence.trim().length<3){setError("Enter source / booking evidence reference (3+ characters).");return;}
-  if(!window.confirm("Update plot "+chosen.plotId+" listing status? The public status needs explicit approval."))return;
+  if(!window.confirm("Publish "+status.toUpperCase()+" for plot "+chosen.plotId+" on the customer Geo site?"))return;
   setBusy(true);setError("");setMessage("");
   try{
    const next=await api<GeoCommercialState>(path+"/commercial","PUT",{
     plotId:chosen.plotId,expectedRevision:chosen.revision,status,pricePaise:chosen.pricePaise,
-    currency:"INR",evidenceRef:evidence.trim(),publicApproved:canApprove&&approved
+    currency:"INR",evidenceRef:evidence.trim(),publicApproved:true
    });
    onCommercialChange(next);
-   setMessage("Status saved and audited. Public display uses only approved verified releases.");
+   const saved=next.rows.find(r=>r.plotId.toLowerCase()===chosen.plotId.toLowerCase());
+   if(saved?.draftStatus===status&&saved.publicApproved&&saved.status===status)
+    setMessage("Plot "+chosen.plotId+" is now "+status.toUpperCase()+" on the customer Geo site.");
+   else setError("Status was not confirmed as published. Refresh and check the current mapping release.");
   }catch(e){setError(e instanceof Error?e.message:"Status update failed.");}
   finally{setBusy(false);}
  }
@@ -135,7 +142,9 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
       <span>{row.area?.value?row.area.value.toLocaleString("en-IN")+" "+row.area.unit:"—"}</span>
       <span>{detail?.ownerName||"—"}</span>
       <span>{rupees(detail?.bookingAmountPaise??null)}</span><span>{detail?.brokerName||"—"}</span>
-      <span className={"client-geo-status "+row.status}>{row.status}</span>
+      <span className={"client-geo-status "+savedStatus(row)}>{savedStatus(row)}
+       {(savedStatus(row)!==row.status||!row.publicApproved)&&row.hasReview
+        ?<small> · Live: {row.status}</small>:null}</span>
       <span className="client-geo-edit-indicator">{editing?"Close editor ↑":"Edit ↓"}</span>
      </button>
      {editing&&chosen&&<section id={"client-geo-editor-"+row.plotId}
@@ -161,11 +170,10 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
     <label>Source / signed evidence reference<input value={evidence} maxLength={250} placeholder="e.g. Booking slip / file reference"
       onChange={e=>setEvidence(e.target.value)}/></label>
    </div>
-   {canApprove&&<label className="client-geo-inline"><input type="checkbox" checked={approved}
-     onChange={e=>setApproved(e.target.checked)}/>Approve this listing for public display</label>}
-   {commercial.publicationMode==="preliminary"&&<p className="client-geo-info">Preliminary mapping: public status stays Available until verified publication.</p>}
-   <button type="button" disabled={busy||!canEdit||evidence.trim().length<3}
-     onClick={()=>void saveStatus()}>{busy?"Saving…":"Save plot status"}</button>
+   {!canApprove&&<p className="client-geo-info">Only a project approver can publish public plot statuses.</p>}
+   {commercial.publicationMode==="preliminary"&&<p className="client-geo-info">Preliminary plot geometry: approved listing statuses can be published separately.</p>}
+   <button type="button" disabled={busy||!canEdit||!canApprove||evidence.trim().length<3}
+     onClick={()=>void saveStatus()}>{busy?"Publishing…":"Save & Publish Status"}</button>
   </section>}
     </div>;
    })}

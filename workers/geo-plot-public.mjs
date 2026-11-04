@@ -16,10 +16,25 @@ export async function publicGeoPlotMapping(env,slug,expectedGeoReleaseId) {
   if (await digest(row.plots_json)!==row.sha256) throw Error("Published plot mapping checksum mismatch.");
   const plots=validateGeoPlotCollection(JSON.parse(row.plots_json));
   const publicationMode=normalizeGeoPlotPublicationMode(row.publication_mode);
-  // Private status and pricing belong to separately approved verified mappings.
-  const commercial=publicationMode==="verified"
-    ?await publicGeoCommercialForRelease(env,row.project_id,row.mapping_release_id,plots.map(p=>p.id))
-    :{};
+  // Listing status is separately approved and release-bound, even when
+  // geometry is published preliminarily. Unapproved records never leave D1.
+  const commercial=await publicGeoCommercialForRelease(env,row.project_id,row.mapping_release_id,plots.map(p=>p.id));
   return {version:row.version,geoReleaseId:row.geo_release_id,
     publicationMode,plots:plots.map(plot=>publicGeoPlotFacts(plot,publicationMode)),commercial};
+}
+
+// Small, no-store projection for open Geo customer pages. Uses the same
+// checksum-validated active mapping and approved-only database projection.
+export async function publicGeoPlotStatusSnapshot(env,slug){
+  const active=await env.DB.prepare(`SELECT ga.geo_release_id AS geoReleaseId
+    FROM projects_3d p
+    JOIN experiences_3d e ON e.project_id=p.id AND e.type='geo'
+    JOIN geo_experience_active_releases_3d ga
+      ON ga.project_id=p.id AND ga.experience_id=e.id
+    WHERE p.slug=? AND p.status='published' LIMIT 1`).bind(slug).first();
+  if(!active)return null;
+  const mapping=await publicGeoPlotMapping(env,slug,active.geoReleaseId);
+  if(!mapping)return null;
+  return {geoReleaseId:mapping.geoReleaseId,version:mapping.version,
+    publicationMode:mapping.publicationMode,commercial:mapping.commercial};
 }

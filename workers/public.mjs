@@ -6,7 +6,7 @@ import {
   serveReleaseAsset,
 } from "./release-runtime.mjs";
 import { assertProjectAssetKey } from "./storage-boundary.mjs";
-import { publicGeoPlotMapping } from "./geo-plot-public.mjs";
+import { publicGeoPlotMapping, publicGeoPlotStatusSnapshot } from "./geo-plot-public.mjs";
 import { loadPublicGeoCustomerContacts } from "./public-geo-contacts.mjs";
 import { publicMasterplanResponse } from "./masterplan-geo-public.mjs";
 import { servePublicMasterplanShareCard } from "./masterplan-share-public.mjs";
@@ -462,6 +462,21 @@ export default {
 
       if (parts[1] === "media" && parts[2]) {
         return serveProjectMedia(env, slug, parts[2], request);
+      }
+
+      if (parts[1] === "geo-status" && parts.length === 2) {
+        if (request.method !== "GET")
+          return json({ error: "Method not allowed." }, { status: 405 });
+        if (!validProjectSlug(slug))
+          return json({ error: "Invalid project." }, { status: 400 });
+        try {
+          const snapshot = await publicGeoPlotStatusSnapshot(env, slug);
+          return snapshot ? json(snapshot)
+            : json({ error: "Published Geo plot status is unavailable." }, { status: 404 });
+        } catch (error) {
+          return serverError("Published Geo plot status unavailable.",
+            error instanceof Error ? error.message : "Invalid current mapping.");
+        }
       }
 
       if (parts[1] === "geo-placement" && parts.length === 2) {
