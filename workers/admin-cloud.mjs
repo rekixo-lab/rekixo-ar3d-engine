@@ -597,8 +597,7 @@ async function createCloudProject(request, env, actor) {
   const name=String(body.name||"").trim(),location=String(body.location||"").trim();
   // Legacy API callers preserve their previous workflow by default.
   const projectKind = body.projectKind === undefined ? "legacy" : body.projectKind;
-  let customerContact;
-  try { customerContact=initialProjectContact(body.customerContact); }
+  let customerContact;try { customerContact=initialProjectContact(body.customerContact); }
   catch(error){return json({error:error.message},{status:400});}
   if (
     !isEngineProjectKind(projectKind) ||
