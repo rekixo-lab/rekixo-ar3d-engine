@@ -154,8 +154,9 @@ test("processing API exposes current artifacts without creating public asset URL
 
 test("Processing Spine shows canonical identity and blocks downstream mapping when handoff is incomplete", () => {
   assert.match(processingUi, /type CanonicalOutputHandoffV1/);
-  assert.match(processingUi, /CANONICAL MODEL/);
-  assert.match(processingUi, /CANONICAL MANIFEST/);
-  assert.match(processingUi, /CANONICAL HANDOFF/);
-  assert.match(processingUi, /Downstream mapping remains blocked/);
+  assert.match(processingUi, /canonicalOutput\?\.nodeCatalog/);
+  assert.match(processingUi, /canonicalOutput\.model\.sha256/);
+  assert.match(processingUi, /Model prepared/);
+  assert.match(processingUi, /processing-spine__mapper-link/);
+  assert.match(processingUi, /ModelScaleReview/);
 });
