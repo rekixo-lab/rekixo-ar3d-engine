@@ -112,10 +112,11 @@ export async function activateGeoRelease(
   const now = new Date().toISOString();
   const restoreMapping=transition.matchingMappingId ? [
     env.DB.prepare(`UPDATE geo_plot_mapping_active_3d
-      SET mapping_release_id=?,updated_by=?,updated_at=?
-      WHERE project_id=? AND experience_id=? AND mapping_release_id=?`).bind(
-      transition.matchingMappingId,actor.email,now,project.id,context.experienceId,
-      transition.currentMappingId)
+      SET mapping_release_id=CASE WHEN mapping_release_id=? THEN ? ELSE NULL END,
+          updated_by=?,updated_at=?
+      WHERE project_id=? AND experience_id=?`).bind(
+      transition.currentMappingId,transition.matchingMappingId,actor.email,now,
+      project.id,context.experienceId)
   ] : [];
   await env.DB.batch([
     env.DB.prepare(
