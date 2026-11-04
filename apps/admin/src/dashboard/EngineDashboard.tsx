@@ -67,6 +67,9 @@ export default function EngineDashboard() {
   const [showCreate, setShowCreate] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createLocation, setCreateLocation] = useState("");
+  const [createCallNumber,setCreateCallNumber] = useState("");
+  const [createWhatsappNumber,setCreateWhatsappNumber] = useState("");
+  const [createPublicContacts,setCreatePublicContacts] = useState(false);
   const [createKind, setCreateKind] = useState<EngineProjectKind>("building");
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -341,10 +344,12 @@ export default function EngineDashboard() {
       const draft = newProject(name);
       draft.location = createLocation.trim();
       draft.slug = projectSlug(draft);
-      const result = await ensureProject(draft, createKind);
-      // New Building-backed Geo plot projects first collect the approved
-      // project number, owner, address and contact consent in Profile.
-      // Source/Building/Geo/Plots remain independent verifiable stages.
+      const result = await ensureProject(draft, createKind,{
+        phonePrimary:createCallNumber.trim(),whatsapp:createWhatsappNumber.trim(),
+        publicContactsEnabled:createPublicContacts,
+      });
+      // All Geo contacts are persisted in the Engine project profile; public
+      // sharing is separately authorized by this explicit owner checkbox.
       if(createKind==="building_geo")
         window.location.assign(`/3Dprojects/profile?project=${encodeURIComponent(result.project.slug)}`);
       else
@@ -548,6 +553,24 @@ export default function EngineDashboard() {
               <span>Location</span>
               <input value={createLocation} onChange={(event) => setCreateLocation(event.target.value)} placeholder="City / site" />
             </label>
+            <label>
+              <span>Customer Call number (optional)</span>
+              <input type="tel" value={createCallNumber} maxLength={25} autoComplete="tel"
+                onChange={event=>setCreateCallNumber(event.target.value)}
+                placeholder="+91 98765 43210" />
+            </label>
+            <label>
+              <span>Customer WhatsApp number (optional)</span>
+              <input type="tel" value={createWhatsappNumber} maxLength={25} autoComplete="off"
+                onChange={event=>setCreateWhatsappNumber(event.target.value)}
+                placeholder="+91 98765 43210" />
+            </label>
+            <label className="engine-overview-create-public-contact">
+              <input type="checkbox" checked={createPublicContacts}
+                onChange={event=>setCreatePublicContacts(event.target.checked)}/>
+              <span>Show these numbers on the public Geo site's Call and WhatsApp buttons</span>
+            </label>
+            <small>Public sharing is optional and OFF by default. Private Client Admin numbers are never used.</small>
             {createError ? <div className="engine-overview-create-error">{createError}</div> : null}
             <div className="engine-overview-modal__actions">
               <button className="engine-control-button" type="button" disabled={createBusy} onClick={() => setShowCreate(false)}>Cancel</button>
