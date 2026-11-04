@@ -49,7 +49,8 @@ function sourceReference(state,project) {
   if(state.manifest.release.projectId!==project.id ||
     state.manifest.release.projectSlug!==project.slug)
     throw Error("Building release ownership mismatch.");
-  return {...src,projectId:project.id,projectSlug:project.slug};
+  return {...src,projectId:project.id,projectSlug:project.slug,
+    manifestSha256:state.manifestSha256};
 }
 function samePlots(current,live) {
   return stable(validateGeoPlotCollection(JSON.parse(current.plots_json)))===
