@@ -12,9 +12,9 @@ test("selection pulse settles while selected prism reflection keeps moving", () 
   assert.equal(atStart.animate, true);
   assert.equal(during.animate, true);
   assert.equal(settled.animate, true);
-  assert.equal(settled.fillOpacity, 0.26);
-  assert.ok(settled.haloOpacity >= 0.80 && settled.haloOpacity <= 0.98);
-  assert.ok(during.fillOpacity >= 0.26 && during.fillOpacity <= 0.38);
+  assert.equal(settled.fillOpacity, 0.33);
+  assert.ok(settled.haloOpacity >= 0.90 && settled.haloOpacity <= 1);
+  assert.ok(during.fillOpacity >= 0.33 && during.fillOpacity <= 0.48);
   assert.ok(settled.reflectTime > during.reflectTime);
   assert.ok(settled.reflectStrength > 0);
   assert.ok(settled.wallOpacity > 0 && settled.roofOpacity > 0);
@@ -26,7 +26,7 @@ test("selection pulse settles while selected prism reflection keeps moving", () 
 test("reduced-motion preference keeps static selected outline", () => {
   const motion = geoPlotFocusMotion(150, 100, true);
   assert.equal(motion.animate, false);
-  assert.equal(motion.haloOpacity, 0.80);
+  assert.equal(motion.haloOpacity, 0.90);
   assert.equal(motion.reflectTime, 0);
   assert.equal(motion.reflectStrength, 0);
   assert.equal(motion.edgeOpacity, 0.99);
@@ -61,7 +61,25 @@ test("visual strength is at least 25 percent greater than the previous glass bas
   assert.ok(frame.wallOpacity >= (0.15 + 0.08 * 0.5) * 1.25);
   assert.ok(frame.roofOpacity >= (0.08 + 0.04 * 0.5) * 1.25);
   const shader = read("apps/public/src/geo/geoPlotSelectionFocus.ts");
-  assert.match(shader, /float alpha = clamp\(uOpacity \* \(0\.90 \+ glint \* 0\.48\), 0\.0, 0\.80\)/);
+  assert.match(shader, /float alpha = clamp\(uOpacity \* \(0\.95 \+ glint \* 0\.55\), 0\.0, 0\.90\)/);
+});
+
+test("second 25 percent boost retains visibility and keeps motion bounded", () => {
+  const previous = {fill: 0.26, wallBase: 0.19, wallWave: 0.10,
+    roofBase: 0.10, roofWave: 0.05, reflection: 0.88};
+  for (const t of [100, 400, 900, 1600, 2200, 4500]) {
+    const frame = geoPlotFocusMotion(t, 100);
+    const shimmer = 0.5 + 0.5 * Math.sin(Math.max(0, t - 100) / 1000 * 1.65);
+    assert.ok(frame.wallOpacity + 1e-12 >=
+      1.25 * (previous.wallBase + previous.wallWave * shimmer));
+    assert.ok(frame.roofOpacity + 1e-12 >=
+      1.25 * (previous.roofBase + previous.roofWave * shimmer));
+    assert.ok(frame.reflectStrength >= previous.reflection * 1.25);
+    assert.ok(frame.wallOpacity < 0.5 && frame.roofOpacity < 0.25);
+    assert.ok(frame.rimOpacity <= 1);
+  }
+  assert.ok(geoPlotFocusMotion(100, 100, true).fillOpacity >= previous.fill * 1.25);
+  assert.equal(geoPlotFocusMotion(500, 100, true).animate, false);
 });
 
 test("glass prism uses the exact mapped footprint and a bounded redraw timer", () => {
