@@ -1,5 +1,6 @@
 export type GeoPlotStatus="available"|"booked"|"sold";
 export declare const GEO_PLOT_STATUS_VALUES:readonly GeoPlotStatus[];
+export declare const GEO_PLOT_STATUS_COLORS:Readonly<Record<GeoPlotStatus,number>>;
 
 export type GeoPlotStatusSummary={
   total:number;available:number;booked:number;sold:number;
