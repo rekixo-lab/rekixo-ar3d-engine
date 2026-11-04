@@ -9,17 +9,17 @@ export function geoPlotFocusMotion(now, startedAt, reducedMotion = false) {
   const shimmer = reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(elapsed / 1000 * 1.65);
   return {
     // Preserve original plan texture and plot number through the glass.
-    fillOpacity: 0.26 + wave * 0.12,
-    haloOpacity: 0.80 + wave * 0.18,
+    fillOpacity: 0.33 + wave * 0.15,
+    haloOpacity: 0.90 + wave * 0.10,
     edgeOpacity: 0.99,
     dotsOpacity: 0.99,
     rippleOpacity: reducedMotion ? 0 : 0.68 * Math.pow(1 - progress, 1.45),
     rippleScale: reducedMotion ? 1 : 1 + 0.14 * progress,
-    wallOpacity: 0.19 + 0.10 * shimmer,
-    roofOpacity: 0.10 + 0.05 * shimmer,
-    rimOpacity: 0.82 + 0.18 * shimmer,
+    wallOpacity: 0.24 + 0.125 * shimmer,
+    roofOpacity: 0.13 + 0.063 * shimmer,
+    rimOpacity: 0.90 + 0.10 * shimmer,
     reflectTime: reducedMotion ? 0 : elapsed / 1000,
-    reflectStrength: reducedMotion ? 0 : 0.88,
+    reflectStrength: reducedMotion ? 0 : 1.10,
     animate: !reducedMotion,
   };
 }
