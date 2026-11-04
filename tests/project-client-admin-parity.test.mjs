@@ -54,7 +54,10 @@ test("Session cannot be shared across projects and retains least privilege",()=>
  assert.match(ui,/Back to Project/);
  assert.match(ui,/BuilderAdminBrand/);
  assert.match(ui,/Change Temporary Password/);
- assert.match(ui,/!authGate&&<header className="engine-client-admin-head">/);
+ assert.doesNotMatch(ui,/<header className="engine-client-admin-head">/);
+ assert.doesNotMatch(ui,/className="engine-client-admin-page-heading"/);
+ assert.match(ui,/engine-client-admin-sidebar-actions/);
+ assert.match(ui,/engine-client-admin-mobile-actions/);
  assert.match(ui,/BuilderAdminBrand projectName=\{projectLabel\}/);
  assert.match(ui,/engine-client-admin-auth/);
  assert.match(ui,/engine-client-admin-reveal/);
