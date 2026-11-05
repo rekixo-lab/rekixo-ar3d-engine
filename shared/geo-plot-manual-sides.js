@@ -39,8 +39,9 @@ export function stageGeoManualSideRange(plot,locks,role,startCorner,endCorner){
 
 export function geoManualSourceSignature(plot){
   if(!plot)return "";
-  return JSON.stringify([plot.id,plot.layout,plot.corners,
-    ORDER.map(role=>plot.sides?.[role]?.edges||[])]);
+  // ALL local draft fields matter: avoid overwriting a concurrent CSV/area
+  // update, source verification, road choice or precision edit from the preview.
+  return JSON.stringify(plot);
 }
 
 function checkLocks(plot,locks){
