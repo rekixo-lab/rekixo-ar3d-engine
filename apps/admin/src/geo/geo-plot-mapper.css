@@ -495,3 +495,65 @@
 .geo-plot-advanced-details:not([open])>*:not(summary),
 .geo-plot-inventory-browser:not([open])>*:not(summary),
 .geo-plot-toolbar-more:not([open])>*:not(summary){display:none!important}
+
+/* Guided side mapping — explicit, independent range previews, never auto-apply. */
+.geo-plot-guided-sides{gap:10px}
+.geo-plot-side-mode-choices{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.geo-plot-page .geo-plot-side-mode-choices button{
+  font-size:11px;min-width:0;padding:8px 5px;font-weight:750
+}
+.geo-plot-page .geo-plot-side-mode-choices button.active{
+  border-color:#65d8af;background:#115448;color:#e5fff4
+}
+.geo-plot-guided-sides .geo-plot-side-role-buttons button{
+  display:flex;align-items:center;justify-content:center;gap:4px;white-space:normal
+}
+.geo-plot-guided-sides .geo-plot-side-role-buttons button span{font-size:16px}
+.geo-plot-manual-instructions{
+  display:grid;gap:5px;border:1px solid #3a6977;border-radius:8px;
+  background:#0b2836;padding:9px;color:#e0f5f6;font-size:11px;line-height:1.45
+}
+.geo-plot-manual-instructions strong{color:#90e9c6;font-size:12px}
+.geo-plot-manual-instructions span:last-child{font-size:10px;color:#abc6d0}
+.geo-plot-manual-range-select{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.geo-plot-manual-range-select label{min-width:0;margin:0;font-size:11px}
+.geo-plot-page .geo-plot-manual-range-select select{
+  min-width:0;padding:8px 6px;font-size:12px
+}
+.geo-plot-manual-lock-list{display:grid;gap:5px}
+.geo-plot-manual-lock-list>div{
+  display:flex;align-items:center;gap:6px;border-radius:6px;background:#082734;
+  border:1px solid #355b63;padding:6px 8px;min-width:0;font-size:11px
+}
+.geo-plot-manual-lock-list>div.locked{border-color:#3aa381;background:#0f3938}
+.geo-plot-manual-lock-list strong{flex:0 0 65px;font-size:11px}
+.geo-plot-manual-lock-list small{flex:1;min-width:0;overflow-wrap:anywhere;font-size:10px}
+.geo-plot-page .geo-plot-manual-lock-list button{
+  padding:1px 6px;min-width:26px;font-size:15px
+}
+.geo-plot-page .geo-plot-side-autofill{
+  width:100%;border-color:#65d8af;background:#10564c;font-weight:800;font-size:12px
+}
+.geo-plot-manual-preview{
+  display:grid;gap:6px;border:1px solid #4d9b8d;border-radius:9px;
+  background:#0b303b;padding:10px
+}
+.geo-plot-manual-preview>strong{font-size:12px;color:#a4f9d6}
+.geo-plot-manual-preview p{font-size:11px;margin:0;line-height:1.5;color:#d4ebee}
+.geo-plot-manual-preview-role{
+  display:flex;align-items:center;gap:6px;border-top:1px solid #31535d;
+  padding:6px 0 0;font-size:11px
+}
+.geo-plot-manual-preview-role b{flex:0 0 65px}
+.geo-plot-manual-preview-role>span:last-child{flex:1;overflow-wrap:anywhere}
+.geo-plot-page .geo-plot-manual-preview .geo-plot-action-primary{
+  width:100%;font-weight:800;padding:10px 8px;background:#087950;border-color:#34d399
+}
+.geo-plot-page .geo-plot-side-cancel-preview{font-size:11px;padding:7px 5px}
+.geo-plot-manual-corner-hit{cursor:crosshair;touch-action:none}
+.geo-plot-manual-corner-hit:focus-visible{outline:2px solid #5eead4}
+@media(max-width:620px){
+  .geo-plot-manual-range-select{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .geo-plot-guided-sides{padding:9px}
+  .geo-plot-page .geo-plot-side-mode-choices button{font-size:10px}
+}

@@ -14,6 +14,9 @@ import {nextUnmappedInventory,parseGeoInventoryCsv,normalizeGeoInventoryRows,
 import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
 import {inferFrontFirstSideGroups,roadFrontPreview} from "../../../../shared/geo-plot-smart-sides.js";
 import {inspectGeoPlotSideCoverage,repairGeoPlotSideCoverage} from "../../../../shared/geo-plot-side-integrity.js";
+import {stageGeoManualSideRange,proposeGeoManualSideMapping,applyGeoManualSideProposal,
+  geoManualSourceSignature, type GeoManualSideLocks,type GeoManualProposal
+} from "../../../../shared/geo-plot-manual-sides.js";
 import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import {cloneUnverifiedGeoPlot,geoPlotEvidenceManifest,geoPlotQualityReport} from "../../../../shared/geo-plot-stage3-review.js";
@@ -51,6 +54,9 @@ type PointerPreview = {clientX:number;clientY:number;rawScreen:Point;screen:Poin
   point:Point;kind:"none"|"vertex"|"edge";pointerType:string};
 type PointerStart = {id:number;x:number;y:number;cancelled?:boolean};
 const ROLES: Role[] = ["front", "back", "depthA", "depthB"];
+const ROLE_COLORS:Record<Role,string>={
+  front:"#34d399",back:"#fb923c",depthA:"#60a5fa",depthB:"#c084fc"
+};
 const directions=GEO_COMPASS_DIRECTIONS.map(item=>item.id);
 const emptySide = (edges:number[]=[]):Side => ({edges,length:0,unit:"ft",roadFacing:false,source:"",verified:false});
 const blank = (id:string):Plot => ({id,corners:[],layout:"four",sides:{},
@@ -169,6 +175,10 @@ export default function GeoPlotMapper(){
   const working=workingHistory.present;
   const [selectedCorner,setSelectedCorner]=useState<number|null>(null);
   const [nudgeStep,setNudgeStep]=useState(0.01);
+  const [sideEditKind,setSideEditKind]=useState<"auto"|"manual">("manual");
+  const [manualSideLocks,setManualSideLocks]=useState<GeoManualSideLocks>({});
+  const [manualStartCorner,setManualStartCorner]=useState<number|null>(null);
+  const [manualProposal,setManualProposal]=useState<GeoManualProposal<Plot>|null>(null);
   const setWorking=useCallback((update:SetStateAction<Plot|null>)=>{
     // Capture grouping before React batches a pointer release; a closed drag must
     // not accidentally create one undo entry per intermediate frame.
@@ -180,14 +190,23 @@ export default function GeoPlotMapper(){
   },[]);
   const resetWorking=useCallback((plot:Plot|null)=>{
     dragStartRef.current=null;setSelectedCorner(null);
+    setManualSideLocks({});setManualStartCorner(null);setManualProposal(null);
     setWorkingHistory(history=>replacePlotEditHistory(history,plot));
   },[]);
   const closeCornerDrag=()=>{
     const started=dragStartRef.current;dragStartRef.current=null;
     if(started)setWorkingHistory(history=>closeGroupedPlotEdit(history,started));
   };
-  const undoWorkingEdit=()=>{if(dragStartRef.current)return;setWorkingHistory(undoPlotEdit);};
-  const redoWorkingEdit=()=>{if(dragStartRef.current)return;setWorkingHistory(redoPlotEdit);};
+  const undoWorkingEdit=()=>{
+    if(dragStartRef.current)return;
+    setManualSideLocks({});setManualStartCorner(null);setManualProposal(null);
+    setWorkingHistory(undoPlotEdit);
+  };
+  const redoWorkingEdit=()=>{
+    if(dragStartRef.current)return;
+    setManualSideLocks({});setManualStartCorner(null);setManualProposal(null);
+    setWorkingHistory(redoPlotEdit);
+  };
   const [originalId,setOriginalId]=useState<string|null>(null);
   const [dirty,setDirty]=useState(false);
   const [message,setMessage]=useState("");
@@ -279,6 +298,8 @@ export default function GeoPlotMapper(){
   const hasUnapplied=hasPendingPlotEdits(working,originalId?plots.find(p=>p.id===originalId):null);
   const sideCoverage=useMemo(()=>working&&working.corners.length>=3?
     inspectGeoPlotSideCoverage(working):null,[working]);
+  const previewIsCurrent=Boolean(manualProposal&&working&&
+    manualProposal.baseSignature===geoManualSourceSignature(working));
   const progress=useMemo(()=>visibleMappingProgress(inventoryRows,plots),[inventoryRows,plots]);
   useEffect(()=>{
     const key=draftStorageKey(slug);
@@ -837,8 +858,81 @@ export default function GeoPlotMapper(){
     setWorking(p=>p?applyApprovedInventoryRow(p,selectedInventory):p);
     setMessage("Plot "+working.id+": approved CSV values staged. Recheck road-facing edge, measurements and sources before applying.");
   };
+  const clearManualSidePreview=()=>{
+    setManualSideLocks({});setManualStartCorner(null);setManualProposal(null);
+  };
+  const openManualSideEditor=()=>{
+    clearManualSidePreview();setSideEditKind("manual");setSelectedRole("front");
+    setExtendSide(false);setMode("side");setInspectorTab("plot");
+    setMessage("Manual: choose Front/Back/Depth, tap its START corner and END corner. "+
+      "Your other sides will not change until you review and Apply.");
+  };
+  const openAutoSideEditor=()=>{
+    clearManualSidePreview();setSideEditKind("auto");setSelectedRole("front");
+    setExtendSide(false);setMode("side");setInspectorTab("plot");
+    setMessage("Auto Front: tapping an edge will reassign whole side groups. "+
+      "Use Manual to choose each corner range independently.");
+  };
+  const selectManualCorner=(index:number)=>{
+    if(!working||mode!=="side"||sideEditKind!=="manual"||busy||!editable)return;
+    if(manualStartCorner===null){
+      setManualStartCorner(index);setManualProposal(null);
+      setMessage("Start corner "+(index+1)+" selected for "+selectedRole+
+        ". Now tap the LAST corner on the same boundary (end exclusive).");
+      return;
+    }
+    try{
+      const next=stageGeoManualSideRange(working,manualSideLocks,selectedRole,manualStartCorner,index);
+      const range=next[selectedRole]||[];
+      setManualSideLocks(next);setManualStartCorner(null);setManualProposal(null);
+      setMessage(selectedRole+": corners "+(manualStartCorner+1)+" → "+(index+1)+
+        " staged as "+range.length+" connected edge(s). Other roles are UNCHANGED. "+
+        "Choose more roles, then Auto Fill Rest to PREVIEW.");
+    }catch(error){
+      setManualStartCorner(null);
+      setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));
+    }
+  };
+  const previewManualSides=()=>{
+    if(!working||!editable||busy)return;
+    try{
+      const proposed=proposeGeoManualSideMapping(working,manualSideLocks);
+      setManualProposal(proposed);
+      setMessage("Preview only: "+proposed.edgeCount+" edges covered; "+
+        proposed.changedRoles.length+" roles would change ("+
+        proposed.changedRoles.join(", ")+"). "+
+        "Original mapping is unchanged until Apply Preview.");
+    }catch(error){
+      setManualProposal(null);
+      setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));
+    }
+  };
+  const applyManualSides=()=>{
+    if(!working||!manualProposal||!previewIsCurrent||!editable||busy)return;
+    const changes=manualProposal.changedRoles;
+    if(!changes.length){
+      clearManualSidePreview();setMode("edit");
+      setMessage("No side changes required; original mapping retained.");
+      return;
+    }
+    const unlocked=manualProposal.changedUnpinned;
+    const explanation="Apply these DRAFT-only side changes to Plot "+working.id+"?\\n"+
+      "Changed: "+changes.join(", ")+"\\n"+
+      (unlocked.length?"Auto-filled (not individually selected): "+unlocked.join(", ")+"\\n":"")+
+      "Every edge stays assigned exactly once. Survey lengths and polygon corners stay intact. "+
+      "Affected road/facing/side verification resets. NOT published.";
+    if(!window.confirm(explanation))return;
+    try{
+      const next=applyGeoManualSideProposal(working,manualProposal);
+      setWorking(next);
+      clearManualSidePreview();setMode("edit");
+      setMessage("✓ Plot "+working.id+": "+changes.join(", ")+
+        " applied to local editor. All polygon edges covered. Recheck road, "+
+        "CSV measurements and approvals, then Save & Next.");
+    }catch(error){setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));}
+  };
   const assignSideOnCanvas=(edge:number)=>{
-    if(!working||busy||mode!=="side"||working.corners.length<3)return;
+    if(!working||busy||mode!=="side"||sideEditKind!=="auto"||working.corners.length<3)return;
     try{
       const changed=assignVisiblePlotEdge(working,selectedRole,edge,{extend:extendSide});
       const suggested=selectedRole==="front"?
@@ -1398,7 +1492,7 @@ export default function GeoPlotMapper(){
           <summary>More</summary>
           <div className="geo-plot-toolbar-more-menu">
             <button type="button" disabled={!editable||busy||!working||working.corners.length<3}
-              onClick={()=>{setMode("side");setInspectorTab("plot");}}>↔ Assign Sides</button>
+              onClick={openManualSideEditor}>↔ Assign Sides</button>
             <button type="button" disabled={busy||!workingHistory.future.length}
               aria-label="Redo working plot edit" onClick={redoWorkingEdit}>↷ Redo</button>
             <button type="button" disabled={!working?.corners.length||busy||Boolean(originalId)}
@@ -1451,7 +1545,7 @@ export default function GeoPlotMapper(){
           {working&&working.corners.length>0&&<>
             <polyline points={path(working.corners)} fill={working.corners.length>=3?"rgba(250,204,21,.22)":"none"}
               stroke="#ffd965" strokeWidth="2.5" strokeDasharray="7 4"/>
-            {showGuides&&ROLES.filter(role=>working.layout==="four"||role!=="depthB")
+            {showGuides&&mode!=="side"&&ROLES.filter(role=>working.layout==="four"||role!=="depthB")
                .map(role=>{
                  const side=working.sides[role],anchor=sideLabelAnchor(working.corners,side?.edges||[]);
                  if(!side||!anchor)return null;
@@ -1466,20 +1560,30 @@ export default function GeoPlotMapper(){
              {(mode==="side"||Boolean(sideCoverage&&!sideCoverage.ok))&&
               working.corners.length>=3&&working.corners.map((point,index)=>{
                 const [x1,y1]=project(point),[x2,y2]=project(working.corners[(index+1)%working.corners.length]);
-                const role=ROLES.find(item=>working.sides[item]?.edges.includes(index))||"";
+                const currentRole=ROLES.find(item=>working.sides[item]?.edges.includes(index))||"";
+                const previewRole=manualProposal&&previewIsCurrent?
+                  ROLES.find(item=>manualProposal.plot.sides[item]?.edges.includes(index)):
+                  sideEditKind==="manual"?
+                    ROLES.find(item=>manualSideLocks[item]?.includes(index)):null;
+                const manual=mode==="side"&&sideEditKind==="manual";
+                const activeRole=manual?previewRole:currentRole;
                 const missing=sideCoverage?.missingEdges.includes(index);
                 const duplicated=sideCoverage?.duplicateEdges.includes(index);
                 const bad=missing||duplicated;
                 return <g key={"side-edge-"+index} className="geo-plot-side-hit">
                   <line x1={x1} y1={y1} x2={x2} y2={y2}
-                    stroke={bad?"#ff555e":role===selectedRole?"#40ffb4":"#ffdc86"}
-                    strokeWidth={bad?"7":"5"} pointerEvents="none"/>
+                    stroke={bad?"#ff555e":activeRole?
+                      ROLE_COLORS[activeRole as Role]:manual?"#647784":
+                      currentRole===selectedRole?"#40ffb4":"#ffdc86"}
+                    strokeWidth={bad?"7":manual?(activeRole?"7":"3"):"5"}
+                    strokeLinecap="round" pointerEvents="none"/>
                   {bad&&<text x={(x1+x2)/2} y={(y1+y2)/2-9} textAnchor="middle"
                     fill="#fff" stroke="#9a192a" paintOrder="stroke" fontSize="12"
                     pointerEvents="none">Edge {index+1} !</text>}
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent"
-                    strokeWidth="22" pointerEvents={mode==="side"?"stroke":"none"}
-                    onPointerDown={e=>{if(mode!=="side")return;e.preventDefault();e.stopPropagation();assignSideOnCanvas(index);}}
+                    strokeWidth="22" pointerEvents={mode==="side"&&sideEditKind==="auto"?"stroke":"none"}
+                    onPointerDown={e=>{if(mode!=="side"||sideEditKind!=="auto")return;
+                      e.preventDefault();e.stopPropagation();assignSideOnCanvas(index);}}
                     onPointerUp={e=>e.stopPropagation()}
                     aria-label={"Assign edge "+(index+1)+" to "+selectedRole}/>
                 </g>;
@@ -1506,7 +1610,16 @@ export default function GeoPlotMapper(){
                   r={Math.max(4.5,10-Math.min((zoomPercent-100)/4900,1)*4)}
                   fill="#ffe49d" stroke="#182a3e" strokeWidth="2.5" pointerEvents="none"/>
                 <text x={x+12} y={y-10} fill="#fff" fontSize="13" stroke="#111"
-                  paintOrder="stroke" pointerEvents="none">{i+1}</text></g>;
+                  paintOrder="stroke" pointerEvents="none">{i+1}</text>
+                {mode==="side"&&sideEditKind==="manual"&&
+                  <circle cx={x} cy={y} r={manualStartCorner===i?21:17}
+                    fill={manualStartCorner===i?"#34d39944":"transparent"}
+                    stroke={manualStartCorner===i?"#34d399":"transparent"}
+                    strokeWidth="3" className="geo-plot-manual-corner-hit"
+                    aria-label={"Corner "+(i+1)+" for manual side range"}
+                    onPointerDown={e=>{e.preventDefault();e.stopPropagation();selectManualCorner(i);}}
+                    onPointerUp={e=>e.stopPropagation()}/>}
+                </g>;
             })}
           </>}
         </svg>}
@@ -1514,7 +1627,9 @@ export default function GeoPlotMapper(){
            <b>Plot {working.id}</b>
            <span>{shape==="four"?working.corners.length+"/4":working.corners.length+" (irregular)"} corners</span>
            <span>{mode==="draw"?"Mark Front edge first":mode==="edit"?"Drag numbered corner handles":
-             mode==="side"?"Tap highlighted boundary edges to assign "+selectedRole:
+             mode==="side"?(sideEditKind==="manual"?
+               (manualStartCorner===null?"Manual · tap START corner for "+selectedRole:
+                 "Manual · tap END corner for "+selectedRole):"Auto · tap boundary edge for "+selectedRole):
              pausedDrawing?"Paused · "+pausedDrawing.nextCorner+" is next · Resume Drawing":"Pan / pinch to inspect"}</span>
          </div>}
          {pausedDrawing&&<div className="geo-plot-paused-banner" role="status">
@@ -1723,9 +1838,9 @@ export default function GeoPlotMapper(){
            <div className="geo-plot-compact-actions">
              <button type="button" disabled={!editable||busy||!sideCoverage?.ok}
                aria-label="Change Front by tapping plot edge"
-               onClick={()=>{setSelectedRole("front");setMode("side");}}>Change Front</button>
+               onClick={openManualSideEditor}>Change Front</button>
              <button type="button" disabled={!editable||busy||!sideCoverage?.ok}
-               onClick={()=>{setSelectedRole("front");setMode("side");}}>Edit Sides</button>
+               onClick={openManualSideEditor}>Edit Sides</button>
              <button type="button" disabled={!editable||busy}
                onClick={()=>{if(advancedDetailsRef.current)advancedDetailsRef.current.open=true;}}>
                Edit Values
@@ -1739,24 +1854,136 @@ export default function GeoPlotMapper(){
              onClick={()=>void confirmPlotAndNext()}>✓ {busy?"Saving…":"Save & Next"}</button>
          </section>}
          {working&&mode==="side"&&working.corners.length>=3&&
-           <section className="geo-plot-visual-side-panel geo-plot-context-side">
+           <section className="geo-plot-visual-side-panel geo-plot-context-side geo-plot-guided-sides"
+             aria-label="Guided manual side assignment">
              <div className="geo-plot-context-head">
-               <strong>Edit sides on canvas</strong>
-               <button type="button" onClick={()=>setMode("edit")}>Done</button>
+               <strong>Assign plot sides</strong>
+               <button type="button" onClick={()=>{
+                 if(sideEditKind==="manual"&&
+                   (Object.keys(manualSideLocks).length>0||manualProposal)&&
+                   !window.confirm("Discard the unapplied side PREVIEW? Saved plot mapping stays unchanged."))return;
+                 clearManualSidePreview();setMode("edit");
+               }}>Done</button>
              </div>
-             <div className="geo-plot-side-role-buttons">
+             <div className="geo-plot-side-mode-choices" role="group" aria-label="Side edit mode">
+               <button type="button" className={sideEditKind==="manual"?"active":""}
+                 aria-pressed={sideEditKind==="manual"} onClick={openManualSideEditor}>
+                 Manual · Independent
+               </button>
+               <button type="button" className={sideEditKind==="auto"?"active":""}
+                 aria-pressed={sideEditKind==="auto"} onClick={()=>{
+                   if(Object.keys(manualSideLocks).length&&
+                     !window.confirm("Discard the unapplied manual ranges and switch to Auto?"))return;
+                   openAutoSideEditor();
+                 }}>Auto · Reassign</button>
+             </div>
+             <div className="geo-plot-side-role-buttons" role="group" aria-label="Choose logical side">
                {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>
                  <button type="button" key={role} aria-pressed={selectedRole===role}
                    className={selectedRole===role?"active":""} disabled={busy||!editable}
-                   onClick={()=>setSelectedRole(role)}>
+                   style={{borderColor:selectedRole===role?ROLE_COLORS[role]:undefined}}
+                   onClick={()=>{setSelectedRole(role);setManualStartCorner(null);}}>
+                   <span style={{color:ROLE_COLORS[role]}}>●</span>{" "}
                    {role==="depthA"?"Depth A":role==="depthB"?"Depth B":role==="front"?"Front":"Back"}
+                   {sideEditKind==="manual"&&manualSideLocks[role]?.length?
+                     " ✓":""}
                  </button>)}
              </div>
-             {working.corners.length>4&&<label className="geo-plot-check">
-               <input type="checkbox" checked={extendSide} onChange={e=>setExtendSide(e.target.checked)}/>
-               Adjust connected segments
-             </label>}
-             <small>Tap a boundary edge to assign {selectedRole}. The editor keeps every edge assigned once.</small>
+             {sideEditKind==="manual"?<>
+               <div className="geo-plot-manual-instructions" role="status">
+                 <strong>{manualStartCorner===null?
+                   "1 · Select START corner":"2 · Select END corner"}</strong>
+                 <span>Selected side: {selectedRole==="depthA"?"Depth A":selectedRole==="depthB"?"Depth B":
+                   selectedRole==="front"?"Front":"Back"}.
+                   Tap two numbered corners on the plot. Connected edges between them form ONE side.</span>
+                 <span>Your existing mapping stays unchanged until Apply Preview.</span>
+               </div>
+               <div className="geo-plot-manual-range-select" aria-label="Precise corner selection">
+                 <label>Start corner
+                   <select aria-label="Manual start corner" value={manualStartCorner??""}
+                     onChange={e=>{
+                       setManualStartCorner(e.target.value===""?null:Number(e.target.value));
+                       setManualProposal(null);
+                     }}>
+                     <option value="">Choose start</option>
+                     {working.corners.map((_,i)=><option key={i} value={i}>Corner {i+1}</option>)}
+                   </select>
+                 </label>
+                 <label>End corner
+                   <select aria-label="Manual end corner" value="" disabled={manualStartCorner===null}
+                     onChange={e=>{if(e.target.value!=="")selectManualCorner(Number(e.target.value));}}>
+                     <option value="">Choose end</option>
+                     {working.corners.map((_,i)=><option key={i} value={i}
+                       disabled={i===manualStartCorner}>Corner {i+1}</option>)}
+                   </select>
+                 </label>
+               </div>
+               <div className="geo-plot-manual-lock-list" aria-label="Locked manual side ranges">
+                 {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{
+                   const edges=manualSideLocks[role];
+                   return <div key={role} className={edges?.length?"locked":""}>
+                     <span style={{color:ROLE_COLORS[role]}}>●</span>{" "}
+                     <strong>{role==="depthA"?"Depth A":role==="depthB"?"Depth B":
+                       role==="front"?"Front":"Back"}</strong>
+                     <small>{edges?.length?"Corners "+(edges[0]+1)+" → "+
+                       ((edges.at(-1)!+1)%working.corners.length+1)+
+                       " · "+edges.length+" edge(s)":"Auto-fill remaining"}</small>
+                     {edges?.length&&<button type="button" disabled={busy||!editable}
+                       aria-label={"Clear "+role+" manual selection"}
+                       onClick={()=>{
+                         const updated={...manualSideLocks};delete updated[role];
+                         setManualSideLocks(updated);setManualProposal(null);setManualStartCorner(null);
+                       }}>×</button>}
+                   </div>;
+                 })}
+               </div>
+               <button type="button" className="geo-plot-side-autofill"
+                 disabled={!editable||busy||!Object.keys(manualSideLocks).length}
+                 onClick={previewManualSides}>↻ Auto Fill Rest · Preview</button>
+               {manualProposal&&previewIsCurrent&&
+                 <div className="geo-plot-manual-preview" role="status">
+                   <strong>PREVIEW ONLY · {manualProposal.edgeCount} / {manualProposal.edgeCount} edges</strong>
+                   <p>{manualProposal.changedRoles.length?
+                     "Would change: "+manualProposal.changedRoles.join(", "):
+                     "No mapping changes needed."}</p>
+                   {manualProposal.changedUnpinned.length>0&&
+                     <p>Auto-filled roles: {manualProposal.changedUnpinned.join(", ")}.
+                       These are suggestions, not silent edits.</p>}
+                   {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>
+                     <div key={role} className="geo-plot-manual-preview-role">
+                       <span style={{color:ROLE_COLORS[role]}}>●</span>
+                       <b>{role==="depthA"?"Depth A":role==="depthB"?"Depth B":
+                         role==="front"?"Front":"Back"}</b>
+                       <span>Edges {(manualProposal.plot.sides[role]?.edges||[])
+                         .map(i=>i+1).join(", ")}</span>
+                     </div>)}
+                   <button type="button" className="geo-plot-action-primary"
+                     disabled={!editable||busy} onClick={applyManualSides}>
+                     ✓ Apply Preview
+                   </button>
+                 </div>}
+               {manualProposal&&!previewIsCurrent&&
+                 <p className="geo-plot-warning" role="alert">
+                   Plot changed. Auto Fill Rest again before applying.
+                 </p>}
+               <button type="button" className="geo-plot-side-cancel-preview"
+                 disabled={!editable||busy||(!Object.keys(manualSideLocks).length&&!manualProposal)}
+                 onClick={()=>{clearManualSidePreview();setMessage(
+                   "Manual side preview cancelled. No plot side or source changed.");}}>
+                 Cancel preview
+               </button>
+             </>:<>
+               <p className="geo-plot-warning" role="status">
+                 Auto mode changes whole side groups immediately. For independent
+                 Front / Back / Depth ranges use Manual.
+               </p>
+               {working.corners.length>4&&<label className="geo-plot-check">
+                 <input type="checkbox" checked={extendSide} onChange={e=>setExtendSide(e.target.checked)}/>
+                 Adjust connected segments
+               </label>}
+               <small>Tap an actual boundary EDGE to reassign {selectedRole}. Changes go
+                 into Undo history and reset approvals.</small>
+             </>}
            </section>}
          {state&&state.draft.revision>0&&state.draft.verifiedInventoryRevision!==state.inventoryRevision&&
           state.draft.verifiedRevision===state.draft.revision&&
