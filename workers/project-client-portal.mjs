@@ -10,6 +10,7 @@ import {clientMasterplanInventory} from "./project-client-masterplan-inventory.m
 import {clientProjectContact} from "./project-client-contact.mjs";
 import {passwordClientLogin,passwordClientChange} from "./project-client-passwords.mjs";
 import {clientGeoPlotDetails} from "./project-client-geo-details.mjs";
+import {clientGeoPlotPublish} from "./project-client-geo-plot-publish.mjs";
 import {clientGeoGallery} from "./project-client-geo-gallery.mjs";
 import {clientGeoNotices} from "./project-client-geo-notices.mjs";
 import {clientGeoSales} from "./project-client-geo-sales.mjs";
@@ -145,7 +146,7 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
    ).bind(Date.now(),await clientTokenHash(value)).run();
    return response({ok:true},200,{"Set-Cookie":clear()});
   }
-  const match=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/(overview|commercial|pricing|deals|masterplan-inventory|contact|plot-details|gallery|gallery-image|notices|sales)$/);
+  const match=url.pathname.match(/^\/3Dprojects\/api\/client-portal\/projects\/([a-z0-9-]+)\/(overview|commercial|pricing|deals|masterplan-inventory|contact|plot-details|plot-publish|gallery|gallery-image|notices|sales)$/);
   if(!match)return response({error:"Unknown project client route."},404);
   const s=await projectClientSession(request,env);
   if(!s)return response({error:"Client sign-in required."},401);
@@ -182,8 +183,9 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
     return response({error:"Only image masterplan Geo projects use this inventory."},404);
    return response(await clientMasterplanInventory(env,s.projectId));
   }
-  if(["commercial","pricing","deals","plot-details","gallery","gallery-image","notices","sales"].includes(section)){
-   const allowed=section==="pricing"?["GET","POST"]:
+  if(["commercial","pricing","deals","plot-details","plot-publish","gallery","gallery-image","notices","sales"].includes(section)){
+   const allowed=section==="plot-publish"?["PUT"]:
+     section==="pricing"?["GET","POST"]:
      section==="deals"||section==="commercial"||section==="plot-details"?["GET","PUT"]:
      section==="gallery"?["GET","POST","DELETE"]:
      section==="gallery-image"?["GET"]:
@@ -214,6 +216,9 @@ export async function handleProjectClientPortal(request,env,url=new URL(request.
    };
    const actor={email:s.email,role:s.role};
    if(section==="plot-details")return clientGeoPlotDetails(request,env,context,actor);
+   if(section==="plot-publish")return clientGeoPlotPublish(request,env,context,actor,{
+     allowApprove:canProjectClient(s.role,"commercial.approve")
+   });
    if(section==="gallery"||section==="gallery-image")return clientGeoGallery(request,env,context.project,actor,section);
    if(section==="notices")return clientGeoNotices(request,env,context,actor);
    if(section==="sales")return clientGeoSales(request,env,context,actor);
