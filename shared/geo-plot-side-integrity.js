@@ -23,8 +23,8 @@ export function inspectGeoPlotSideCoverage(plot){
       seen.add(edge);owners[edge].push(role);
     }
   }
-  if(roles.length===3&&Array.isArray(plot?.sides?.depthB?.edges)&&plot.sides.depthB.edges.length)
-    invalidEdges.push({role:"depthB",edge:plot.sides.depthB.edges[0]});
+  if(roles.length===3&&plot?.sides?.depthB!=null)
+    invalidEdges.push({role:"depthB",edge:plot.sides.depthB.edges?.[0]??null});
   const missingEdges=[],duplicateEdges=[];
   owners.forEach((list,i)=>{if(!list.length)missingEdges.push(i);else if(list.length>1)duplicateEdges.push(i);});
   const uniqueDisconnected=[...new Set(disconnectedRoles)];
@@ -51,13 +51,33 @@ export function assignCoveredGeoPlotEdge(plot,role,edge,{extend=false}={}){
   const owner=inspection.owners[edge][0];
   if(!extend){
     if(owner!==role){
-      const previous=sides[role].edges;
-      sides[role].edges=sides[owner].edges;
-      sides[owner].edges=previous;
-      for(const changed of [role,owner]){
-        sides[changed].verified=false;
-        sides[changed].facingDirection=undefined;
-        sides[changed].roadFacing=changed==="front";
+      // When a connected boundary ring follows the four/three logical side
+      // order, rotate WHOLE side groups. Thus selecting a new road Front also
+      // reorients Back and both Depths without losing corner/arc segments.
+      const ordered=inspection.roles.every((key,i)=>{
+        const next=inspection.roles[(i+1)%inspection.roles.length];
+        return (sides[key].edges.at(-1)+1)%n===sides[next].edges[0];
+      });
+      if(ordered){
+        const offset=(inspection.roles.indexOf(owner)-inspection.roles.indexOf(role)+inspection.roles.length)%inspection.roles.length;
+        const old=Object.fromEntries(inspection.roles.map(key=>[key,[...sides[key].edges]]));
+        for(let i=0;i<inspection.roles.length;i++)
+          sides[inspection.roles[i]].edges=[...old[inspection.roles[(i+offset)%inspection.roles.length]]];
+        for(const key of inspection.roles){
+          sides[key].verified=false;
+          sides[key].facingDirection=undefined;
+          sides[key].roadFacing=key==="front"&&role==="front";
+        }
+      }else{
+        // Legacy manually reordered layouts remain editable without data loss.
+        const previous=sides[role].edges;
+        sides[role].edges=sides[owner].edges;
+        sides[owner].edges=previous;
+        for(const changed of [role,owner]){
+          sides[changed].verified=false;
+          sides[changed].facingDirection=undefined;
+          sides[changed].roadFacing=changed==="front"&&role==="front";
+        }
       }
     }else if(role==="front"){
       sides.front.roadFacing=true;
