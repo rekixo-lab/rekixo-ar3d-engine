@@ -1385,7 +1385,7 @@ export default function GeoPlotMapper(){
           </button>
           {mode==="draw"&&shape==="irregular"&&working&&working.corners.length>=3&&
             <button type="button" className="geo-plot-tool-complete"
-              disabled={!editable||busy} onClick={finishBoundary}>✓ Finish boundary</button>}
+              disabled={!editable||busy} onClick={finishBoundary}>✓ Boundary complete</button>}
         </div>
         <div className="geo-plot-tool-group geo-plot-tool-group--secondary">
           <button type="button" disabled={busy||!workingHistory.past.length}
