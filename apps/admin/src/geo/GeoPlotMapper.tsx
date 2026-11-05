@@ -246,6 +246,7 @@ export default function GeoPlotMapper(){
   const overlayRef=useRef<SVGSVGElement>(null);
   const workingRef=useRef(working);
   workingRef.current=working;
+  const advancedDetailsRef=useRef<HTMLDetailsElement|null>(null);
   const displayedPlots=useMemo(()=>plots.filter(p=>p.id.toLowerCase().includes(inventoryQuery.trim().toLowerCase())),
     [plots,inventoryQuery]);
   const inventoryIssues=useMemo(()=>geoInventoryReviewIssues(plots,inventoryRows),
@@ -1689,50 +1690,90 @@ export default function GeoPlotMapper(){
             Plot {working.id} is NOT in the approved CSV ({progress.inventory} IDs).
             Cancel this unfinished plot and select a CSV Plot ID before Confirm.
           </p>}
-         {working&&working.corners.length>=3&&<div className="geo-plot-visual-side-panel" aria-label="Smart plot mapping overview">
+         {working&&working.corners.length>=3&&<section className="geo-plot-compact-card" aria-label="Current plot summary">
+           <div className="geo-plot-compact-head">
+             <strong>Plot {working.id}</strong>
+             <span>{working.corners.length} corners · {sideCoverage?.ok?
+               "✓ "+sideCoverage.edgeCount+" edges assigned":"Side review needed"}</span>
+           </div>
            {sideCoverage&&!sideCoverage.ok&&<div className="geo-plot-warning" role="alert">
-             <strong>Side assignment incomplete — {coverageError(sideCoverage)}</strong>
-             <p>Plot corners are safe. Repair fills every missing edge without remapping; check the corrected Front/Depth groups before verification.</p>
+             <strong>{coverageError(sideCoverage)}</strong>
              <button type="button" disabled={!editable||busy} onClick={repairWorkingSides}>
                Repair Sides · Keep Polygon
              </button>
            </div>}
-           {sideCoverage?.ok&&<small className="geo-plot-coverage-ok">
-             ✓ All {sideCoverage.edgeCount} polygon edges assigned once
-           </small>}
-           <strong>Smart sides · Plot {working.id}</strong>
-           <p className="geo-plot-hint">Initial Front = first drawn edge; Change Front swaps complete side groups, so no polygon edge is lost. For irregular plots, use connected-segment mode to adjust boundaries. Verify the real road before publishing.</p>
-           <p className="geo-plot-hint">Front edge: {(working.sides.front?.edges[0]??0)+1} · Geo-facing suggestion: {roadFrontPreview(working,geo?.placement.headingDeg??Number.NaN,suggestGeoSideFacing)||"Check Geo North"}</p>
-           {inferFrontFirstSideGroups(working.corners)?.reviewRequired&&
-             <p className="geo-plot-warning">Complex irregular sides need visual review. The engine has not guessed a road side or source measurement.</p>}
-           <div className="geo-plot-inspector-actions">
-             <button type="button" disabled={!editable||busy}
-               onClick={()=>{setSelectedRole("front");setMode("side");}}>Select Front on Map</button>
-             <button type="button" className="geo-plot-action-primary"
-               disabled={!editable||busy||!state||(shape==="four"&&working.corners.length!==4)}
-               onClick={()=>void confirmPlotAndNext()}>✓ Save & Next</button>
+           <div className="geo-plot-compact-area">
+             <span>Approved area</span>
+             <strong>{working.area.value>0?working.area.value:selectedInventory?.area||"—"}
+               {" "}{working.area.value>0?working.area.unit:selectedInventory?.areaUnit||""}</strong>
            </div>
-         </div>}
-         {working&&working.corners.length>=3&&<div className="geo-plot-visual-side-panel">
-          <strong>Assign Front / Back / Depth on the 3D boundary</strong>
-          <div className="geo-plot-side-role-buttons">
-            {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>
-              <button type="button" key={role} aria-pressed={mode==="side"&&selectedRole===role}
-                className={mode==="side"&&selectedRole===role?"active":""}
-                disabled={busy||!editable}
-                onClick={()=>{setSelectedRole(role);setMode("side");}}>
-                {role==="depthA"?"Depth A":role==="depthB"?"Depth B":role==="front"?"Front":"Back"}
-              </button>)}
-          </div>
-          {working.corners.length>4&&<label className="geo-plot-check">
-            <input type="checkbox" checked={extendSide}
-              onChange={e=>setExtendSide(e.target.checked)}/> Add connected irregular boundary segments
-          </label>}
-          <small>Select a side, then tap its actual 3D plot edge. Front must touch
-            the real road. Every change resets source/facing approvals.</small>
-          {mode==="side"&&<button type="button" onClick={()=>setMode("edit")}>
-            Done assigning sides · Edit corners</button>}
-        </div>}
+           <div className="geo-plot-compact-dimensions">
+             {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{
+               const length=working.sides[role]?.length||selectedInventory?.[role]||0;
+               const unit=working.sides[role]?.unit||selectedInventory?.lengthUnit||"ft";
+               return <div key={role}>
+                 <span>{role==="depthA"?"Depth A":role==="depthB"?"Depth B":role==="front"?"Front":"Back"}</span>
+                 <strong>{length>0?length.toFixed(2)+" "+unit:"Needs source"}</strong>
+               </div>;
+             })}
+           </div>
+           <div className="geo-plot-compact-meta">
+             <span>Facing <b>{roadFrontPreview(working,geo?.placement.headingDeg??Number.NaN,suggestGeoSideFacing)||working.facing||"—"}</b>
+               <small>Geo suggestion · verify road</small></span>
+             <span>Road <b>{working.sides.front?.roadFacing?"Front selected":"Check Front"}</b></span>
+           </div>
+           {(()=>{const variance=measurementVariance(areaSqm(working.corners),working.area.value,
+             working.area.unit,geo?.placement.scale||1);
+             return variance!==null&&Math.abs(variance)>0.1?
+               <p className="geo-plot-compact-warning" role="status">
+                 ⚠ Area mismatch {(Math.abs(variance)*100).toFixed(1)}% · Review Geometry
+               </p>:null;
+           })()}
+           {inferFrontFirstSideGroups(working.corners)?.reviewRequired&&
+             <p className="geo-plot-compact-hint">Irregular side groups: confirm the real road and corner segments.</p>}
+           {(()=>{const review=reviewQueue.queue.find(item=>item.id.toLowerCase()===working.id.toLowerCase());
+             return review?<button type="button" className="geo-plot-compact-review"
+               onClick={()=>setInspectorTab("quality")}>
+               {review.blockers} blocker(s) · {review.reviews} review(s) · View Quality
+             </button>:null;
+           })()}
+           <div className="geo-plot-compact-actions">
+             <button type="button" disabled={!editable||busy||!sideCoverage?.ok}
+               onClick={()=>{setSelectedRole("front");setMode("side");}}>Change Front</button>
+             <button type="button" disabled={!editable||busy||!sideCoverage?.ok}
+               onClick={()=>{setSelectedRole("front");setMode("side");}}>Edit Sides</button>
+             <button type="button" disabled={!editable||busy}
+               onClick={()=>{if(advancedDetailsRef.current)advancedDetailsRef.current.open=true;}}>
+               Edit Values
+             </button>
+           </div>
+           <button type="button" className="geo-plot-confirm-primary geo-plot-compact-save"
+             disabled={!editable||busy||!state||!sideCoverage?.ok||
+               (shape==="four"&&working.corners.length!==4)||
+               Boolean(inventoryRows.length&&!inventoryRows.some(row=>row.id.toLowerCase()===working.id.toLowerCase()))}
+             aria-label={"Confirm Plot "+working.id+" & Next — Save & Next"}
+             onClick={()=>void confirmPlotAndNext()}>✓ {busy?"Saving…":"Save & Next"}</button>
+         </section>}
+         {working&&mode==="side"&&working.corners.length>=3&&
+           <section className="geo-plot-visual-side-panel geo-plot-context-side">
+             <div className="geo-plot-context-head">
+               <strong>Edit sides on canvas</strong>
+               <button type="button" onClick={()=>setMode("edit")}>Done</button>
+             </div>
+             <div className="geo-plot-side-role-buttons">
+               {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>
+                 <button type="button" key={role} aria-pressed={selectedRole===role}
+                   className={selectedRole===role?"active":""} disabled={busy||!editable}
+                   onClick={()=>setSelectedRole(role)}>
+                   {role==="depthA"?"Depth A":role==="depthB"?"Depth B":role==="front"?"Front":"Back"}
+                 </button>)}
+             </div>
+             {working.corners.length>4&&<label className="geo-plot-check">
+               <input type="checkbox" checked={extendSide} onChange={e=>setExtendSide(e.target.checked)}/>
+               Adjust connected segments
+             </label>}
+             <small>Tap a boundary edge to assign {selectedRole}. The editor keeps every edge assigned once.</small>
+           </section>}
          {state&&state.draft.revision>0&&state.draft.verifiedInventoryRevision!==state.inventoryRevision&&
           state.draft.verifiedRevision===state.draft.revision&&
           <p className="geo-plot-warning" role="status">Source inventory was updated after verification.
