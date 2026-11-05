@@ -508,7 +508,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               [e.clientX-box.left,e.clientY-box.top]);
             zoom(e.deltaY>0?1.12:.88,focus);}}>
           <image href={imageUrl} x="0" y="0" width={draft.width} height={draft.height} />
-          {draft.plots.map(plot=><g key={plot.id} onClick={()=>tool!=="draw"&&choose(plot)}>
+          {draft.plots.map(plot=><g key={plot.id} onClick={()=>tool!=="draw"&&tool!=="front"&&choose(plot)}>
             <polygon points={plot.corners.map(p=>p[0]*draft.width+","+p[1]*draft.height).join(" ")}
               fill="rgba(20,211,161,.17)" stroke="#2be3ad" strokeWidth={Math.max(1,frame.w/600)}/>
             <text x={plot.corners[0][0]*draft.width+4} y={plot.corners[0][1]*draft.height+14}
@@ -616,7 +616,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
                area:{...p.area,verified:false},facingVerified:false}))}>Undo Corner</button>
             <button disabled={working.corners.length<3} onClick={()=>setTool("edit")}>Drag Corners</button>
             {working.corners.length>=3&&<div className="masterplan-guidance">
-              First tapped edge = Front. Sides are suggested automatically; compare with the actual road.
+              Initial Front = first tapped edge. After mapping, choose any road-facing edge to change Front; other sides update automatically.
               {inferFrontFirstSideGroups(working.corners)?.reviewRequired&&
                 <p>Irregular side groups need manual review; no surveyed length is guessed.</p>}
             </div>}
