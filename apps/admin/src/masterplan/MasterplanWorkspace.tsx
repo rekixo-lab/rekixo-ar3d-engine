@@ -4,6 +4,7 @@ import type { Asset } from "../studio/domain";
 import {fitImageFrame,imageWorldAt,panImageFrame,pinchImageFrame,zoomImageFrame} from "../../../../shared/masterplan-image-gestures.js";
 import {assignFourCornerRoadFront} from "../../../../shared/geo-plot-source-operations.js";
 import {inferFrontFirstSideGroups,nearestPlotBoundaryEdge} from "../../../../shared/geo-plot-smart-sides.js";
+import {inspectGeoPlotSideCoverage,repairGeoPlotSideCoverage} from "../../../../shared/geo-plot-side-integrity.js";
 import {packMasterplanRecovery,unpackMasterplanRecovery,reviewMasterplanCsv,invalidateMasterplanSourceProof,
   type MasterplanCsvReview} from "../../../../shared/masterplan-workflow.js";
 import "./masterplan-workspace.css";
@@ -96,6 +97,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const pointerRef=useRef<Map<number,Point>>(new Map());
   const dragRef=useRef<number|null>(null);
   const workingRef=useRef(working);workingRef.current=working;
+  const sideCoverage=useMemo(()=>working&&working.corners.length>=3?
+    inspectGeoPlotSideCoverage(working):null,[working]);
   const load=useCallback(async()=>{
     if(!slug){setState(null);setDraft(null);return;}
     const id=slug;
@@ -360,6 +363,13 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   }
   function apply(){
     if(!working||!draft) return;
+    const audit=inspectGeoPlotSideCoverage(working);
+    if(!audit.ok){
+      setError("Plot "+working.id+": incomplete sides. Unassigned edges "+
+        audit.missingEdges.map(x=>x+1).join(", ")+
+        ". Check duplicates/continuity and use Repair Sides.");
+      return;
+    }
     const id=working.id.trim();
     if(!id||working.corners.length<3){setError("Plot number and at least three polygon corners required.");return;}
     if(draft.plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId)){
