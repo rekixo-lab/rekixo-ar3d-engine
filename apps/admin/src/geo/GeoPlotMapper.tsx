@@ -1492,7 +1492,7 @@ export default function GeoPlotMapper(){
           <summary>More</summary>
           <div className="geo-plot-toolbar-more-menu">
             <button type="button" disabled={!editable||busy||!working||working.corners.length<3}
-              onClick={()=>{setMode("side");setInspectorTab("plot");}}>↔ Assign Sides</button>
+              onClick={openManualSideEditor}>↔ Assign Sides</button>
             <button type="button" disabled={busy||!workingHistory.future.length}
               aria-label="Redo working plot edit" onClick={redoWorkingEdit}>↷ Redo</button>
             <button type="button" disabled={!working?.corners.length||busy||Boolean(originalId)}
@@ -1838,9 +1838,9 @@ export default function GeoPlotMapper(){
            <div className="geo-plot-compact-actions">
              <button type="button" disabled={!editable||busy||!sideCoverage?.ok}
                aria-label="Change Front by tapping plot edge"
-               onClick={()=>{setSelectedRole("front");setMode("side");}}>Change Front</button>
+               onClick={openManualSideEditor}>Change Front</button>
              <button type="button" disabled={!editable||busy||!sideCoverage?.ok}
-               onClick={()=>{setSelectedRole("front");setMode("side");}}>Edit Sides</button>
+               onClick={openManualSideEditor}>Edit Sides</button>
              <button type="button" disabled={!editable||busy}
                onClick={()=>{if(advancedDetailsRef.current)advancedDetailsRef.current.open=true;}}>
                Edit Values
@@ -1854,24 +1854,136 @@ export default function GeoPlotMapper(){
              onClick={()=>void confirmPlotAndNext()}>✓ {busy?"Saving…":"Save & Next"}</button>
          </section>}
          {working&&mode==="side"&&working.corners.length>=3&&
-           <section className="geo-plot-visual-side-panel geo-plot-context-side">
+           <section className="geo-plot-visual-side-panel geo-plot-context-side geo-plot-guided-sides"
+             aria-label="Guided manual side assignment">
              <div className="geo-plot-context-head">
-               <strong>Edit sides on canvas</strong>
-               <button type="button" onClick={()=>setMode("edit")}>Done</button>
+               <strong>Assign plot sides</strong>
+               <button type="button" onClick={()=>{
+                 if(sideEditKind==="manual"&&
+                   (Object.keys(manualSideLocks).length>0||manualProposal)&&
+                   !window.confirm("Discard the unapplied side PREVIEW? Saved plot mapping stays unchanged."))return;
+                 clearManualSidePreview();setMode("edit");
+               }}>Done</button>
              </div>
-             <div className="geo-plot-side-role-buttons">
+             <div className="geo-plot-side-mode-choices" role="group" aria-label="Side edit mode">
+               <button type="button" className={sideEditKind==="manual"?"active":""}
+                 aria-pressed={sideEditKind==="manual"} onClick={openManualSideEditor}>
+                 Manual · Independent
+               </button>
+               <button type="button" className={sideEditKind==="auto"?"active":""}
+                 aria-pressed={sideEditKind==="auto"} onClick={()=>{
+                   if(Object.keys(manualSideLocks).length&&
+                     !window.confirm("Discard the unapplied manual ranges and switch to Auto?"))return;
+                   openAutoSideEditor();
+                 }}>Auto · Reassign</button>
+             </div>
+             <div className="geo-plot-side-role-buttons" role="group" aria-label="Choose logical side">
                {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>
                  <button type="button" key={role} aria-pressed={selectedRole===role}
                    className={selectedRole===role?"active":""} disabled={busy||!editable}
-                   onClick={()=>setSelectedRole(role)}>
+                   style={{borderColor:selectedRole===role?ROLE_COLORS[role]:undefined}}
+                   onClick={()=>{setSelectedRole(role);setManualStartCorner(null);}}>
+                   <span style={{color:ROLE_COLORS[role]}}>●</span>{" "}
                    {role==="depthA"?"Depth A":role==="depthB"?"Depth B":role==="front"?"Front":"Back"}
+                   {sideEditKind==="manual"&&manualSideLocks[role]?.length?
+                     " ✓":""}
                  </button>)}
              </div>
-             {working.corners.length>4&&<label className="geo-plot-check">
-               <input type="checkbox" checked={extendSide} onChange={e=>setExtendSide(e.target.checked)}/>
-               Adjust connected segments
-             </label>}
-             <small>Tap a boundary edge to assign {selectedRole}. The editor keeps every edge assigned once.</small>
+             {sideEditKind==="manual"?<>
+               <div className="geo-plot-manual-instructions" role="status">
+                 <strong>{manualStartCorner===null?
+                   "1 · Select START corner":"2 · Select END corner"}</strong>
+                 <span>Selected side: {selectedRole==="depthA"?"Depth A":selectedRole==="depthB"?"Depth B":
+                   selectedRole==="front"?"Front":"Back"}.
+                   Tap two numbered corners on the plot. Connected edges between them form ONE side.</span>
+                 <span>Your existing mapping stays unchanged until Apply Preview.</span>
+               </div>
+               <div className="geo-plot-manual-range-select" aria-label="Precise corner selection">
+                 <label>Start corner
+                   <select aria-label="Manual start corner" value={manualStartCorner??""}
+                     onChange={e=>{
+                       setManualStartCorner(e.target.value===""?null:Number(e.target.value));
+                       setManualProposal(null);
+                     }}>
+                     <option value="">Choose start</option>
+                     {working.corners.map((_,i)=><option key={i} value={i}>Corner {i+1}</option>)}
+                   </select>
+                 </label>
+                 <label>End corner
+                   <select aria-label="Manual end corner" value="" disabled={manualStartCorner===null}
+                     onChange={e=>{if(e.target.value!=="")selectManualCorner(Number(e.target.value));}}>
+                     <option value="">Choose end</option>
+                     {working.corners.map((_,i)=><option key={i} value={i}
+                       disabled={i===manualStartCorner}>Corner {i+1}</option>)}
+                   </select>
+                 </label>
+               </div>
+               <div className="geo-plot-manual-lock-list" aria-label="Locked manual side ranges">
+                 {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{
+                   const edges=manualSideLocks[role];
+                   return <div key={role} className={edges?.length?"locked":""}>
+                     <span style={{color:ROLE_COLORS[role]}}>●</span>{" "}
+                     <strong>{role==="depthA"?"Depth A":role==="depthB"?"Depth B":
+                       role==="front"?"Front":"Back"}</strong>
+                     <small>{edges?.length?"Corners "+(edges[0]+1)+" → "+
+                       ((edges.at(-1)!+1)%working.corners.length+1)+
+                       " · "+edges.length+" edge(s)":"Auto-fill remaining"}</small>
+                     {edges?.length&&<button type="button" disabled={busy||!editable}
+                       aria-label={"Clear "+role+" manual selection"}
+                       onClick={()=>{
+                         const updated={...manualSideLocks};delete updated[role];
+                         setManualSideLocks(updated);setManualProposal(null);setManualStartCorner(null);
+                       }}>×</button>}
+                   </div>;
+                 })}
+               </div>
+               <button type="button" className="geo-plot-side-autofill"
+                 disabled={!editable||busy||!Object.keys(manualSideLocks).length}
+                 onClick={previewManualSides}>↻ Auto Fill Rest · Preview</button>
+               {manualProposal&&previewIsCurrent&&
+                 <div className="geo-plot-manual-preview" role="status">
+                   <strong>PREVIEW ONLY · {manualProposal.edgeCount} / {manualProposal.edgeCount} edges</strong>
+                   <p>{manualProposal.changedRoles.length?
+                     "Would change: "+manualProposal.changedRoles.join(", "):
+                     "No mapping changes needed."}</p>
+                   {manualProposal.changedUnpinned.length>0&&
+                     <p>Auto-filled roles: {manualProposal.changedUnpinned.join(", ")}.
+                       These are suggestions, not silent edits.</p>}
+                   {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>
+                     <div key={role} className="geo-plot-manual-preview-role">
+                       <span style={{color:ROLE_COLORS[role]}}>●</span>
+                       <b>{role==="depthA"?"Depth A":role==="depthB"?"Depth B":
+                         role==="front"?"Front":"Back"}</b>
+                       <span>Edges {(manualProposal.plot.sides[role]?.edges||[])
+                         .map(i=>i+1).join(", ")}</span>
+                     </div>)}
+                   <button type="button" className="geo-plot-action-primary"
+                     disabled={!editable||busy} onClick={applyManualSides}>
+                     ✓ Apply Preview
+                   </button>
+                 </div>}
+               {manualProposal&&!previewIsCurrent&&
+                 <p className="geo-plot-warning" role="alert">
+                   Plot changed. Auto Fill Rest again before applying.
+                 </p>}
+               <button type="button" className="geo-plot-side-cancel-preview"
+                 disabled={!editable||busy||(!Object.keys(manualSideLocks).length&&!manualProposal)}
+                 onClick={()=>{clearManualSidePreview();setMessage(
+                   "Manual side preview cancelled. No plot side or source changed.");}}>
+                 Cancel preview
+               </button>
+             </>:<>
+               <p className="geo-plot-warning" role="status">
+                 Auto mode changes whole side groups immediately. For independent
+                 Front / Back / Depth ranges use Manual.
+               </p>
+               {working.corners.length>4&&<label className="geo-plot-check">
+                 <input type="checkbox" checked={extendSide} onChange={e=>setExtendSide(e.target.checked)}/>
+                 Adjust connected segments
+               </label>}
+               <small>Tap an actual boundary EDGE to reassign {selectedRole}. Changes go
+                 into Undo history and reset approvals.</small>
+             </>}
            </section>}
          {state&&state.draft.revision>0&&state.draft.verifiedInventoryRevision!==state.inventoryRevision&&
           state.draft.verifiedRevision===state.draft.revision&&
