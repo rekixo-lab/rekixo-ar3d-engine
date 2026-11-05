@@ -1693,6 +1693,12 @@ export default function GeoPlotMapper(){
          {working&&working.corners.length>=3&&<section className="geo-plot-compact-card" aria-label="Current plot summary">
            <div className="geo-plot-compact-head">
              <strong>Plot {working.id}</strong>
+             <div className="geo-plot-compact-navigation">
+               <button type="button" disabled={!plots.length||busy} onClick={()=>chooseSibling(-1)}
+                 aria-label="Previous mapped plot">‹</button>
+               <button type="button" disabled={!plots.length||busy} onClick={()=>chooseSibling(1)}
+                 aria-label="Next mapped plot">›</button>
+             </div>
              <span>{working.corners.length} corners · {sideCoverage?.ok?
                "✓ "+sideCoverage.edgeCount+" edges assigned":"Side review needed"}</span>
            </div>
@@ -1778,7 +1784,7 @@ export default function GeoPlotMapper(){
           state.draft.verifiedRevision===state.draft.revision&&
           <p className="geo-plot-warning" role="status">Source inventory was updated after verification.
             Review current CSV evidence, then Save/Verify before any new Publish.</p>}
-        {inventoryRows.length>0&&<div className="geo-plot-source-review" aria-live="polite">
+        {inventoryIssues.length>0&&<div className="geo-plot-source-review" aria-live="polite">
           <strong>Source Reconciliation · {inventoryIssues.length} issue(s)</strong>
           <small>Inventory revision {state?.inventoryRevision??0} ·
             Verified revision {state?.draft.verifiedInventoryRevision??"not yet"}</small>
@@ -1788,6 +1794,8 @@ export default function GeoPlotMapper(){
           {!inventoryIssues.length&&<small>{progress.confirmed} mapped Plot IDs match current CSV references.
             {progress.pending>0?" "+progress.pending+" approved IDs still need mapping.":""}</small>}
         </div>}
+        <details className="geo-plot-inventory-browser">
+          <summary>Browse mapped plots · {plots.length}</summary>
         <label className="geo-plot-inventory-search">Find plot
            <input type="search" placeholder="Search plot number" value={inventoryQuery}
              onChange={e=>setInventoryQuery(e.target.value)}/>
@@ -1803,7 +1811,17 @@ export default function GeoPlotMapper(){
            {plots.length===0&&<p className="geo-plot-hint">No plot boundaries yet. Select 4 corners or Irregular to draw the first plot.</p>}
            {plots.length>0&&displayedPlots.length===0&&<p className="geo-plot-hint">No plots match this search.</p>}
          </div>
+        </details>
+         {working&&working.corners.length<3&&<div className="geo-plot-compact-empty">
+           <strong>Plot {working.id} · {working.corners.length} corners</strong>
+           <p>Draw the first Front edge and continue around the actual boundary. Dimensions are read from the approved CSV.</p>
+           <button type="button" disabled={!editable||busy} onClick={()=>begin(shape)}>
+             {working.corners.length?"Resume drawing":"Start drawing"}
+           </button>
+         </div>}
          {working&&<>
+          <details ref={advancedDetailsRef} className="geo-plot-advanced-details">
+            <summary>Advanced · measurements, evidence & precision</summary>
           <h3>{plots.some(p=>p.id===working.id)?"Update":"New"} Plot {working.id}</h3>
           <div className="geo-plot-inspector-selection">
              <span>{originalId?"Editing mapped plot":"New polygon"}</span>
@@ -2016,6 +2034,7 @@ export default function GeoPlotMapper(){
               Apply & Draw Next →</button>
           </div>
           </details>
+          </details>
         </>}
         </>}
         {inspectorTab==="publish"&&<>
@@ -2089,13 +2108,13 @@ export default function GeoPlotMapper(){
           }}>Activate Mapping v{r.version}{r.publicationMode==="preliminary"?" · Preliminary":" · Verified"}</button>)}
         </div>
         </>}
-        <div className="geo-plot-shortcuts">
-          <strong>Keyboard shortcuts</strong>
+        <details className="geo-plot-shortcuts geo-plot-help">
+          <summary>Keyboard shortcuts · Help</summary>
           <span>P Pan · D Resume 4 corners · I Resume Irregular · E Edit · F Fit</span>
           <span>After Pan, use Resume Drawing (or the SAME shape button) to keep existing corners.</span>
           <span>Ctrl/⌘+Z Undo · Ctrl/⌘+Shift+Z Redo · Corner + arrow keys (Shift = 10×)</span>
           <span>+ / − Zoom · Backspace Remove last new corner · Ctrl/⌘+S Save draft</span>
-        </div>
+        </details>
       </aside>
       </div>
     </div>
