@@ -203,7 +203,7 @@ export default function GeoPlotMapper(){
   const [selectedRole,setSelectedRole]=useState<Role>("front");
   const [selectedFacingRole,setSelectedFacingRole]=useState<Role>("front");
   const [extendSide,setExtendSide]=useState(false);
-  const [inspectorTab,setInspectorTab]=useState<"sources"|"plot"|"quality"|"publish">("sources");
+  const [inspectorTab,setInspectorTab]=useState<"sources"|"plot"|"quality"|"publish">("plot");
   const [recoveredLocalDraft,setRecoveredLocalDraft]=useState<{
     plot:Plot;originalId:string|null;shape:"four"|"irregular";checkedAt:number
   }|null>(null);
@@ -1547,17 +1547,27 @@ export default function GeoPlotMapper(){
            (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Click corners clockwise · wheel zoom at cursor":"Drag numbered handles · wheel zoom at cursor"))}</div>
       </div>
       <aside className="geo-plot-dock">
-        <nav className="geo-plot-dock-tabs" aria-label="Plot editor sections">
-          {(["sources","plot","quality","publish"] as const).map(tab=>
-            <button type="button" key={tab}
-              className={inspectorTab===tab?"active":""}
-              aria-pressed={inspectorTab===tab}
-              disabled={busy||(mode==="align"&&tab!=="sources")}
-              onClick={()=>setInspectorTab(tab)}>
-              {tab==="sources"?"1 · CSV / Image":tab==="plot"?"2 · Plot Details":
-                tab==="quality"?"3 · Quality":"4 · Publish"}
-            </button>)}
+        <nav className="geo-plot-dock-tabs geo-plot-primary-tabs" aria-label="Plot Mapper workspaces">
+          <button type="button" className={inspectorTab==="plot"?"active":""}
+            aria-pressed={inspectorTab==="plot"} disabled={busy||mode==="align"}
+            onClick={()=>setInspectorTab("plot")}>Mapping</button>
+          <button type="button" className={inspectorTab==="sources"?"active":""}
+            aria-pressed={inspectorTab==="sources"} disabled={busy}
+            onClick={()=>setInspectorTab("sources")}>CSV / Image</button>
+          <button type="button" className={inspectorTab==="quality"||inspectorTab==="publish"?"active":""}
+            aria-pressed={inspectorTab==="quality"||inspectorTab==="publish"}
+            disabled={busy||mode==="align"}
+            onClick={()=>setInspectorTab("quality")}>Review & Publish</button>
         </nav>
+        {(inspectorTab==="quality"||inspectorTab==="publish")&&
+          <nav className="geo-plot-review-tabs" aria-label="Mapping review or publishing">
+            <button type="button" className={inspectorTab==="quality"?"active":""}
+              aria-pressed={inspectorTab==="quality"} disabled={busy}
+              onClick={()=>setInspectorTab("quality")}>Quality Review</button>
+            <button type="button" className={inspectorTab==="publish"?"active":""}
+              aria-pressed={inspectorTab==="publish"} disabled={busy}
+              onClick={()=>setInspectorTab("publish")}>Publish</button>
+          </nav>}
         {recoveredLocalDraft&&<div className="geo-plot-local-recovery" role="status">
           <strong>Unfinished Plot {recoveredLocalDraft.plot.id} available on this browser</strong>
           <span>Matches this project, 3D model and mapping revision. Not published.</span>
