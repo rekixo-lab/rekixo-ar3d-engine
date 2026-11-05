@@ -625,6 +625,21 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               corners:p.corners.slice(0,-1),sides:assignSides(p.corners.slice(0,-1)),
                area:{...p.area,verified:false},facingVerified:false}))}>Undo Corner</button>
             <button disabled={working.corners.length<3} onClick={()=>setTool("edit")}>Drag Corners</button>
+            {sideCoverage&&!sideCoverage.ok&&<div className="masterplan-guidance" role="alert">
+              <strong>Side edges need repair</strong>
+              <p>Unassigned: {sideCoverage.missingEdges.map(i=>i+1).join(", ")||"none"} ·
+                Duplicated: {sideCoverage.duplicateEdges.map(i=>i+1).join(", ")||"none"} ·
+                Missing roles: {sideCoverage.missingRoles.join(", ")||"none"}</p>
+              <button type="button" disabled={busy} onClick={()=>{
+                if(!window.confirm("Repair only logical side assignments for Plot "+working.id+
+                  "? The original polygon, CSV measurements and published map remain unchanged. Reverify side assignments."))return;
+                try{
+                  editWorking(p=>repairGeoPlotSideCoverage(p));
+                  setStatus("Side coverage repaired. Review Front/Depth and approved dimensions.");
+                }catch(e){setError(String(e));}
+              }}>Repair Sides · Keep Polygon</button>
+            </div>}
+            {sideCoverage?.ok&&<small>✓ {sideCoverage.edgeCount} edges assigned exactly once</small>
             {working.corners.length>=3&&<div className="masterplan-guidance">
               Initial Front = first tapped edge. After mapping, choose any road-facing edge to change Front; other sides update automatically.
               {inferFrontFirstSideGroups(working.corners)?.reviewRequired&&
