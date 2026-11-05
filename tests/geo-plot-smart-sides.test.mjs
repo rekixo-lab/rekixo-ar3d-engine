@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {inferFrontFirstSideGroups,roadFrontPreview} from "../shared/geo-plot-smart-sides.js";
+import {inferFrontFirstSideGroups,roadFrontPreview,nearestPlotBoundaryEdge} from "../shared/geo-plot-smart-sides.js";
 
 test("four clicked corners: first boundary is Front, next is Depth A",()=>{
   const out=inferFrontFirstSideGroups([[0,0],[4,0],[4,3],[0,3]]);
@@ -33,4 +33,13 @@ test("invalid input is rejected; no compass is guessed without verified heading"
   const plot={corners:[[0,0],[4,0],[4,3],[0,3]],sides:{front:{edges:[0]}}};
   assert.equal(roadFrontPreview(plot,Number.NaN,()=>{throw Error("should not call");}),null);
   assert.equal(roadFrontPreview(plot,0,(_p,edges)=>edges[0]===0?"north":null),"north");
+});
+
+test("direct side selection uses actual scaled edge distance",()=>{
+  const corners=[[0,0],[1,0],[1,1],[0,1]];
+  assert.equal(nearestPlotBoundaryEdge(corners,[0.52,0.02],1000,1000)?.edge,0);
+  assert.equal(nearestPlotBoundaryEdge(corners,[0.99,0.51],1000,1000)?.edge,1);
+  assert.equal(nearestPlotBoundaryEdge(corners,[0.5,0.98],1000,1000)?.edge,2);
+  assert.equal(nearestPlotBoundaryEdge(corners,[0.02,0.5],1000,1000)?.edge,3);
+  assert.equal(nearestPlotBoundaryEdge(corners,[0.5,0.5],0,1000),null);
 });
