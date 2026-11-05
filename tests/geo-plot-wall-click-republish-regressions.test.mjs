@@ -11,7 +11,7 @@ const admin=read("apps/admin/src/geo/GeoPlotMapper.tsx");
 test("real 3D walls occlude hidden polygon fills and front/side outlines",()=>{
   assert.match(layer,/depthTest:true,depthWrite:false/g);
   const number=(layer.match(/depthTest:true,depthWrite:false/g)||[]).length;
-  assert.equal(number,2,"both the plot fill and line must respect the depth buffer");
+  assert.equal(number,3,"plot fill, inward status rim and thin outline must all respect the depth buffer");
   assert.doesNotMatch(layer,/depthTest:false/);
   assert.match(layer,/ray\.intersectObjects\(touched,false\)/);
   assert.match(layer,/center\[0\]\+\(x-center\[0\]\)\*0\.3/);
