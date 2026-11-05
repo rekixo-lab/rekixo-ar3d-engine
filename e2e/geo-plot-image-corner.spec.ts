@@ -57,6 +57,7 @@ test("independently verified image mode stages the SAME Geo Plot ID without publ
   })));
   await page.goto("/3Dprojects/geo-plots?project=e2e-geo");
   await expect(page.getByRole("heading",{name:"3D Geo Plot Mapper"}).last()).toBeVisible();
+  await page.getByRole("button",{name:"CSV / Image"}).click();
   await page.locator(".geo-align-panel > summary").click();
   const open=page.getByRole("button",{name:"Edit Existing Plot Corners on Verified Image"});
   await expect(open).toBeEnabled();
@@ -75,12 +76,16 @@ test("independently verified image mode stages the SAME Geo Plot ID without publ
   await expect(page.getByText(/Unverified image corner correction staged/)).toBeVisible();
   await page.getByRole("button",{name:"Exit Image Plot Editor"}).click();
   // The new focus studio keeps original image and 3D Plot Details in explicit tabs.
-  await page.getByRole("button",{name:"2 · Plot Details"}).click();
+  await page.getByRole("button",{name:"Mapping",exact:true}).click();
+  await page.locator(".geo-plot-inventory-browser > summary").click();
   await page.getByRole("button",{name:"Plot 1 4 corners"}).click();
+  await page.locator(".geo-plot-advanced-details > summary").click();
   await expect(page.getByLabel("Area verified against source")).not.toBeChecked();
   await expect(page.getByLabel("Facing verified against reference")).not.toBeChecked();
   await expect(page.getByLabel("Verified model-local plot mapping plane")).not.toBeChecked();
   const front=page.locator("fieldset").filter({has:page.locator("legend:text-is('front')")});
   await expect(front.getByLabel("Road side")).not.toBeChecked();
+  await page.getByRole("button",{name:"Review & Publish"}).click();
+  await page.getByRole("button",{name:"Publish",exact:true}).click();
   await expect(page.getByRole("button",{name:"Publish Mapping"})).toBeDisabled();
 });
