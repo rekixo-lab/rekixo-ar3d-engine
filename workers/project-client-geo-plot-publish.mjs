@@ -5,16 +5,10 @@ import {activeMap,listGeoCommercialState} from "./geo-plot-commercial.mjs";
 const json=(body,status=200)=>Response.json(body,{status,headers:{
  "Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
 const safe=(value,max)=>typeof value==="string"&&value.length<=max
- &&!/[\\x00-\\x1f\\x7f]/.test(value);
+ &&!/[\x00-\x1f\x7f]/.test(value);
 const money=n=>Number.isSafeInteger(n)&&n>0&&n<=1000000000000;
 const uuid=value=>typeof value==="string"&&
  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-const findRevision=async(env,table,ctx,releaseId,id)=>{
- const row=await env.DB.prepare(
-  "SELECT revision FROM "+table+" WHERE project_id=? AND mapping_release_id=? AND plot_id=?"
- ).bind(ctx.project.id,releaseId,id).first();
- return Number(row?.revision||0);
-};
 
 export async function clientGeoPlotPublish(request,env,ctx,actor,{allowApprove=false}={}){
  if(request.method!=="PUT")return json({error:"Method not allowed."},405);
