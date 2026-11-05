@@ -533,6 +533,13 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
           {working&&<g>
             <polyline points={working.corners.map(p=>p[0]*draft.width+","+p[1]*draft.height).join(" ")}
               fill="rgba(245,201,54,.22)" stroke="#ffe084" strokeWidth={Math.max(2,frame.w/440)}/>
+            {sideCoverage&&!sideCoverage.ok&&[...new Set([...sideCoverage.missingEdges,...sideCoverage.duplicateEdges])].map(i=>{
+              const a=working.corners[i],b=working.corners[(i+1)%working.corners.length];
+              return <line key={"missing-"+i} x1={a[0]*draft.width} y1={a[1]*draft.height}
+                x2={b[0]*draft.width} y2={b[1]*draft.height}
+                stroke="#ff5964" strokeWidth={Math.max(3,frame.w/300)}
+                strokeLinecap="round" pointerEvents="none"/>;
+            })}
             {working.corners.map((p,i)=><circle key={i} cx={p[0]*draft.width} cy={p[1]*draft.height}
               r={Math.max(5,frame.w/140)} fill="#ffe7a1" stroke="#112734" strokeWidth={1.5}/>)}
           </g>}
