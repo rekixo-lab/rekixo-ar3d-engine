@@ -1691,7 +1691,7 @@ export default function GeoPlotMapper(){
              </button>
            </div>}
            <div className="geo-plot-compact-area">
-             <span>Approved area</span>
+             <span>Area · mapped value</span>
              <strong>{working.area.value>0?working.area.value:selectedInventory?.area||"—"}
                {" "}{working.area.value>0?working.area.unit:selectedInventory?.areaUnit||""}</strong>
            </div>
@@ -1706,9 +1706,10 @@ export default function GeoPlotMapper(){
              })}
            </div>
            <div className="geo-plot-compact-meta">
-             <span>Facing <b>{roadFrontPreview(working,geo?.placement.headingDeg??Number.NaN,suggestGeoSideFacing)||working.facing||"—"}</b>
+             <span>Facing <b>{roadFrontPreview(working,geo?.placement.headingDeg??Number.NaN,suggestGeoSideFacing)||
+               (working.facingVerified&&working.facingSource?working.facing:"Check Geo North")}</b>
                <small>Geo suggestion · verify road</small></span>
-             <span>Road <b>{working.sides.front?.roadFacing?"Front selected":"Check Front"}</b></span>
+             <span>Road <b>{working.sides.front?.roadFacing?"Front marked · review source":"Check Front"}</b></span>
            </div>
            {(()=>{const variance=measurementVariance(areaSqm(working.corners),working.area.value,
              working.area.unit,geo?.placement.scale||1);
