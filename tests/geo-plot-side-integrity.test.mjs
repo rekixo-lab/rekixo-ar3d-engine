@@ -41,7 +41,9 @@ test("7-corner rounded boundary: change Front without orphaning original edges",
   const changed=assignVisiblePlotEdge(p,"front",5);
   valid(changed);
   assert.deepEqual(changed.sides.front.edges,[3,4,5,6]);
-  assert.deepEqual(changed.sides.depthB.edges,[0]);
+  assert.deepEqual(changed.sides.depthA.edges,[0]);
+  assert.deepEqual(changed.sides.back.edges,[1]);
+  assert.deepEqual(changed.sides.depthB.edges,[2]);
   assert.equal(changed.sides.front.verified,false);
   assert.equal(changed.facingVerified,false);
   assert.deepEqual(p.sides.front.edges,[0]);
