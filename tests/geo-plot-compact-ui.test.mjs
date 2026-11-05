@@ -26,6 +26,7 @@ test("normal sidebar is summary-first, with one Save & Next and optional advance
   assert.match(ui,/geo-plot-inventory-browser/);
   assert.match(ui,/geo-plot-toolbar-more/);
   assert.equal((ui.match(/className="geo-plot-confirm-primary/g)||[]).length,1);
+  assert.equal((ui.match(/aria-label="Change Front by tapping plot edge"/g)||[]).length,1);
   assert.equal((ui.match(/onClick=\{\(\)=>void confirmPlotAndNext\(\)\}/g)||[]).length,1);
   assert.match(ui,/role==="depthA"\?"Depth A"/);
   assert.match(ui,/Repair Sides · Keep Polygon/);
