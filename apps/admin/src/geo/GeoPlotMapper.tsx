@@ -1377,12 +1377,6 @@ export default function GeoPlotMapper(){
           <button type="button" disabled={!editable||busy||!working}
             className={mode==="edit"?"active":""} title="Drag corners for precision (E)"
             onClick={()=>setMode("edit")}>✎ Edit</button>
-          <button type="button" disabled={!editable||busy||!working||working.corners.length<3}
-            className={mode==="side"&&selectedRole==="front"?"active":""}
-            aria-label="Change Front by tapping plot edge"
-            onClick={()=>{setSelectedRole("front");setMode("side");setInspectorTab("plot");}}>
-            ↔ Change Front
-          </button>
           {mode==="draw"&&shape==="irregular"&&working&&working.corners.length>=3&&
             <button type="button" className="geo-plot-tool-complete"
               disabled={!editable||busy} onClick={finishBoundary}>✓ Boundary complete</button>}
@@ -1728,6 +1722,7 @@ export default function GeoPlotMapper(){
            })()}
            <div className="geo-plot-compact-actions">
              <button type="button" disabled={!editable||busy||!sideCoverage?.ok}
+               aria-label="Change Front by tapping plot edge"
                onClick={()=>{setSelectedRole("front");setMode("side");}}>Change Front</button>
              <button type="button" disabled={!editable||busy||!sideCoverage?.ok}
                onClick={()=>{setSelectedRole("front");setMode("side");}}>Edit Sides</button>
