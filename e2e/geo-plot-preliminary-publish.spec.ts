@@ -56,6 +56,8 @@ test("36/36-style mapped unverified Draft can publish preliminary without misrep
     }));
   });
   await page.goto("/3Dprojects/geo-plots?project="+slug);
+  await page.getByRole("button",{name:"Review & Publish"}).click();
+  await page.getByRole("button",{name:"Publish",exact:true}).click();
   const prelim=page.getByRole("button",{name:"Publish Live · Preliminary"});
   await expect(prelim).toBeEnabled();
   await expect(page.getByRole("button",{name:"Publish Mapping"})).toBeDisabled();
@@ -65,6 +67,6 @@ test("36/36-style mapped unverified Draft can publish preliminary without misrep
   expect(postedAction).toBe("publish-preliminary");
   expect(postedRevision).toBe(36);
   await expect(page.locator(".geo-plot-stats")).toContainText("v1 · Preliminary");
-  await page.getByRole("button",{name:"4 · Publish"}).click();
+  await expect(page.getByRole("button",{name:"Publish",exact:true})).toHaveAttribute("aria-pressed","true");
   await expect(page.getByRole("button",{name:"Publish Preliminary Mapping · Editable Later"})).toBeEnabled();
 });
