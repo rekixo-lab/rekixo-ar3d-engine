@@ -51,7 +51,7 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
  const [filter,setFilter]=useState<"all"|Status>("all");
  const [page,setPage]=useState(0);
  const [selected,setSelected]=useState("");
- const headingRef=useRef<HTMLHeadingElement|null>(null);
+ const editorHeadingRef=useRef<HTMLHeadingElement|null>(null);
  const [form,setForm]=useState<Draft>(emptyDraft);
  const [status,setStatus]=useState<Status>("available");
  const [baseline,setBaseline]=useState("");
@@ -98,9 +98,10 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
   &&Number(activeAmount)>0&&Number(activeAmount)<=1e10;
 
  useEffect(()=>{
-  if(!editingVisible||!headingRef.current)return;
+  if(!editingVisible||!editorHeadingRef.current)return;
+  const heading=editorHeadingRef.current;
   const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  headingRef.current.scrollIntoView({
+  heading.scrollIntoView({
    block:"nearest",inline:"nearest",behavior:reduced?"auto":"smooth"
   });
  },[selected,editingVisible]);
@@ -229,12 +230,12 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
        {(liveStatus!==row.status||!row.publicApproved)&&row.hasReview
         ?<small> · Live: {displayStatus(row.status)}</small>:null}
       </span>
-      <span className="client-geo-edit-indicator">{editing?"Close ↑":"Edit ↓"}</span>
+      <span className="client-geo-edit-indicator">{editing?"Close editor ↑":"Edit ↓"}</span>
      </button>
      {editing&&chosen&&<section id={"client-geo-editor-"+row.plotId}
       className="client-geo-editor client-geo-editor--inline"
       aria-label={"Edit plot "+chosen.plotId}>
-      <header><h3 ref={headingRef}>Editing Plot {chosen.plotId}</h3>
+      <header><h3 ref={editorHeadingRef}>Editing Plot {chosen.plotId}</h3>
        <span>Live: <b className={"client-geo-status "+chosen.status}>{displayStatus(chosen.status)}</b></span>
       </header>
       <fieldset className="client-geo-status-chooser">
