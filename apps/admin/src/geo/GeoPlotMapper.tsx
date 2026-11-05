@@ -14,6 +14,9 @@ import {nextUnmappedInventory,parseGeoInventoryCsv,normalizeGeoInventoryRows,
 import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
 import {inferFrontFirstSideGroups,roadFrontPreview} from "../../../../shared/geo-plot-smart-sides.js";
 import {inspectGeoPlotSideCoverage,repairGeoPlotSideCoverage} from "../../../../shared/geo-plot-side-integrity.js";
+import {stageGeoManualSideRange,proposeGeoManualSideMapping,applyGeoManualSideProposal,
+  geoManualSourceSignature, type GeoManualSideLocks,type GeoManualProposal
+} from "../../../../shared/geo-plot-manual-sides.js";
 import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import {cloneUnverifiedGeoPlot,geoPlotEvidenceManifest,geoPlotQualityReport} from "../../../../shared/geo-plot-stage3-review.js";
@@ -169,6 +172,10 @@ export default function GeoPlotMapper(){
   const working=workingHistory.present;
   const [selectedCorner,setSelectedCorner]=useState<number|null>(null);
   const [nudgeStep,setNudgeStep]=useState(0.01);
+  const [sideEditKind,setSideEditKind]=useState<"auto"|"manual">("manual");
+  const [manualSideLocks,setManualSideLocks]=useState<GeoManualSideLocks>({});
+  const [manualStartCorner,setManualStartCorner]=useState<number|null>(null);
+  const [manualProposal,setManualProposal]=useState<GeoManualProposal<Plot>|null>(null);
   const setWorking=useCallback((update:SetStateAction<Plot|null>)=>{
     // Capture grouping before React batches a pointer release; a closed drag must
     // not accidentally create one undo entry per intermediate frame.
@@ -180,14 +187,23 @@ export default function GeoPlotMapper(){
   },[]);
   const resetWorking=useCallback((plot:Plot|null)=>{
     dragStartRef.current=null;setSelectedCorner(null);
+    setManualSideLocks({});setManualStartCorner(null);setManualProposal(null);
     setWorkingHistory(history=>replacePlotEditHistory(history,plot));
   },[]);
   const closeCornerDrag=()=>{
     const started=dragStartRef.current;dragStartRef.current=null;
     if(started)setWorkingHistory(history=>closeGroupedPlotEdit(history,started));
   };
-  const undoWorkingEdit=()=>{if(dragStartRef.current)return;setWorkingHistory(undoPlotEdit);};
-  const redoWorkingEdit=()=>{if(dragStartRef.current)return;setWorkingHistory(redoPlotEdit);};
+  const undoWorkingEdit=()=>{
+    if(dragStartRef.current)return;
+    setManualSideLocks({});setManualStartCorner(null);setManualProposal(null);
+    setWorkingHistory(undoPlotEdit);
+  };
+  const redoWorkingEdit=()=>{
+    if(dragStartRef.current)return;
+    setManualSideLocks({});setManualStartCorner(null);setManualProposal(null);
+    setWorkingHistory(redoPlotEdit);
+  };
   const [originalId,setOriginalId]=useState<string|null>(null);
   const [dirty,setDirty]=useState(false);
   const [message,setMessage]=useState("");
@@ -279,6 +295,8 @@ export default function GeoPlotMapper(){
   const hasUnapplied=hasPendingPlotEdits(working,originalId?plots.find(p=>p.id===originalId):null);
   const sideCoverage=useMemo(()=>working&&working.corners.length>=3?
     inspectGeoPlotSideCoverage(working):null,[working]);
+  const previewIsCurrent=Boolean(manualProposal&&working&&
+    manualProposal.baseSignature===geoManualSourceSignature(working));
   const progress=useMemo(()=>visibleMappingProgress(inventoryRows,plots),[inventoryRows,plots]);
   useEffect(()=>{
     const key=draftStorageKey(slug);
