@@ -127,9 +127,9 @@ test("single atomic publish saves Booked, then Sold, separately and preserves ol
   assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM engine_admin_audit WHERE action='geo.client_plot_published'").get().n,1);
 
   // Legacy notes are deliberately NOT exposed in the new form, but remain stored.
-  const existing=f.db.prepare("UPDATE geo_client_plot_details_3d SET notes='Historic note' WHERE project_id='p1' AND plot_id='1'").run();
+  const existing=f.db.prepare("UPDATE geo_client_plot_details_3d SET notes='Historic note',revision=revision+1 WHERE project_id='p1' AND plot_id='1'").run();
   assert.equal(existing.changes,1);
-  const sold=await clientGeoPlotPublish(req(publishUrl,"PUT",publishPayload("sold",1,1)),f.env,f.ctx,f.actor,{allowApprove:true});
+  const sold=await clientGeoPlotPublish(req(publishUrl,"PUT",publishPayload("sold",2,1)),f.env,f.ctx,f.actor,{allowApprove:true});
   assert.equal(sold.status,200,await sold.clone().text());
   const second=await sold.json();
   assert.equal(second.detail.bookingAmountPaise,175000);
@@ -138,7 +138,7 @@ test("single atomic publish saves Booked, then Sold, separately and preserves ol
   assert.equal(second.commercial.rows[0].status,"sold");
   assert.equal((await publicGeoCommercialForRelease(f.env,"p1","r1",["1"]))["1"].status,"sold");
 
-  const available=await clientGeoPlotPublish(req(publishUrl,"PUT",publishPayload("available",2,2)),f.env,f.ctx,f.actor,{allowApprove:true});
+  const available=await clientGeoPlotPublish(req(publishUrl,"PUT",publishPayload("available",3,2)),f.env,f.ctx,f.actor,{allowApprove:true});
   assert.equal(available.status,200,await available.clone().text());
   const third=await available.json();
   assert.equal(third.commercial.rows[0].status,"available");
