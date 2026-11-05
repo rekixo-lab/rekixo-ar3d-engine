@@ -1770,7 +1770,7 @@ export default function GeoPlotMapper(){
             <button type="button" disabled={!editable||busy} onClick={applyCurrentSource}>
               Apply Latest Approved CSV to Selected Plot (unverified)</button>
           </div>}
-          <details className="geo-plot-inspector-section">
+          <details open className="geo-plot-inspector-section">
             <summary>01 · Geometry & site plane</summary>
           <p className="geo-plot-hint">Corners: {working.corners.length} · Model area (unverified): {areaSqm(working.corners).toFixed(2)} m²
           · Geo-scale area estimate: {(areaSqm(working.corners)*(geo?.placement.scale||1)**2).toFixed(2)} m²</p>
@@ -1790,7 +1790,7 @@ export default function GeoPlotMapper(){
               : null;
           })()}
           </details>
-          <details className="geo-plot-inspector-section">
+          <details open className="geo-plot-inspector-section">
             <summary>02 · Approved area & source</summary>
           <label>Approved Area<input inputMode="decimal" type="number" min="0.001" value={working.area.value||""}
             onChange={e=>setWorking({...working,area:{...working.area,value:Number(e.target.value),verified:false}})}/></label>
@@ -1801,7 +1801,7 @@ export default function GeoPlotMapper(){
           <label className="geo-plot-check"><input type="checkbox" checked={working.area.verified}
             onChange={e=>setWorking({...working,area:{...working.area,verified:e.target.checked}})}/> Area verified against source</label>
           </details>
-          <details className="geo-plot-inspector-section">
+          <details open className="geo-plot-inspector-section">
             <summary>03 · Road, facing & north</summary>
           <label>Road / Access<input value={working.road} onChange={e=>setWorking({...working,road:e.target.value,facingVerified:false})}/></label>
           <label>Primary Front Facing <select value={working.facing}
@@ -1865,7 +1865,7 @@ export default function GeoPlotMapper(){
           })()}
 
           </details>
-          <details className="geo-plot-inspector-section">
+          <details open className="geo-plot-inspector-section">
             <summary>04 · Front, Back & Depth sizes</summary>
           <p className="geo-plot-hint">Front must face the actual road, not the top of the screen. For four-corner plots select the road-touching edge. Corner plots may have multiple road-facing sides.</p>
           {working.corners.length===4&&working.layout==="four"&&<label>Road-facing FRONT boundary
