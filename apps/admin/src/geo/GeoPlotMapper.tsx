@@ -1642,7 +1642,7 @@ export default function GeoPlotMapper(){
           </p>}
          {working&&working.corners.length>=3&&<div className="geo-plot-visual-side-panel" aria-label="Smart plot mapping overview">
            <strong>Smart sides · Plot {working.id}</strong>
-           <p className="geo-plot-hint">Front = first clicked edge (corner 1 → 2). Depth A, Back and Depth B are arranged automatically. Front is not road-verified until checked against the approved plan.</p>
+           <p className="geo-plot-hint">Initial Front = first drawn edge (corner 1 → 2); you can change Front on the map at any time. Other sides are suggested automatically. Check the real road before verification.</p>
            <p className="geo-plot-hint">Front edge: {(working.sides.front?.edges[0]??0)+1} · Geo-facing suggestion: {roadFrontPreview(working,geo?.placement.headingDeg??Number.NaN,suggestGeoSideFacing)||"Check Geo North"}</p>
            {inferFrontFirstSideGroups(working.corners)?.reviewRequired&&
              <p className="geo-plot-warning">Complex irregular sides need visual review. The engine has not guessed a road side or source measurement.</p>}
