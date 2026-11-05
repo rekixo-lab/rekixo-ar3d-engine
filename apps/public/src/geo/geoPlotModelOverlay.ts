@@ -92,7 +92,41 @@ function plotShapeGeometry(points:Array<[number,number]>,elevation:number){
 }
 
 function plotOutlineGeometry(points:Array<[number,number]>,elevation:number){
-  const vertices=points.flatMap(([x,z])=>[x,elevation+SURFACE_OFFSET_M*1.75,z]);
+  const vertices=points.flatMap(([x,z])=>[x,elevation+SURFACE_OFFSET_M*2.6,z]);
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute("position",new THREE.Float32BufferAttribute(vertices,3));
+  return geometry;
+}
+
+/**
+ * A thin, inward-facing rim follows each mapped polygon edge exactly.
+ * Unlike the washed-out full-surface tint, the almost-opaque edge carries
+ * the canonical status hue without covering the plot labels or GLB texture.
+ * No added hit targets: this geometry is presentation-only.
+ */
+function plotStatusRimGeometry(points:Array<[number,number]>,elevation:number){
+  const xs=points.map(p=>p[0]),zs=points.map(p=>p[1]);
+  const span=Math.min(Math.max(...xs)-Math.min(...xs),
+    Math.max(...zs)-Math.min(...zs));
+  const width=Math.max(0.025,Math.min(0.15,span*0.009));
+  const twiceArea=points.reduce((sum,[ax,az],i)=>{
+    const [bx,bz]=points[(i+1)%points.length];
+    return sum+ax*bz-bx*az;
+  },0);
+  const winding=twiceArea>=0?1:-1;
+  const y=elevation+SURFACE_OFFSET_M*2.1;
+  const vertices:number[]=[];
+  for(let i=0;i<points.length;i++){
+    const [ax,az]=points[i],[bx,bz]=points[(i+1)%points.length];
+    const dx=bx-ax,dz=bz-az,length=Math.hypot(dx,dz);
+    if(length<1e-7)continue;
+    const nx=-winding*dz/length*width,nz=winding*dx/length*width;
+    // Single inward strip, never a widened outward overlay over the road.
+    vertices.push(
+      ax,y,az,bx,y,bz,bx+nx,y,bz+nz,
+      ax,y,az,bx+nx,y,bz+nz,ax+nx,y,az+nz
+    );
+  }
   const geometry=new THREE.BufferGeometry();
   geometry.setAttribute("position",new THREE.Float32BufferAttribute(vertices,3));
   return geometry;
@@ -128,7 +162,12 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
     depthTest:true,depthWrite:false
   });
   const strokeMaterial=new THREE.LineBasicMaterial({
-    color:PLOT_COLOR,transparent:true,opacity:0,depthTest:true,depthWrite:false
+    color:PLOT_COLOR,transparent:true,opacity:0,depthTest:true,depthWrite:false,
+    toneMapped:false
+  });
+  const rimMaterial=new THREE.MeshBasicMaterial({
+    color:PLOT_COLOR,transparent:true,opacity:0,side:THREE.DoubleSide,
+    depthTest:true,depthWrite:false,toneMapped:false
   });
   // Reuse one material pair for each state, not one allocation per polygon.
   // Keep the map visually natural when status is OFF, while transparent hit
@@ -140,17 +179,23 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
     const stroke=strokeMaterial.clone();
     stroke.color.setHex(color);
     stroke.opacity=strokeOpacity;
-    return {fill,stroke};
+    const rim=rimMaterial.clone();
+    rim.color.setHex(color);
+    rim.opacity=0.91;
+    return {fill,stroke,rim};
   };
   const palette={
-    neutral:{fill:fillMaterial,stroke:strokeMaterial},
-    available:tinted(GEO_PLOT_STATUS_COLORS.available,.44,1),
-    booked:tinted(GEO_PLOT_STATUS_COLORS.booked,.50,1),
-    sold:tinted(GEO_PLOT_STATUS_COLORS.sold,.52,1),
-    // When one status filter is selected, hide other fills entirely.
+    neutral:{fill:fillMaterial,stroke:strokeMaterial,rim:rimMaterial},
+    // A deliberately lighter glass floor preserves numbers. The rich, sharp
+    // inward rim (rather than opaque paint) defines each status polygon.
+    available:tinted(GEO_PLOT_STATUS_COLORS.available,.24,1),
+    booked:tinted(GEO_PLOT_STATUS_COLORS.booked,.27,1),
+    sold:tinted(GEO_PLOT_STATUS_COLORS.sold,.29,1),
+    // When one status filter is selected, hide other fills and edges.
     dim:tinted(0x708891,0,0)
   };
-  const plotVisuals=new Map<string,{fill:THREE.Mesh;outline:THREE.LineLoop}>();
+  palette.dim.rim.opacity=0;
+  const plotVisuals=new Map<string,{fill:THREE.Mesh;outline:THREE.LineLoop;rim:THREE.Mesh}>();
   for(const plot of plots){
     if(!Array.isArray(plot.corners)||plot.corners.length<3)continue;
     const surfaceY=modelPlotElevation(plot,bounds,ray,candidateMeshes,plots.length<=120?5:1);
@@ -160,13 +205,16 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
     mesh.name="geo-plot-hit-"+plot.id;
     mesh.userData.plotId=plot.id;
     mesh.renderOrder=19;
+    const rim=new THREE.Mesh(plotStatusRimGeometry(plot.corners,surfaceY),rimMaterial);
+    rim.name="geo-plot-status-rim-"+plot.id;
+    rim.renderOrder=20;
     const outline=new THREE.LineLoop(plotOutlineGeometry(plot.corners,surfaceY),strokeMaterial);
-    outline.renderOrder=20;
-    plotGroup.add(mesh,outline);
+    outline.renderOrder=21;
+    plotGroup.add(mesh,rim,outline);
     group.add(plotGroup);
     groupsById.set(plot.id,plotGroup);
     focusSources.set(plot.id,{id:plot.id,corners:plot.corners,surfaceY});
-    plotVisuals.set(plot.id,{fill:mesh,outline});
+    plotVisuals.set(plot.id,{fill:mesh,outline,rim});
     hitMeshes.push(mesh);
   }
   const setStatusPresentation:ModelPlotLayer["setStatusPresentation"]=
@@ -181,6 +229,7 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
           :palette[valid];
         parts.fill.material=style.fill;
         parts.outline.material=style.stroke;
+        parts.rim.material=style.rim;
       }
       if(focus.selectedId)focus.setAccent(selectedAccent(focus.selectedId));
     };
@@ -196,13 +245,17 @@ export function buildModelGeoPlotLayer(model:THREE.Object3D,plots:readonly Model
     for(const plotGroup of groupsById.values()){
       const outline=plotGroup.children.find(child=>child instanceof THREE.LineLoop);
       if(outline instanceof THREE.LineLoop)outline.geometry.dispose();
+      const rim=plotGroup.children.find(child=>child.name.startsWith("geo-plot-status-rim-"));
+      if(rim instanceof THREE.Mesh)rim.geometry.dispose();
     }
     fillMaterial.dispose();
     strokeMaterial.dispose();
+    rimMaterial.dispose();
     for(const [name,style] of Object.entries(palette)){
       if(name==="neutral")continue;
       style.fill.dispose();
       style.stroke.dispose();
+      style.rim.dispose();
     }
     group.removeFromParent();
   }};
