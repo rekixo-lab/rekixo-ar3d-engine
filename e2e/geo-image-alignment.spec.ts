@@ -104,6 +104,8 @@ test("private original image captures real pixels and source-pinned alignment dr
   });
   await page.goto("/3Dprojects/geo-plots?project=e2e-geo");
   await expect(page.getByRole("heading",{name:"3D Geo Plot Mapper"}).last()).toBeVisible();
+  // Image alignment is an explicit Source workflow in the compact mapper.
+  await page.getByRole("button",{name:"CSV / Image"}).click();
   const panel=page.locator(".geo-align-panel");
   await panel.locator("summary").click();
   await panel.getByLabel("Approved original reference image").selectOption("approved-reference");
@@ -124,5 +126,7 @@ test("private original image captures real pixels and source-pinned alignment dr
   await page.locator(".geo-plot-overlay").click({position:{x:160,y:135}});
   await expect(panel.getByText("Fit anchors · 1")).toBeVisible();
   await expect(page.getByRole("button",{name:"Cancel alignment capture"})).toHaveCount(0);
+  await page.getByRole("button",{name:"Review & Publish"}).click();
+  await page.getByRole("button",{name:"Publish",exact:true}).click();
   await expect(page.getByRole("button",{name:"Publish Mapping"})).toBeDisabled();
 });

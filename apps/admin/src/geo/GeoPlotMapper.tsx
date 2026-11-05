@@ -203,7 +203,7 @@ export default function GeoPlotMapper(){
   const [selectedRole,setSelectedRole]=useState<Role>("front");
   const [selectedFacingRole,setSelectedFacingRole]=useState<Role>("front");
   const [extendSide,setExtendSide]=useState(false);
-  const [inspectorTab,setInspectorTab]=useState<"sources"|"plot"|"quality"|"publish">("sources");
+  const [inspectorTab,setInspectorTab]=useState<"sources"|"plot"|"quality"|"publish">("plot");
   const [recoveredLocalDraft,setRecoveredLocalDraft]=useState<{
     plot:Plot;originalId:string|null;shape:"four"|"irregular";checkedAt:number
   }|null>(null);
@@ -246,6 +246,7 @@ export default function GeoPlotMapper(){
   const overlayRef=useRef<SVGSVGElement>(null);
   const workingRef=useRef(working);
   workingRef.current=working;
+  const advancedDetailsRef=useRef<HTMLDetailsElement|null>(null);
   const displayedPlots=useMemo(()=>plots.filter(p=>p.id.toLowerCase().includes(inventoryQuery.trim().toLowerCase())),
     [plots,inventoryQuery]);
   const inventoryIssues=useMemo(()=>geoInventoryReviewIssues(plots,inventoryRows),
@@ -1376,68 +1377,44 @@ export default function GeoPlotMapper(){
           <button type="button" disabled={!editable||busy||!working}
             className={mode==="edit"?"active":""} title="Drag corners for precision (E)"
             onClick={()=>setMode("edit")}>✎ Edit</button>
-          <button type="button" disabled={!editable||busy||!working||working.corners.length<3}
-            className={mode==="side"&&selectedRole==="front"?"active":""}
-            aria-label="Change Front by tapping plot edge"
-            onClick={()=>{setSelectedRole("front");setMode("side");setInspectorTab("plot");}}>
-            ↔ Change Front
-          </button>
-          <button type="button" className="geo-plot-tool-complete"
-            disabled={!editable||busy||!working||working.corners.length<3||
-              (shape==="four"&&working.corners.length!==4)}
-            onClick={finishBoundary}>✓ Boundary complete</button>
-          <button type="button" disabled={!editable||busy||!working||working.corners.length<3}
-            className={mode==="side"?"active":""}
-            onClick={()=>{setMode("side");setInspectorTab("plot");}}>
-            ↔ Assign Sides</button>
+          {mode==="draw"&&shape==="irregular"&&working&&working.corners.length>=3&&
+            <button type="button" className="geo-plot-tool-complete"
+              disabled={!editable||busy} onClick={finishBoundary}>✓ Boundary complete</button>}
         </div>
         <div className="geo-plot-tool-group geo-plot-tool-group--secondary">
-          <button type="button" disabled={busy||!workingHistory.past.length} aria-label="Undo working plot edit"
-            title="Undo draft plot field or corner edit (Ctrl/⌘+Z)" onClick={undoWorkingEdit}>↶ Undo edit</button>
-          <button type="button" disabled={busy||!workingHistory.future.length} aria-label="Redo working plot edit"
-            title="Redo draft plot field or corner edit (Ctrl/⌘+Shift+Z)" onClick={redoWorkingEdit}>↷ Redo edit</button>
-          <button type="button" disabled={!working?.corners.length||busy||Boolean(originalId)}
-            title="Remove last new-plot corner (Backspace)" onClick={undoCorner}>Remove point</button>
-          <button type="button" disabled={!working||busy} onClick={cancelWorking}>Cancel</button>
-          <label className="geo-plot-toggle"><input type="checkbox" checked={snap}
-            onChange={e=>setSnap(e.target.checked)}/> Snap {snap?"ON":"OFF"}</label>
-          <label className="geo-plot-toggle"><input type="checkbox" checked={showGuides}
-            onChange={e=>setShowGuides(e.target.checked)}/> Labels</label>
+          <button type="button" disabled={busy||!workingHistory.past.length}
+            aria-label="Undo working plot edit" title="Undo plot edit" onClick={undoWorkingEdit}>↶ Undo</button>
         </div>
         <div className="geo-plot-tool-group geo-plot-zoom-tools" aria-label="Precision viewport zoom">
           <button type="button" disabled={!geo} aria-label="Zoom out" onClick={()=>zoomBy(.8)}>−</button>
-          <input type="range" min="100" max="5000" step="1"
-            value={zoomPercent} onChange={e=>setZoom(Number(e.target.value))}
-            aria-label="Zoom percent" aria-valuetext={zoomPercent+" percent"}/>
           <output>{zoomPercent}%</output>
           <button type="button" disabled={!geo} aria-label="Zoom in" onClick={()=>zoomBy(1.25)}>+</button>
           <button type="button" disabled={!geo} title="Fit all geometry (F)" onClick={fitView}>Fit</button>
-          <button type="button" className="geo-plot-fullscreen-toggle" title="Show toolbar, canvas and inspector in full screen"
-            aria-pressed={focused} onClick={()=>void toggleFullscreen()}>
-            {focused?"⊟ Exit full screen":"⛶ Full screen"}</button>
+          <button type="button" className="geo-plot-fullscreen-toggle"
+            title="Show canvas and mapper in full screen" aria-label={focused?"Exit full screen":"Full screen"} aria-pressed={focused}
+            onClick={()=>void toggleFullscreen()}>{focused?"⊟ Exit":"⛶ Full screen"}</button>
         </div>
-        <div className="geo-plot-tool-group geo-plot-tool-group--confirm">
-          <button type="button" className="geo-plot-confirm-primary"
-            disabled={!editable||busy||!working||working.corners.length<3||
-              (shape==="four"&&working.corners.length!==4)||
-              Boolean(inventoryRows.length&&!inventoryRows.some(row=>row.id.toLowerCase()===working.id.toLowerCase()))}
-            onClick={()=>void confirmPlotAndNext()}>
-            ✓ {busy?"Saving…":working?"Confirm Plot "+working.id+" & Next":"Confirm Plot & Next"}
-          </button>
-        </div>
-        <div className="geo-plot-tool-group geo-plot-tool-group--publish">
-          <button type="button" className="geo-plot-preliminary-button"
-            disabled={!editable||busy||dirty||Boolean(working)||!state||plots.length===0}
-            title="Publish saved plot boundaries now; source approvals can be completed and republished later"
-            onClick={()=>void execute("publish-preliminary")}>Publish Live · Preliminary</button>
-          <button type="button" className="geo-plot-publish-button"
-            disabled={!editable||busy||dirty||Boolean(working)||!state||
-              state.draft.verifiedRevision!==state.draft.revision||
-              state.draft.verifiedInventoryRevision!==state.inventoryRevision||
-              (state.alignmentRevision>0&&state.draft.verifiedAlignmentRevision!==state.alignmentRevision)||
-              inventoryIssues.length>0}
-            onClick={()=>void execute("publish")}>Publish Mapping</button>
-        </div>
+        <details className="geo-plot-toolbar-more">
+          <summary>More</summary>
+          <div className="geo-plot-toolbar-more-menu">
+            <button type="button" disabled={!editable||busy||!working||working.corners.length<3}
+              onClick={()=>{setMode("side");setInspectorTab("plot");}}>↔ Assign Sides</button>
+            <button type="button" disabled={busy||!workingHistory.future.length}
+              aria-label="Redo working plot edit" onClick={redoWorkingEdit}>↷ Redo</button>
+            <button type="button" disabled={!working?.corners.length||busy||Boolean(originalId)}
+              title="Remove last new-plot corner" onClick={undoCorner}>Remove point</button>
+            <button type="button" disabled={!working||busy} onClick={cancelWorking}>Cancel plot</button>
+            <label className="geo-plot-toggle"><input type="checkbox" checked={snap}
+              onChange={e=>setSnap(e.target.checked)}/> Snap {snap?"ON":"OFF"}</label>
+            <label className="geo-plot-toggle"><input type="checkbox" checked={showGuides}
+              onChange={e=>setShowGuides(e.target.checked)}/> Labels</label>
+            <label className="geo-plot-toolbar-zoom">Zoom
+              <input type="range" min="100" max="5000" step="1" value={zoomPercent}
+                onChange={e=>setZoom(Number(e.target.value))}
+                aria-label="Zoom percent" aria-valuetext={zoomPercent+" percent"}/>
+            </label>
+          </div>
+        </details>
       </section>
       {focused&&message&&<div className={message.startsWith("ERROR")?"geo-plot-warning":"geo-plot-message"} role={message.startsWith("ERROR")?"alert":"status"}>{message}</div>}
       <div className="geo-plot-workspace">
@@ -1547,17 +1524,27 @@ export default function GeoPlotMapper(){
            (mode==="pan"?"1 finger pan · pinch zoom":mode==="draw"?"Click corners clockwise · wheel zoom at cursor":"Drag numbered handles · wheel zoom at cursor"))}</div>
       </div>
       <aside className="geo-plot-dock">
-        <nav className="geo-plot-dock-tabs" aria-label="Plot editor sections">
-          {(["sources","plot","quality","publish"] as const).map(tab=>
-            <button type="button" key={tab}
-              className={inspectorTab===tab?"active":""}
-              aria-pressed={inspectorTab===tab}
-              disabled={busy||(mode==="align"&&tab!=="sources")}
-              onClick={()=>setInspectorTab(tab)}>
-              {tab==="sources"?"1 · CSV / Image":tab==="plot"?"2 · Plot Details":
-                tab==="quality"?"3 · Quality":"4 · Publish"}
-            </button>)}
+        <nav className="geo-plot-dock-tabs geo-plot-primary-tabs" aria-label="Plot Mapper workspaces">
+          <button type="button" className={inspectorTab==="plot"?"active":""}
+            aria-pressed={inspectorTab==="plot"} disabled={busy||mode==="align"}
+            onClick={()=>setInspectorTab("plot")}>Mapping</button>
+          <button type="button" className={inspectorTab==="sources"?"active":""}
+            aria-pressed={inspectorTab==="sources"} disabled={busy}
+            onClick={()=>setInspectorTab("sources")}>CSV / Image</button>
+          <button type="button" className={inspectorTab==="quality"||inspectorTab==="publish"?"active":""}
+            aria-pressed={inspectorTab==="quality"||inspectorTab==="publish"}
+            disabled={busy||mode==="align"}
+            onClick={()=>setInspectorTab("quality")}>Review & Publish</button>
         </nav>
+        {(inspectorTab==="quality"||inspectorTab==="publish")&&
+          <nav className="geo-plot-review-tabs" aria-label="Mapping review or publishing">
+            <button type="button" className={inspectorTab==="quality"?"active":""}
+              aria-pressed={inspectorTab==="quality"} disabled={busy}
+              onClick={()=>setInspectorTab("quality")}>Quality Review</button>
+            <button type="button" className={inspectorTab==="publish"?"active":""}
+              aria-pressed={inspectorTab==="publish"} disabled={busy}
+              onClick={()=>setInspectorTab("publish")}>Publish</button>
+          </nav>}
         {recoveredLocalDraft&&<div className="geo-plot-local-recovery" role="status">
           <strong>Unfinished Plot {recoveredLocalDraft.plot.id} available on this browser</strong>
           <span>Matches this project, 3D model and mapping revision. Not published.</span>
@@ -1565,7 +1552,7 @@ export default function GeoPlotMapper(){
             Restore unfinished plot</button>
             <button type="button" onClick={clearLocalPlotDraft}>Discard local copy</button></div>
         </div>}
-        {inspectorTab==="sources"&&<>
+        <div className="geo-plot-source-workspace" hidden={inspectorTab!=="sources"}>
         <GeoPlotInventoryPanel key={slug+"-inventory-"+inventoryImportNonce}
           slug={slug} mappedIds={plots.map(p=>p.id)}
           workingId={working?.id} blocked={!editable||busy||dirty||hasUnapplied}
@@ -1587,7 +1574,7 @@ export default function GeoPlotMapper(){
           onStageImageCorner={stageCornerFromVerifiedImage} editable={editable&&!busy}
           mappingStale={Boolean(state.draft.stale)}
           onRebindSource={rebindWithReviewedSource}/>}
-        </>}
+        </div>
         {inspectorTab==="quality"&&<>
         <details className="geo-plot-review-dashboard" open>
           <summary>03 · Data quality · {progress.pending} pending / {quality.summary.blockers} blockers /
@@ -1679,55 +1666,103 @@ export default function GeoPlotMapper(){
             Plot {working.id} is NOT in the approved CSV ({progress.inventory} IDs).
             Cancel this unfinished plot and select a CSV Plot ID before Confirm.
           </p>}
-         {working&&working.corners.length>=3&&<div className="geo-plot-visual-side-panel" aria-label="Smart plot mapping overview">
+         {working&&working.corners.length>=3&&<section className="geo-plot-compact-card" aria-label="Current plot summary">
+           <div className="geo-plot-compact-head">
+             <strong>Plot {working.id}</strong>
+             <div className="geo-plot-compact-navigation">
+               <button type="button" disabled={!plots.length||busy} onClick={()=>chooseSibling(-1)}
+                 aria-label="Previous mapped plot">‹</button>
+               <button type="button" disabled={!plots.length||busy} onClick={()=>chooseSibling(1)}
+                 aria-label="Next mapped plot">›</button>
+             </div>
+             <span>{working.corners.length} corners · {sideCoverage?.ok?
+               "✓ "+sideCoverage.edgeCount+" edges assigned":"Side review needed"}</span>
+           </div>
            {sideCoverage&&!sideCoverage.ok&&<div className="geo-plot-warning" role="alert">
-             <strong>Side assignment incomplete — {coverageError(sideCoverage)}</strong>
-             <p>Plot corners are safe. Repair fills every missing edge without remapping; check the corrected Front/Depth groups before verification.</p>
+             <strong>{coverageError(sideCoverage)}</strong>
              <button type="button" disabled={!editable||busy} onClick={repairWorkingSides}>
                Repair Sides · Keep Polygon
              </button>
            </div>}
-           {sideCoverage?.ok&&<small className="geo-plot-coverage-ok">
-             ✓ All {sideCoverage.edgeCount} polygon edges assigned once
-           </small>}
-           <strong>Smart sides · Plot {working.id}</strong>
-           <p className="geo-plot-hint">Initial Front = first drawn edge; Change Front swaps complete side groups, so no polygon edge is lost. For irregular plots, use connected-segment mode to adjust boundaries. Verify the real road before publishing.</p>
-           <p className="geo-plot-hint">Front edge: {(working.sides.front?.edges[0]??0)+1} · Geo-facing suggestion: {roadFrontPreview(working,geo?.placement.headingDeg??Number.NaN,suggestGeoSideFacing)||"Check Geo North"}</p>
-           {inferFrontFirstSideGroups(working.corners)?.reviewRequired&&
-             <p className="geo-plot-warning">Complex irregular sides need visual review. The engine has not guessed a road side or source measurement.</p>}
-           <div className="geo-plot-inspector-actions">
-             <button type="button" disabled={!editable||busy}
-               onClick={()=>{setSelectedRole("front");setMode("side");}}>Select Front on Map</button>
-             <button type="button" className="geo-plot-action-primary"
-               disabled={!editable||busy||!state||(shape==="four"&&working.corners.length!==4)}
-               onClick={()=>void confirmPlotAndNext()}>✓ Save & Next</button>
+           <div className="geo-plot-compact-area">
+             <span>Area · mapped value</span>
+             <strong>{working.area.value>0?working.area.value:selectedInventory?.area||"—"}
+               {" "}{working.area.value>0?working.area.unit:selectedInventory?.areaUnit||""}</strong>
            </div>
-         </div>}
-         {working&&working.corners.length>=3&&<div className="geo-plot-visual-side-panel">
-          <strong>Assign Front / Back / Depth on the 3D boundary</strong>
-          <div className="geo-plot-side-role-buttons">
-            {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>
-              <button type="button" key={role} aria-pressed={mode==="side"&&selectedRole===role}
-                className={mode==="side"&&selectedRole===role?"active":""}
-                disabled={busy||!editable}
-                onClick={()=>{setSelectedRole(role);setMode("side");}}>
-                {role==="depthA"?"Depth A":role==="depthB"?"Depth B":role==="front"?"Front":"Back"}
-              </button>)}
-          </div>
-          {working.corners.length>4&&<label className="geo-plot-check">
-            <input type="checkbox" checked={extendSide}
-              onChange={e=>setExtendSide(e.target.checked)}/> Add connected irregular boundary segments
-          </label>}
-          <small>Select a side, then tap its actual 3D plot edge. Front must touch
-            the real road. Every change resets source/facing approvals.</small>
-          {mode==="side"&&<button type="button" onClick={()=>setMode("edit")}>
-            Done assigning sides · Edit corners</button>}
-        </div>}
+           <div className="geo-plot-compact-dimensions">
+             {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>{
+               const length=working.sides[role]?.length||selectedInventory?.[role]||0;
+               const unit=working.sides[role]?.unit||selectedInventory?.lengthUnit||"ft";
+               return <div key={role}>
+                 <span>{role==="depthA"?"Depth A":role==="depthB"?"Depth B":role==="front"?"Front":"Back"}</span>
+                 <strong>{length>0?length.toFixed(2)+" "+unit:"Needs source"}</strong>
+               </div>;
+             })}
+           </div>
+           <div className="geo-plot-compact-meta">
+             <span>Facing <b>{roadFrontPreview(working,geo?.placement.headingDeg??Number.NaN,suggestGeoSideFacing)||
+               (working.facingVerified&&working.facingSource?working.facing:"Check Geo North")}</b>
+               <small>Geo suggestion · verify road</small></span>
+             <span>Road <b>{working.sides.front?.roadFacing?"Front marked · review source":"Check Front"}</b></span>
+           </div>
+           {(()=>{const variance=measurementVariance(areaSqm(working.corners),working.area.value,
+             working.area.unit,geo?.placement.scale||1);
+             return variance!==null&&Math.abs(variance)>0.1?
+               <p className="geo-plot-compact-warning" role="status">
+                 ⚠ Area mismatch {(Math.abs(variance)*100).toFixed(1)}% · Review Geometry
+               </p>:null;
+           })()}
+           {inferFrontFirstSideGroups(working.corners)?.reviewRequired&&
+             <p className="geo-plot-compact-hint">Irregular side groups: confirm the real road and corner segments.</p>}
+           {(()=>{const review=reviewQueue.queue.find(item=>item.id.toLowerCase()===working.id.toLowerCase());
+             return review?<button type="button" className="geo-plot-compact-review"
+               onClick={()=>setInspectorTab("quality")}>
+               {review.blockers} blocker(s) · {review.reviews} review(s) · View Quality
+             </button>:null;
+           })()}
+           <div className="geo-plot-compact-actions">
+             <button type="button" disabled={!editable||busy||!sideCoverage?.ok}
+               aria-label="Change Front by tapping plot edge"
+               onClick={()=>{setSelectedRole("front");setMode("side");}}>Change Front</button>
+             <button type="button" disabled={!editable||busy||!sideCoverage?.ok}
+               onClick={()=>{setSelectedRole("front");setMode("side");}}>Edit Sides</button>
+             <button type="button" disabled={!editable||busy}
+               onClick={()=>{if(advancedDetailsRef.current)advancedDetailsRef.current.open=true;}}>
+               Edit Values
+             </button>
+           </div>
+           <button type="button" className="geo-plot-confirm-primary geo-plot-compact-save"
+             disabled={!editable||busy||!state||!sideCoverage?.ok||
+               (shape==="four"&&working.corners.length!==4)||
+               Boolean(inventoryRows.length&&!inventoryRows.some(row=>row.id.toLowerCase()===working.id.toLowerCase()))}
+             aria-label={"Confirm Plot "+working.id+" & Next — Save & Next"}
+             onClick={()=>void confirmPlotAndNext()}>✓ {busy?"Saving…":"Save & Next"}</button>
+         </section>}
+         {working&&mode==="side"&&working.corners.length>=3&&
+           <section className="geo-plot-visual-side-panel geo-plot-context-side">
+             <div className="geo-plot-context-head">
+               <strong>Edit sides on canvas</strong>
+               <button type="button" onClick={()=>setMode("edit")}>Done</button>
+             </div>
+             <div className="geo-plot-side-role-buttons">
+               {ROLES.filter(role=>working.layout==="four"||role!=="depthB").map(role=>
+                 <button type="button" key={role} aria-pressed={selectedRole===role}
+                   className={selectedRole===role?"active":""} disabled={busy||!editable}
+                   onClick={()=>setSelectedRole(role)}>
+                   {role==="depthA"?"Depth A":role==="depthB"?"Depth B":role==="front"?"Front":"Back"}
+                 </button>)}
+             </div>
+             {working.corners.length>4&&<label className="geo-plot-check">
+               <input type="checkbox" checked={extendSide} onChange={e=>setExtendSide(e.target.checked)}/>
+               Adjust connected segments
+             </label>}
+             <small>Tap a boundary edge to assign {selectedRole}. The editor keeps every edge assigned once.</small>
+           </section>}
          {state&&state.draft.revision>0&&state.draft.verifiedInventoryRevision!==state.inventoryRevision&&
           state.draft.verifiedRevision===state.draft.revision&&
           <p className="geo-plot-warning" role="status">Source inventory was updated after verification.
             Review current CSV evidence, then Save/Verify before any new Publish.</p>}
-        {inventoryRows.length>0&&<div className="geo-plot-source-review" aria-live="polite">
+        {inventoryIssues.length>0&&<div className="geo-plot-source-review" aria-live="polite">
           <strong>Source Reconciliation · {inventoryIssues.length} issue(s)</strong>
           <small>Inventory revision {state?.inventoryRevision??0} ·
             Verified revision {state?.draft.verifiedInventoryRevision??"not yet"}</small>
@@ -1737,6 +1772,8 @@ export default function GeoPlotMapper(){
           {!inventoryIssues.length&&<small>{progress.confirmed} mapped Plot IDs match current CSV references.
             {progress.pending>0?" "+progress.pending+" approved IDs still need mapping.":""}</small>}
         </div>}
+        <details className="geo-plot-inventory-browser">
+          <summary>Browse mapped plots · {plots.length}</summary>
         <label className="geo-plot-inventory-search">Find plot
            <input type="search" placeholder="Search plot number" value={inventoryQuery}
              onChange={e=>setInventoryQuery(e.target.value)}/>
@@ -1752,7 +1789,17 @@ export default function GeoPlotMapper(){
            {plots.length===0&&<p className="geo-plot-hint">No plot boundaries yet. Select 4 corners or Irregular to draw the first plot.</p>}
            {plots.length>0&&displayedPlots.length===0&&<p className="geo-plot-hint">No plots match this search.</p>}
          </div>
+        </details>
+         {working&&working.corners.length<3&&<div className="geo-plot-compact-empty">
+           <strong>Plot {working.id} · {working.corners.length} corners</strong>
+           <p>Draw the first Front edge and continue around the actual boundary. Dimensions are read from the approved CSV.</p>
+           <button type="button" disabled={!editable||busy} onClick={()=>begin(shape)}>
+             {working.corners.length?"Resume drawing":"Start drawing"}
+           </button>
+         </div>}
          {working&&<>
+          <details ref={advancedDetailsRef} className="geo-plot-advanced-details">
+            <summary>Advanced · measurements, evidence & precision</summary>
           <h3>{plots.some(p=>p.id===working.id)?"Update":"New"} Plot {working.id}</h3>
           <div className="geo-plot-inspector-selection">
              <span>{originalId?"Editing mapped plot":"New polygon"}</span>
@@ -1965,9 +2012,23 @@ export default function GeoPlotMapper(){
               Apply & Draw Next →</button>
           </div>
           </details>
+          </details>
         </>}
         </>}
         {inspectorTab==="publish"&&<>
+        <section className="geo-plot-publish-actions" aria-label="Publish mapping">
+          <button type="button" className="geo-plot-preliminary-button"
+            disabled={!editable||busy||dirty||Boolean(working)||!state||plots.length===0}
+            title="Publish saved plot boundaries; authoritative source approval can follow"
+            onClick={()=>void execute("publish-preliminary")}>Publish Live · Preliminary</button>
+          <button type="button" className="geo-plot-publish-button"
+            disabled={!editable||busy||dirty||Boolean(working)||!state||
+              state.draft.verifiedRevision!==state.draft.revision||
+              state.draft.verifiedInventoryRevision!==state.inventoryRevision||
+              (state.alignmentRevision>0&&state.draft.verifiedAlignmentRevision!==state.alignmentRevision)||
+              inventoryIssues.length>0}
+            onClick={()=>void execute("publish")}>Publish Mapping</button>
+        </section>
         {state?.activeMapping?.current&&slug&&<GeoPlotCommercialPanel
           key={slug+"-commercial-"+state.activeMapping.id}
           slug={slug} mappingReleaseId={state.activeMapping.id}
@@ -2038,13 +2099,13 @@ export default function GeoPlotMapper(){
           }}>Activate Mapping v{r.version}{r.publicationMode==="preliminary"?" · Preliminary":" · Verified"}</button>)}
         </div>
         </>}
-        <div className="geo-plot-shortcuts">
-          <strong>Keyboard shortcuts</strong>
+        <details className="geo-plot-shortcuts geo-plot-help">
+          <summary>Keyboard shortcuts · Help</summary>
           <span>P Pan · D Resume 4 corners · I Resume Irregular · E Edit · F Fit</span>
           <span>After Pan, use Resume Drawing (or the SAME shape button) to keep existing corners.</span>
           <span>Ctrl/⌘+Z Undo · Ctrl/⌘+Shift+Z Redo · Corner + arrow keys (Shift = 10×)</span>
           <span>+ / − Zoom · Backspace Remove last new corner · Ctrl/⌘+S Save draft</span>
-        </div>
+        </details>
       </aside>
       </div>
     </div>

@@ -48,14 +48,19 @@ test("legacy Geo editor reveals stale CSV evidence and offers safe road Front re
   })));
   await page.goto("/3Dprojects/geo-plots?project=e2e-geo");
   await expect(page.getByRole("heading",{name:"3D Geo Plot Mapper"}).last()).toBeVisible();
-  // New fullscreen tabs intentionally keep source reconciliation with the Plot editor.
-  await page.getByRole("button",{name:"2 · Plot Details"}).click();
+  // Mapping is the default workspace; stale CSV evidence stays visible.
+  await expect(page.getByRole("button",{name:"Mapping",exact:true})).toHaveAttribute("aria-pressed","true");
   const review=page.locator(".geo-plot-source-review").first();
   await expect(review).toContainText("1 issue(s)");
   await expect(review).toContainText("front");
   await expect(page.getByText("Source inventory was updated after verification.")).toBeVisible();
+  await page.getByRole("button",{name:"Review & Publish"}).click();
+  await page.getByRole("button",{name:"Publish",exact:true}).click();
   await expect(page.getByRole("button",{name:"Publish Mapping"})).toBeDisabled();
+  await page.getByRole("button",{name:"Mapping",exact:true}).click();
+  await page.locator(".geo-plot-inventory-browser > summary").click();
   await page.getByRole("button",{name:"Plot 1 4 corners"}).click();
+  await page.locator(".geo-plot-advanced-details > summary").click();
   // Platform parity: use the browser's native crosshair, not an overlay
   // magnifier or a second synthetic cursor that can drift from the hit point.
   const overlay=page.locator(".geo-plot-overlay");
@@ -105,7 +110,7 @@ test("legacy Geo editor reveals stale CSV evidence and offers safe road Front re
   await expect(page.locator(".geo-plot-editor-shell")).toHaveAttribute("data-fullscreen","false");
 
   // The Quality tab isolates diagnostic evidence from the fast drawing controls.
-  await page.getByRole("button",{name:"3 · Quality"}).click();
+  await page.getByRole("button",{name:"Review & Publish"}).click();
   // Evidence dashboard is diagnostic-only, while Clone Previous produces a
   // new canonical ID with unverified source and NO silent polygon publication.
   await expect(page.getByText("Data quality ·")).toBeVisible();
@@ -113,21 +118,25 @@ test("legacy Geo editor reveals stale CSV evidence and offers safe road Front re
   await expect(page.locator(".geo-plot-quality-item")).toHaveCount(1);
   await expect(page.locator(".geo-plot-quality-item")).toContainText("Plot 1");
   await page.getByRole("button",{name:"Review Plot 1 in Editor"}).click();
-  await expect(page.getByRole("button",{name:"2 · Plot Details"})).toHaveAttribute("aria-pressed","true");
+  await expect(page.getByRole("button",{name:"Mapping",exact:true})).toHaveAttribute("aria-pressed","true");
   await expect(page.getByLabel("Current approved CSV plot")).toHaveValue("1");
+  await page.locator(".geo-plot-advanced-details > summary").click();
   await expect(page.locator(".geo-plot-selected-review-note")).toBeVisible();
-  await page.getByRole("button",{name:"3 · Quality"}).click();
+  await page.getByRole("button",{name:"Review & Publish"}).click();
   await page.getByText("Clone Previous · unverified footprint template").click();
   await page.getByLabel("Previous mapped Plot ID").selectOption("1");
   await page.getByLabel("X offset (metres)").fill("10");
   await page.getByLabel("Z offset (metres)").fill("0");
   page.on("dialog",dialog=>dialog.accept());
   await page.getByRole("button",{name:"Clone to Unverified Draft"}).click();
+  await page.locator(".geo-plot-advanced-details > summary").click();
   await expect(page.getByRole("heading",{name:"New Plot 2"})).toBeVisible();
   await expect(page.getByLabel("Area verified against source")).not.toBeChecked();
   await expect(page.getByLabel("Facing verified against reference")).not.toBeChecked();
   const clonedFront=page.locator("fieldset").filter({has:page.locator("legend:text-is('front')")});
   await expect(clonedFront.getByLabel("Road side")).not.toBeChecked();
   await expect(clonedFront.getByLabel("Source verified")).not.toBeChecked();
+  await page.getByRole("button",{name:"Review & Publish"}).click();
+  await page.getByRole("button",{name:"Publish",exact:true}).click();
   await expect(page.getByRole("button",{name:"Publish Mapping"})).toBeDisabled();
 });

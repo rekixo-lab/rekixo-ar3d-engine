@@ -78,7 +78,22 @@ for(const {shape,cornerCount,toolKey,toolLabel} of [
     await page.keyboard.press(toolKey);
     await expect(overlay).toHaveAttribute("data-tool-mode","draw");
     await expect(status).toContainText(countText);
-    if(shape==="four")await expect(page.getByRole("button",{name:"Confirm Plot 1 & Next"})).toBeDisabled();
-    else await expect(page.getByRole("button",{name:"Confirm Plot 1 & Next"})).toBeEnabled();
+    // Restored partial polygons must never be saveable until every edge has a
+    // complete side assignment; the repair preserves all original corners.
+    const confirm=page.getByRole("button",{name:/Confirm Plot 1 & Next/});
+    if(shape==="four"){
+      // Compact mapper avoids showing Save for a one-corner incomplete plot.
+      await expect(confirm).toHaveCount(0);
+    }else{
+      await expect(confirm).toBeDisabled();
+    }
+    if(shape==="irregular"){
+      const repair=page.getByRole("button",{name:"Repair Sides · Keep Polygon"});
+      await expect(repair).toBeVisible();
+      page.once("dialog",dialog=>dialog.accept());
+      await repair.click();
+      await expect(confirm).toBeEnabled();
+      await expect(status).toContainText(countText);
+    }
   });
 }
