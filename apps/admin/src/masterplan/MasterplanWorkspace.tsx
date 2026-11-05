@@ -3,6 +3,7 @@ import { listAssets, uploadAsset, type CloudAssetSummary } from "../studio/cloud
 import type { Asset } from "../studio/domain";
 import {fitImageFrame,imageWorldAt,panImageFrame,pinchImageFrame,zoomImageFrame} from "../../../../shared/masterplan-image-gestures.js";
 import {assignFourCornerRoadFront} from "../../../../shared/geo-plot-source-operations.js";
+import {inferFrontFirstSideGroups,nearestPlotBoundaryEdge} from "../../../../shared/geo-plot-smart-sides.js";
 import {packMasterplanRecovery,unpackMasterplanRecovery,reviewMasterplanCsv,invalidateMasterplanSourceProof,
   type MasterplanCsvReview} from "../../../../shared/masterplan-workflow.js";
 import "./masterplan-workspace.css";
@@ -20,7 +21,7 @@ type ImageComparison={file:File;width:number;height:number;previewUrl:string};
 type MasterplanState={project:{slug:string;name:string;status:string};draft:MasterplanDraft;
   activeRelease:{id:string;version:number;draftRevision:number}|null;history:Array<{id:string;version:number}>};
 type Mode="source"|"plots"|"controls";
-type Tool="pan"|"draw"|"edit"|"point";
+type Tool="pan"|"draw"|"edit"|"point"|"front";
 const roles:Role[]=["front","depthA","back","depthB"];
 const directions=["north","north-east","east","south-east","south","south-west","west","north-west"];
 const blankSide=():Side=>({edges:[],length:0,unit:"ft",roadFacing:false,source:"",verified:false});
@@ -28,13 +29,13 @@ function newPlot(id:string):Plot{return {id,corners:[],layout:"four",sides:{},
   area:{value:0,unit:"sqft",source:"",verified:false},facing:"north",
   facingSource:"",facingVerified:false,road:"",notes:""};}
 function assignSides(points:Point[]):Plot["sides"]{
-  const sides:Plot["sides"]={};if(points.length<3)return sides;
-  const names=points.length===3?roles.slice(0,3):roles;
-  names.forEach((role,i)=>{
-    const edges=i===names.length-1
-      ? Array.from({length:points.length-i},(_,j)=>i+j):[i];
-    sides[role]={...blankSide(),edges};
-  });
+  const inferred=inferFrontFirstSideGroups(points);
+  const sides:Plot["sides"]={};
+  if(!inferred)return sides;
+  for(const role of roles){
+    const edges=inferred.roles[role];
+    if(edges?.length)sides[role]={...blankSide(),edges:[...edges]};
+  }
   return sides;
 }
 function normalizedSvgPoint(e:ReactPointerEvent<SVGSVGElement>,svg:SVGSVGElement,width:number,height:number):Point|null{
@@ -382,7 +383,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   });
   const setRoadFront=(edge:number)=>{
     if(!working)return;
-    if(!window.confirm("Make edge "+edge+" the road-facing Front? All side/facing approvals will be reset."))return;
+    if(!window.confirm("Make edge "+(edge+1)+" the road-facing Front? Side/facing approvals will reset. Existing polygons and published releases remain unchanged."))return;
     editWorking(p=>assignFourCornerRoadFront(p,edge));
   };
   function down(e:ReactPointerEvent<SVGSVGElement>){
@@ -391,6 +392,14 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
     pointerRef.current.set(e.pointerId,[e.clientX,e.clientY]);
     if(tool==="pan"){e.currentTarget.setPointerCapture(e.pointerId);return;}
     if(pointerRef.current.size>1||!p)return;
+    if(tool==="front"&&working){
+      const picked=nearestPlotBoundaryEdge(working.corners,p,draft.width,draft.height);
+      const threshold=12*frame.w/Math.max(svg.clientWidth,1);
+      if(picked&&picked.distance<=threshold&&working.corners.length===4&&working.layout==="four"){
+        setRoadFront(picked.edge);setTool("edit");
+      }else setStatus("Tap closer to a plotted boundary edge. For complex irregular sides, use Advanced edge groups.");
+      return;
+    }
     if(tool==="point" && controlIndex!==null){
       const arr=draft.controlPoints.map((cp,i)=>i===controlIndex?{...cp,u:p[0],v:p[1],verified:false}:cp);
       changeDraft({controlPoints:arr});setControlIndex(null);setTool("pan");return;
@@ -524,6 +533,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
         <p className="masterplan-stage-hint">{tool==="pan"?"Drag to pan; use two fingers to pinch-zoom on touch screens, or Zoom/Fit.":
           tool==="draw"?"Tap each plot corner; then enter approved details and apply.":
           tool==="edit"?"Drag an individual polygon corner; side approvals reset.":
+          tool==="front"?"Tap the real road-facing edge to set Front. Other sides update automatically.":
           "Tap a location on the image for selected GPS control point."}</p>
       </section>
       <aside className="masterplan-dock">
@@ -605,6 +615,14 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               corners:p.corners.slice(0,-1),sides:assignSides(p.corners.slice(0,-1)),
                area:{...p.area,verified:false},facingVerified:false}))}>Undo Corner</button>
             <button disabled={working.corners.length<3} onClick={()=>setTool("edit")}>Drag Corners</button>
+            {working.corners.length>=3&&<div className="masterplan-guidance">
+              First tapped edge = Front. Sides are suggested automatically; compare with the actual road.
+              {inferFrontFirstSideGroups(working.corners)?.reviewRequired&&
+                <p>Irregular side groups need manual review; no surveyed length is guessed.</p>}
+            </div>}
+            {working.corners.length===4&&working.layout==="four"&&
+              <button type="button" className={tool==="front"?"active":""}
+                onClick={()=>setTool("front")}>↔ Choose Front on Map</button>}
             <label>Approved Area<input type="number" step="any" min="0" value={working.area.value||""}
               onChange={e=>updatePlot("area",{...working.area,value:Number(e.target.value),verified:false})}/></label>
             <label>Area Unit<select value={working.area.unit} onChange={e=>updatePlot("area",
@@ -648,7 +666,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
             })}
             {advanced&&<label>Notes<textarea rows={2} value={working.notes} onChange={e=>updatePlot("notes",e.target.value)}/></label>}
             {!advanced&&<small>Source verification and edge details are in Advanced.</small>}
-            <button disabled={working.corners.length<3} onClick={apply}>Apply Plot to Draft</button>
+            <button disabled={working.corners.length<3} onClick={()=>apply()}>Apply Plot to Draft</button>
           </fieldset>:<p>Select a plot, or create a new polygon.</p>}
           <button disabled={!draft?.plots.length} onClick={()=>{
             if(!draft)return;
