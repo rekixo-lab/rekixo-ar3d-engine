@@ -37,11 +37,15 @@ test("four-corner visual Front selection assigns actual visible road edge and re
 test("visual irregular chain does not assign one segment to two roles and rejects disconnected segments",()=>{
   const p=plot(6);
   p.sides.front.edges=[0];
+  p.sides.depthA.edges=[1,2];
+  p.sides.back.edges=[3];
+  p.sides.depthB.edges=[4,5];
   const after=assignVisiblePlotEdge(p,"front",1,{extend:true});
   assert.deepEqual(after.sides.front.edges,[0,1]);
-  assert.equal(after.sides.depthA.edges.length,0);
+  assert.deepEqual(after.sides.depthA.edges,[2]);
   assert.equal(after.sides.front.verified,false);
-  assert.throws(()=>assignVisiblePlotEdge(after,"front",4,{extend:true}),/connected/);
+  assert.equal(validateGeoPlotCollection([after]).length,1);
+  assert.throws(()=>assignVisiblePlotEdge(after,"front",4,{extend:true}),/adjoining|neighboring/);
   assert.throws(()=>assignVisiblePlotEdge(p,"depthB",-1),/valid plot side/);
 });
 test("local draft recovery is source/revision bound, expires and cannot cross projects",()=>{
@@ -72,11 +76,14 @@ test("visual Back/Depth swap retains all four edges and passes server draft geom
 test("irregular chains allow wraparound clockwise but never disconnected or mid-chain removal",()=>{
   const p=plot(6);
   p.sides.front.edges=[5];
+  p.sides.depthA.edges=[0,1,2];
+  p.sides.back.edges=[3];
+  p.sides.depthB.edges=[4];
   const wrap=assignVisiblePlotEdge(p,"front",0,{extend:true});
   assert.deepEqual(wrap.sides.front.edges,[5,0]);
   const continued=assignVisiblePlotEdge(wrap,"front",1,{extend:true});
   assert.deepEqual(continued.sides.front.edges,[5,0,1]);
-  assert.throws(()=>assignVisiblePlotEdge(continued,"front",0,{extend:true}),/chain end/);
+  assert.throws(()=>assignVisiblePlotEdge(continued,"front",0,{extend:true}),/first or last/);
   assert.deepEqual(assignVisiblePlotEdge(continued,"front",5,{extend:true}).sides.front.edges,[0,1]);
 });
 test("actual UI contract keeps Confirm & Next, source/revision-safe local recovery and visible publish",()=>{
