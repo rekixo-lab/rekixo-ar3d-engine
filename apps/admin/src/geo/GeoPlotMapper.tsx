@@ -1558,7 +1558,7 @@ export default function GeoPlotMapper(){
             Restore unfinished plot</button>
             <button type="button" onClick={clearLocalPlotDraft}>Discard local copy</button></div>
         </div>}
-        {inspectorTab==="sources"&&<>
+        <div className="geo-plot-source-workspace" hidden={inspectorTab!=="sources"}>
         <GeoPlotInventoryPanel key={slug+"-inventory-"+inventoryImportNonce}
           slug={slug} mappedIds={plots.map(p=>p.id)}
           workingId={working?.id} blocked={!editable||busy||dirty||hasUnapplied}
@@ -1580,7 +1580,7 @@ export default function GeoPlotMapper(){
           onStageImageCorner={stageCornerFromVerifiedImage} editable={editable&&!busy}
           mappingStale={Boolean(state.draft.stale)}
           onRebindSource={rebindWithReviewedSource}/>}
-        </>}
+        </div>
         {inspectorTab==="quality"&&<>
         <details className="geo-plot-review-dashboard" open>
           <summary>03 · Data quality · {progress.pending} pending / {quality.summary.blockers} blockers /
