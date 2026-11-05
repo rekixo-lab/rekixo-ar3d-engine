@@ -1391,7 +1391,7 @@ export default function GeoPlotMapper(){
           <button type="button" disabled={!geo} aria-label="Zoom in" onClick={()=>zoomBy(1.25)}>+</button>
           <button type="button" disabled={!geo} title="Fit all geometry (F)" onClick={fitView}>Fit</button>
           <button type="button" className="geo-plot-fullscreen-toggle"
-            title="Show canvas and mapper in full screen" aria-pressed={focused}
+            title="Show canvas and mapper in full screen" aria-label={focused?"Exit full screen":"Full screen"} aria-pressed={focused}
             onClick={()=>void toggleFullscreen()}>{focused?"⊟ Exit":"⛶ Full screen"}</button>
         </div>
         <details className="geo-plot-toolbar-more">
