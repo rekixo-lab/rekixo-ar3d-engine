@@ -44,3 +44,21 @@ export function roadFrontPreview(plot,headingDeg,geoFacingSuggest) {
      typeof geoFacingSuggest!=="function")return null;
   return geoFacingSuggest(plot.corners,plot.sides.front.edges,headingDeg);
 }
+
+export function nearestPlotBoundaryEdge(corners,point,width=1,height=1) {
+  if(!Array.isArray(corners)||corners.length<3||!corners.every(finitePoint)||
+     !finitePoint(point)||!Number.isFinite(width)||width<=0||
+     !Number.isFinite(height)||height<=0)return null;
+  let best=null;
+  for(let i=0;i<corners.length;i++){
+    const a=corners[i],b=corners[(i+1)%corners.length];
+    const ax=a[0]*width,ay=a[1]*height,bx=b[0]*width,by=b[1]*height;
+    const px=point[0]*width,py=point[1]*height;
+    const dx=bx-ax,dy=by-ay,den=dx*dx+dy*dy;
+    if(den<1e-12)continue;
+    const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/den));
+    const distance=Math.hypot(px-ax-t*dx,py-ay-t*dy);
+    if(!best||distance<best.distance)best={edge:i,distance};
+  }
+  return best;
+}
