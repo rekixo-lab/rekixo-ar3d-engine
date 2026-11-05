@@ -855,8 +855,81 @@ export default function GeoPlotMapper(){
     setWorking(p=>p?applyApprovedInventoryRow(p,selectedInventory):p);
     setMessage("Plot "+working.id+": approved CSV values staged. Recheck road-facing edge, measurements and sources before applying.");
   };
+  const clearManualSidePreview=()=>{
+    setManualSideLocks({});setManualStartCorner(null);setManualProposal(null);
+  };
+  const openManualSideEditor=()=>{
+    clearManualSidePreview();setSideEditKind("manual");setSelectedRole("front");
+    setExtendSide(false);setMode("side");setInspectorTab("plot");
+    setMessage("Manual: choose Front/Back/Depth, tap its START corner and END corner. "+
+      "Your other sides will not change until you review and Apply.");
+  };
+  const openAutoSideEditor=()=>{
+    clearManualSidePreview();setSideEditKind("auto");setSelectedRole("front");
+    setExtendSide(false);setMode("side");setInspectorTab("plot");
+    setMessage("Auto Front: tapping an edge will reassign whole side groups. "+
+      "Use Manual to choose each corner range independently.");
+  };
+  const selectManualCorner=(index:number)=>{
+    if(!working||mode!=="side"||sideEditKind!=="manual"||busy||!editable)return;
+    if(manualStartCorner===null){
+      setManualStartCorner(index);setManualProposal(null);
+      setMessage("Start corner "+(index+1)+" selected for "+selectedRole+
+        ". Now tap the LAST corner on the same boundary (end exclusive).");
+      return;
+    }
+    try{
+      const next=stageGeoManualSideRange(working,manualSideLocks,selectedRole,manualStartCorner,index);
+      const range=next[selectedRole]||[];
+      setManualSideLocks(next);setManualStartCorner(null);setManualProposal(null);
+      setMessage(selectedRole+": corners "+(manualStartCorner+1)+" → "+(index+1)+
+        " staged as "+range.length+" connected edge(s). Other roles are UNCHANGED. "+
+        "Choose more roles, then Auto Fill Rest to PREVIEW.");
+    }catch(error){
+      setManualStartCorner(null);
+      setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));
+    }
+  };
+  const previewManualSides=()=>{
+    if(!working||!editable||busy)return;
+    try{
+      const proposed=proposeGeoManualSideMapping(working,manualSideLocks);
+      setManualProposal(proposed);
+      setMessage("Preview only: "+proposed.edgeCount+" edges covered; "+
+        proposed.changedRoles.length+" roles would change ("+
+        proposed.changedRoles.join(", ")+"). "+
+        "Original mapping is unchanged until Apply Preview.");
+    }catch(error){
+      setManualProposal(null);
+      setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));
+    }
+  };
+  const applyManualSides=()=>{
+    if(!working||!manualProposal||!previewIsCurrent||!editable||busy)return;
+    const changes=manualProposal.changedRoles;
+    if(!changes.length){
+      clearManualSidePreview();setMode("edit");
+      setMessage("No side changes required; original mapping retained.");
+      return;
+    }
+    const unlocked=manualProposal.changedUnpinned;
+    const explanation="Apply these DRAFT-only side changes to Plot "+working.id+"?\\n"+
+      "Changed: "+changes.join(", ")+"\\n"+
+      (unlocked.length?"Auto-filled (not individually selected): "+unlocked.join(", ")+"\\n":"")+
+      "Every edge stays assigned exactly once. Survey lengths and polygon corners stay intact. "+
+      "Affected road/facing/side verification resets. NOT published.";
+    if(!window.confirm(explanation))return;
+    try{
+      const next=applyGeoManualSideProposal(working,manualProposal);
+      setWorking(next);
+      clearManualSidePreview();setMode("edit");
+      setMessage("✓ Plot "+working.id+": "+changes.join(", ")+
+        " applied to local editor. All polygon edges covered. Recheck road, "+
+        "CSV measurements and approvals, then Save & Next.");
+    }catch(error){setMessage("ERROR: "+(error instanceof Error?error.message:String(error)));}
+  };
   const assignSideOnCanvas=(edge:number)=>{
-    if(!working||busy||mode!=="side"||working.corners.length<3)return;
+    if(!working||busy||mode!=="side"||sideEditKind!=="auto"||working.corners.length<3)return;
     try{
       const changed=assignVisiblePlotEdge(working,selectedRole,edge,{extend:extendSide});
       const suggested=selectedRole==="front"?
