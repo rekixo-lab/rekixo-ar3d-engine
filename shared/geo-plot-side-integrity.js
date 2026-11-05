@@ -58,7 +58,7 @@ export function assignCoveredGeoPlotEdge(plot,role,edge,{extend=false}={}){
         const next=inspection.roles[(i+1)%inspection.roles.length];
         return (sides[key].edges.at(-1)+1)%n===sides[next].edges[0];
       });
-      if(ordered){
+      if(ordered&&n!==4){
         const offset=(inspection.roles.indexOf(owner)-inspection.roles.indexOf(role)+inspection.roles.length)%inspection.roles.length;
         const old=Object.fromEntries(inspection.roles.map(key=>[key,[...sides[key].edges]]));
         for(let i=0;i<inspection.roles.length;i++)
