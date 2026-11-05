@@ -1383,62 +1383,44 @@ export default function GeoPlotMapper(){
             onClick={()=>{setSelectedRole("front");setMode("side");setInspectorTab("plot");}}>
             ↔ Change Front
           </button>
-          <button type="button" className="geo-plot-tool-complete"
-            disabled={!editable||busy||!working||working.corners.length<3||
-              (shape==="four"&&working.corners.length!==4)}
-            onClick={finishBoundary}>✓ Boundary complete</button>
-          <button type="button" disabled={!editable||busy||!working||working.corners.length<3}
-            className={mode==="side"?"active":""}
-            onClick={()=>{setMode("side");setInspectorTab("plot");}}>
-            ↔ Assign Sides</button>
+          {mode==="draw"&&shape==="irregular"&&working&&working.corners.length>=3&&
+            <button type="button" className="geo-plot-tool-complete"
+              disabled={!editable||busy} onClick={finishBoundary}>✓ Finish boundary</button>}
         </div>
         <div className="geo-plot-tool-group geo-plot-tool-group--secondary">
-          <button type="button" disabled={busy||!workingHistory.past.length} aria-label="Undo working plot edit"
-            title="Undo draft plot field or corner edit (Ctrl/⌘+Z)" onClick={undoWorkingEdit}>↶ Undo edit</button>
-          <button type="button" disabled={busy||!workingHistory.future.length} aria-label="Redo working plot edit"
-            title="Redo draft plot field or corner edit (Ctrl/⌘+Shift+Z)" onClick={redoWorkingEdit}>↷ Redo edit</button>
-          <button type="button" disabled={!working?.corners.length||busy||Boolean(originalId)}
-            title="Remove last new-plot corner (Backspace)" onClick={undoCorner}>Remove point</button>
-          <button type="button" disabled={!working||busy} onClick={cancelWorking}>Cancel</button>
-          <label className="geo-plot-toggle"><input type="checkbox" checked={snap}
-            onChange={e=>setSnap(e.target.checked)}/> Snap {snap?"ON":"OFF"}</label>
-          <label className="geo-plot-toggle"><input type="checkbox" checked={showGuides}
-            onChange={e=>setShowGuides(e.target.checked)}/> Labels</label>
+          <button type="button" disabled={busy||!workingHistory.past.length}
+            aria-label="Undo working plot edit" title="Undo plot edit" onClick={undoWorkingEdit}>↶ Undo</button>
         </div>
         <div className="geo-plot-tool-group geo-plot-zoom-tools" aria-label="Precision viewport zoom">
           <button type="button" disabled={!geo} aria-label="Zoom out" onClick={()=>zoomBy(.8)}>−</button>
-          <input type="range" min="100" max="5000" step="1"
-            value={zoomPercent} onChange={e=>setZoom(Number(e.target.value))}
-            aria-label="Zoom percent" aria-valuetext={zoomPercent+" percent"}/>
           <output>{zoomPercent}%</output>
           <button type="button" disabled={!geo} aria-label="Zoom in" onClick={()=>zoomBy(1.25)}>+</button>
           <button type="button" disabled={!geo} title="Fit all geometry (F)" onClick={fitView}>Fit</button>
-          <button type="button" className="geo-plot-fullscreen-toggle" title="Show toolbar, canvas and inspector in full screen"
-            aria-pressed={focused} onClick={()=>void toggleFullscreen()}>
-            {focused?"⊟ Exit full screen":"⛶ Full screen"}</button>
+          <button type="button" className="geo-plot-fullscreen-toggle"
+            title="Show canvas and mapper in full screen" aria-pressed={focused}
+            onClick={()=>void toggleFullscreen()}>{focused?"⊟ Exit":"⛶ Full screen"}</button>
         </div>
-        <div className="geo-plot-tool-group geo-plot-tool-group--confirm">
-          <button type="button" className="geo-plot-confirm-primary"
-            disabled={!editable||busy||!working||working.corners.length<3||
-              (shape==="four"&&working.corners.length!==4)||
-              Boolean(inventoryRows.length&&!inventoryRows.some(row=>row.id.toLowerCase()===working.id.toLowerCase()))}
-            onClick={()=>void confirmPlotAndNext()}>
-            ✓ {busy?"Saving…":working?"Confirm Plot "+working.id+" & Next":"Confirm Plot & Next"}
-          </button>
-        </div>
-        <div className="geo-plot-tool-group geo-plot-tool-group--publish">
-          <button type="button" className="geo-plot-preliminary-button"
-            disabled={!editable||busy||dirty||Boolean(working)||!state||plots.length===0}
-            title="Publish saved plot boundaries now; source approvals can be completed and republished later"
-            onClick={()=>void execute("publish-preliminary")}>Publish Live · Preliminary</button>
-          <button type="button" className="geo-plot-publish-button"
-            disabled={!editable||busy||dirty||Boolean(working)||!state||
-              state.draft.verifiedRevision!==state.draft.revision||
-              state.draft.verifiedInventoryRevision!==state.inventoryRevision||
-              (state.alignmentRevision>0&&state.draft.verifiedAlignmentRevision!==state.alignmentRevision)||
-              inventoryIssues.length>0}
-            onClick={()=>void execute("publish")}>Publish Mapping</button>
-        </div>
+        <details className="geo-plot-toolbar-more">
+          <summary>More</summary>
+          <div className="geo-plot-toolbar-more-menu">
+            <button type="button" disabled={!editable||busy||!working||working.corners.length<3}
+              onClick={()=>{setMode("side");setInspectorTab("plot");}}>↔ Assign Sides</button>
+            <button type="button" disabled={busy||!workingHistory.future.length}
+              aria-label="Redo working plot edit" onClick={redoWorkingEdit}>↷ Redo</button>
+            <button type="button" disabled={!working?.corners.length||busy||Boolean(originalId)}
+              title="Remove last new-plot corner" onClick={undoCorner}>Remove point</button>
+            <button type="button" disabled={!working||busy} onClick={cancelWorking}>Cancel plot</button>
+            <label className="geo-plot-toggle"><input type="checkbox" checked={snap}
+              onChange={e=>setSnap(e.target.checked)}/> Snap {snap?"ON":"OFF"}</label>
+            <label className="geo-plot-toggle"><input type="checkbox" checked={showGuides}
+              onChange={e=>setShowGuides(e.target.checked)}/> Labels</label>
+            <label className="geo-plot-toolbar-zoom">Zoom
+              <input type="range" min="100" max="5000" step="1" value={zoomPercent}
+                onChange={e=>setZoom(Number(e.target.value))}
+                aria-label="Zoom percent" aria-valuetext={zoomPercent+" percent"}/>
+            </label>
+          </div>
+        </details>
       </section>
       {focused&&message&&<div className={message.startsWith("ERROR")?"geo-plot-warning":"geo-plot-message"} role={message.startsWith("ERROR")?"alert":"status"}>{message}</div>}
       <div className="geo-plot-workspace">
@@ -2038,6 +2020,19 @@ export default function GeoPlotMapper(){
         </>}
         </>}
         {inspectorTab==="publish"&&<>
+        <section className="geo-plot-publish-actions" aria-label="Publish mapping">
+          <button type="button" className="geo-plot-preliminary-button"
+            disabled={!editable||busy||dirty||Boolean(working)||!state||plots.length===0}
+            title="Publish saved plot boundaries; authoritative source approval can follow"
+            onClick={()=>void execute("publish-preliminary")}>Publish Live · Preliminary</button>
+          <button type="button" className="geo-plot-publish-button"
+            disabled={!editable||busy||dirty||Boolean(working)||!state||
+              state.draft.verifiedRevision!==state.draft.revision||
+              state.draft.verifiedInventoryRevision!==state.inventoryRevision||
+              (state.alignmentRevision>0&&state.draft.verifiedAlignmentRevision!==state.alignmentRevision)||
+              inventoryIssues.length>0}
+            onClick={()=>void execute("publish")}>Publish Mapping</button>
+        </section>
         {state?.activeMapping?.current&&slug&&<GeoPlotCommercialPanel
           key={slug+"-commercial-"+state.activeMapping.id}
           slug={slug} mappingReleaseId={state.activeMapping.id}
