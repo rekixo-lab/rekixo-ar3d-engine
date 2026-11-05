@@ -12,6 +12,9 @@ test("mapper opens in compact Mapping workspace; CSV and review/publish remain a
     assert.ok(ui.includes(">"+title+"</button>"),title);
   assert.match(ui,/inspectorTab==="publish"/);
   assert.match(ui,/inspectorTab==="quality"/);
+  // Sources must fetch data even when Mapping is the initial visible workspace.
+  assert.match(ui,/className="geo-plot-source-workspace" hidden=\{inspectorTab!=="sources"\}/);
+  assert.match(ui,/onRowsChange=\{onInventoryRowsChange\}/);
 });
 
 test("normal sidebar is summary-first, with one Save & Next and optional advanced editing",()=>{
