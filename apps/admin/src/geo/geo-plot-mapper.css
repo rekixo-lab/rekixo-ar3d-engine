@@ -489,3 +489,9 @@
   .geo-plot-compact-card{padding:9px}
   .geo-plot-page .geo-plot-primary-tabs button{font-size:10px;min-height:37px}
 }
+
+/* Author display rules must not defeat native closed <details> visibility. */
+.geo-plot-help:not([open])>*:not(summary),
+.geo-plot-advanced-details:not([open])>*:not(summary),
+.geo-plot-inventory-browser:not([open])>*:not(summary),
+.geo-plot-toolbar-more:not([open])>*:not(summary){display:none!important}
