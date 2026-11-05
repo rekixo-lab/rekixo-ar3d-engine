@@ -646,7 +646,7 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
                 }catch(e){setError(String(e));}
               }}>Repair Sides · Keep Polygon</button>
             </div>}
-            {sideCoverage?.ok&&<small>✓ {sideCoverage.edgeCount} edges assigned exactly once</small>
+            {sideCoverage?.ok&&<small>✓ {sideCoverage.edgeCount} edges assigned exactly once</small>}
             {working.corners.length>=3&&<div className="masterplan-guidance">
               Initial Front = first tapped edge. After mapping, choose any road-facing edge to change Front; other sides update automatically.
               {inferFrontFirstSideGroups(working.corners)?.reviewRequired&&
