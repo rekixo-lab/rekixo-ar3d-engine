@@ -12,6 +12,7 @@ import GeoPlotCommercialPanel from "./GeoPlotCommercialPanel";
 import {nextUnmappedInventory,parseGeoInventoryCsv,normalizeGeoInventoryRows,
   type GeoInventoryRow} from "../../../../shared/geo-plot-inventory.js";
 import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
+import {inferFrontFirstSideGroups,roadFrontPreview} from "../../../../shared/geo-plot-smart-sides.js";
 import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import {cloneUnverifiedGeoPlot,geoPlotEvidenceManifest,geoPlotQualityReport} from "../../../../shared/geo-plot-stage3-review.js";
@@ -71,19 +72,17 @@ function sidesWithInventory(corners:Point[],row?:GeoInventoryRow):Plot["sides"] 
   return sides;
 }
 function initialSides(corners:Point[]): Plot["sides"] {
-  if(corners.length<3)return {};
+  const suggestion=inferFrontFirstSideGroups(corners);
+  if(!suggestion)return {};
   const result:Plot["sides"]={};
-  const layout=corners.length===3?"three":"four";
-  // Geometric ring order: Front → right depth → Back → left depth.
-  const edges:Role[]=layout==="three" ? ["front","depthA","back"] : ["front","depthA","back","depthB"];
-  edges.forEach((role,i)=>{
-    const indices=i===edges.length-1
-      ? Array.from({length:corners.length-i},(_,k)=>i+k) : [i];
+  for(const role of ROLES){
+    const indices=suggestion.roles[role];
+    if(!indices?.length)continue;
     const length=indices.reduce((sum,j)=>sum+Math.hypot(
       corners[j][0]-corners[(j+1)%corners.length][0],
       corners[j][1]-corners[(j+1)%corners.length][1]),0);
-    result[role]={...emptySide(indices),length:Number((length*3.280839895).toFixed(3))};
-  });
+    result[role]={...emptySide([...indices]),length:Number((length*3.280839895).toFixed(3))};
+  }
   return result;
 }
 function areaSqm(points:Point[]) {
@@ -710,8 +709,10 @@ export default function GeoPlotMapper(){
       if(!prev||prev.corners.length>=80||(shape==="four"&&prev.corners.length>=4))return prev;
       const corners=[...prev.corners,target.point];
       const sourceRow=inventoryRows.find(row=>row.id.toLowerCase()===prev.id.toLowerCase());
-      return {...prev,corners,layout:corners.length===3?"three":"four",
-        sides:sidesWithInventory(corners,sourceRow),
+      const sides=sidesWithInventory(corners,sourceRow);
+      const suggested=roadFrontPreview({corners,sides},geo?.placement.headingDeg??Number.NaN,suggestGeoSideFacing);
+      return {...prev,corners,layout:corners.length===3?"three":"four",sides,
+        ...(!prev.facingSource&&suggested?{facing:suggested}:{}),
         area:{...prev.area,verified:false},facingVerified:false};
     });
   };
@@ -808,8 +809,13 @@ export default function GeoPlotMapper(){
   const selectRoadFront=(edge:number)=>{
     if(!working)return;
     if(!window.confirm("Make polygon edge "+edge+" the road-facing FRONT? All side and facing approvals will reset. No published plot is changed."))return;
-    setWorking(p=>p?assignFourCornerRoadFront(p,edge):p);
-    setMessage("Road-facing Front changed to edge "+edge+". Review Front/Back/Depth lengths and sources, then reverify.");
+    setWorking(p=>{
+      if(!p)return p;
+      const next=assignFourCornerRoadFront(p,edge);
+      const suggested=roadFrontPreview(next,geo?.placement.headingDeg??Number.NaN,suggestGeoSideFacing);
+      return {...next,...(!p.facingSource&&suggested?{facing:suggested}:{})};
+    });
+    setMessage("Road-facing Front changed to edge "+(edge+1)+". Other sides were reassigned automatically. Review CSV measurements, compass and approvals.");
   };
   const applyCurrentSource=()=>{
     if(!working||!selectedInventory)return;
@@ -822,7 +828,9 @@ export default function GeoPlotMapper(){
     if(!working||busy||mode!=="side"||working.corners.length<3)return;
     try{
       const changed=assignVisiblePlotEdge(working,selectedRole,edge,{extend:extendSide});
-      setWorking(changed);
+      const suggested=selectedRole==="front"?
+        roadFrontPreview(changed,geo?.placement.headingDeg??Number.NaN,suggestGeoSideFacing):null;
+      setWorking({...changed,...(!working.facingSource&&suggested?{facing:suggested}:{})});
       setMessage("Plot "+working.id+": "+selectedRole+" edge "+(edge+1)+
         " staged. Road, source lengths and facing need review before Verify.");
     }catch(error){setMessage("ERROR: "+String(error));}
@@ -1186,7 +1194,11 @@ export default function GeoPlotMapper(){
     if(shape==="four"&&working.corners.length!==4){
       setMessage("ERROR: A 4-corner boundary requires exactly 4 points.");return;
     }
-    setMode("edit");setMessage("Boundary ready. Adjust corner handles and enter approved measurements in the inspector.");
+    const suggestion=inferFrontFirstSideGroups(working.corners);
+    setMode("edit");
+    setMessage(suggestion?.reviewRequired
+      ?"Boundary ready. Irregular side grouping needs manual review before verification; polygon corners were preserved."
+      :"Boundary ready. Front/Depth/Back labels suggested. Check the road edge, then Save & Next.");
   };
   useEffect(()=>{
     const handleKey=(event:KeyboardEvent)=>{
@@ -1332,6 +1344,12 @@ export default function GeoPlotMapper(){
           <button type="button" disabled={!editable||busy||!working}
             className={mode==="edit"?"active":""} title="Drag corners for precision (E)"
             onClick={()=>setMode("edit")}>✎ Edit</button>
+          <button type="button" disabled={!editable||busy||!working||working.corners.length<3}
+            className={mode==="side"&&selectedRole==="front"?"active":""}
+            aria-label="Change Front by tapping plot edge"
+            onClick={()=>{setSelectedRole("front");setMode("side");setInspectorTab("plot");}}>
+            ↔ Change Front
+          </button>
           <button type="button" className="geo-plot-tool-complete"
             disabled={!editable||busy||!working||working.corners.length<3||
               (shape==="four"&&working.corners.length!==4)}
@@ -1622,6 +1640,20 @@ export default function GeoPlotMapper(){
             Plot {working.id} is NOT in the approved CSV ({progress.inventory} IDs).
             Cancel this unfinished plot and select a CSV Plot ID before Confirm.
           </p>}
+         {working&&working.corners.length>=3&&<div className="geo-plot-visual-side-panel" aria-label="Smart plot mapping overview">
+           <strong>Smart sides · Plot {working.id}</strong>
+           <p className="geo-plot-hint">Front = first clicked edge (corner 1 → 2). Depth A, Back and Depth B are arranged automatically. Front is not road-verified until checked against the approved plan.</p>
+           <p className="geo-plot-hint">Front edge: {(working.sides.front?.edges[0]??0)+1} · Geo-facing suggestion: {roadFrontPreview(working,geo?.placement.headingDeg??Number.NaN,suggestGeoSideFacing)||"Check Geo North"}</p>
+           {inferFrontFirstSideGroups(working.corners)?.reviewRequired&&
+             <p className="geo-plot-warning">Complex irregular sides need visual review. The engine has not guessed a road side or source measurement.</p>}
+           <div className="geo-plot-inspector-actions">
+             <button type="button" disabled={!editable||busy}
+               onClick={()=>{setSelectedRole("front");setMode("side");}}>Select Front on Map</button>
+             <button type="button" className="geo-plot-action-primary"
+               disabled={!editable||busy||!state||(shape==="four"&&working.corners.length!==4)}
+               onClick={()=>void confirmPlotAndNext()}>✓ Save & Next</button>
+           </div>
+         </div>}
          {working&&working.corners.length>=3&&<div className="geo-plot-visual-side-panel">
           <strong>Assign Front / Back / Depth on the 3D boundary</strong>
           <div className="geo-plot-side-role-buttons">
@@ -1738,7 +1770,7 @@ export default function GeoPlotMapper(){
             <button type="button" disabled={!editable||busy} onClick={applyCurrentSource}>
               Apply Latest Approved CSV to Selected Plot (unverified)</button>
           </div>}
-          <details open className="geo-plot-inspector-section">
+          <details className="geo-plot-inspector-section">
             <summary>01 · Geometry & site plane</summary>
           <p className="geo-plot-hint">Corners: {working.corners.length} · Model area (unverified): {areaSqm(working.corners).toFixed(2)} m²
           · Geo-scale area estimate: {(areaSqm(working.corners)*(geo?.placement.scale||1)**2).toFixed(2)} m²</p>
@@ -1758,7 +1790,7 @@ export default function GeoPlotMapper(){
               : null;
           })()}
           </details>
-          <details open className="geo-plot-inspector-section">
+          <details className="geo-plot-inspector-section">
             <summary>02 · Approved area & source</summary>
           <label>Approved Area<input inputMode="decimal" type="number" min="0.001" value={working.area.value||""}
             onChange={e=>setWorking({...working,area:{...working.area,value:Number(e.target.value),verified:false}})}/></label>
@@ -1769,7 +1801,7 @@ export default function GeoPlotMapper(){
           <label className="geo-plot-check"><input type="checkbox" checked={working.area.verified}
             onChange={e=>setWorking({...working,area:{...working.area,verified:e.target.checked}})}/> Area verified against source</label>
           </details>
-          <details open className="geo-plot-inspector-section">
+          <details className="geo-plot-inspector-section">
             <summary>03 · Road, facing & north</summary>
           <label>Road / Access<input value={working.road} onChange={e=>setWorking({...working,road:e.target.value,facingVerified:false})}/></label>
           <label>Primary Front Facing <select value={working.facing}
@@ -1833,7 +1865,7 @@ export default function GeoPlotMapper(){
           })()}
 
           </details>
-          <details open className="geo-plot-inspector-section">
+          <details className="geo-plot-inspector-section">
             <summary>04 · Front, Back & Depth sizes</summary>
           <p className="geo-plot-hint">Front must face the actual road, not the top of the screen. For four-corner plots select the road-touching edge. Corner plots may have multiple road-facing sides.</p>
           {working.corners.length===4&&working.layout==="four"&&<label>Road-facing FRONT boundary
