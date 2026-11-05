@@ -9,7 +9,7 @@ export async function clientGeoPlotDetails(request,env,ctx,actor){
   const source=await activeMap(env,ctx);
   if(!source)return respond({mappingReleaseId:null,rows:[],notice:"Verified published mapping unavailable."},request.method==="GET"?200:409);
   if(request.method==="GET"){
-   const r=await env.DB.prepare("SELECT plot_id AS plotId,owner_name AS ownerName,broker_name AS brokerName,booking_amount_paise AS bookingAmountPaise,notes,revision,updated_at AS updatedAt FROM geo_client_plot_details_3d WHERE project_id=? AND mapping_release_id=? ORDER BY plot_id LIMIT 2500").bind(ctx.project.id,source.releaseId).all();
+   const r=await env.DB.prepare("SELECT plot_id AS plotId,owner_name AS ownerName,broker_name AS brokerName,booking_amount_paise AS bookingAmountPaise,sold_amount_paise AS soldAmountPaise,notes,revision,updated_at AS updatedAt FROM geo_client_plot_details_3d WHERE project_id=? AND mapping_release_id=? ORDER BY plot_id LIMIT 2500").bind(ctx.project.id,source.releaseId).all();
    return respond({mappingReleaseId:source.releaseId,rows:r.results||[]});
   }
   if(ctx.project.status==="archived")return respond({error:"Archived project is read-only."},409);
