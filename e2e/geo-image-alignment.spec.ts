@@ -126,5 +126,7 @@ test("private original image captures real pixels and source-pinned alignment dr
   await page.locator(".geo-plot-overlay").click({position:{x:160,y:135}});
   await expect(panel.getByText("Fit anchors · 1")).toBeVisible();
   await expect(page.getByRole("button",{name:"Cancel alignment capture"})).toHaveCount(0);
+  await page.getByRole("button",{name:"Review & Publish"}).click();
+  await page.getByRole("button",{name:"Publish",exact:true}).click();
   await expect(page.getByRole("button",{name:"Publish Mapping"})).toBeDisabled();
 });
