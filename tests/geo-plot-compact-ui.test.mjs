@@ -49,6 +49,8 @@ test("side edit tools are contextual, and untouched approvals remain guarded",()
 test("fullscreen and mobile preserve canvas, sidebar and accessible manual tools",()=>{
   assert.match(css,/\.geo-plot-compact-card\{/);
   assert.match(css,/\.geo-plot-toolbar-more-menu\{/);
+  assert.match(css,/\.geo-plot-help:not\(\[open\]\)>\*:not\(summary\)/);
+  assert.match(css,/\.geo-plot-advanced-details:not\(\[open\]\)>\*:not\(summary\)/);
   assert.match(css,/\.geo-plot-advanced-details/);
   assert.match(css,/grid-template-columns:minmax\(0,4fr\) minmax\(288px,1fr\)/);
   assert.match(css,/@media\(max-width:950px\)/);
