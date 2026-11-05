@@ -46,6 +46,7 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
  slug:string;commercial:GeoCommercialState;canEdit:boolean;canApprove:boolean;
  onCommercialChange:(next:GeoCommercialState)=>void}){
  const [details,setDetails]=useState<Details[]>([]);
+ const [detailsReady,setDetailsReady]=useState(false);
  const [query,setQuery]=useState("");
  const [filter,setFilter]=useState<"all"|Status>("all");
  const [page,setPage]=useState(0);
@@ -62,13 +63,14 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
 
  useEffect(()=>{
   let active=true;
+  setDetailsReady(false);
   void api<{mappingReleaseId:string|null;rows:Details[]}>(path+"/plot-details")
    .then(data=>{
     if(!active)return;
     if(data.mappingReleaseId!==commercial.mappingReleaseId){
      setError("Mapping changed. Refresh this project before editing.");return;
     }
-    setDetails(data.rows);
+    setDetails(data.rows);setDetailsReady(true);
    })
    .catch(e=>{if(active)setError(e instanceof Error?e.message:"Plot details unavailable.");});
   return()=>{active=false;};
@@ -105,7 +107,7 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
 
  const clearFeedback=()=>{setError("");setPublished(null);};
  function choose(row:Row){
-  if(busy)return;
+  if(busy||!detailsReady)return;
   if(isDirty&&selected&&!window.confirm("Discard unsaved plot changes?"))return;
   if(row.plotId===selected){
    setSelected("");clearFeedback();return;
@@ -173,6 +175,8 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
       confirmed.revision!==response.confirmation.commercialRevision||
       response.detail.revision!==response.confirmation.detailRevision)
     throw Error("Server could not confirm the public status. Refresh and check.");
+   if(response.detail.plotId.toLowerCase()!==chosen.plotId.toLowerCase())
+    throw Error("Server returned different private plot details. Refresh before editing.");
    onCommercialChange(response.commercial);
    setDetails(rows=>{
     const other=rows.filter(row=>row.plotId.toLowerCase()!==chosen.plotId.toLowerCase());
@@ -201,6 +205,7 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
   </div>
   {commercial.notice&&<p className="client-geo-info">{commercial.notice}</p>}
   {!editingVisible&&error&&<p className="engine-manage-error" role="alert">{error}</p>}
+  {!detailsReady&&<p className="client-geo-info" role="status">Loading private plot details…</p>}
   <div className="client-geo-list" aria-label="All published plots">
    <div className="client-geo-table-heading">
     <span>Plot</span><span>Area</span><span>Owner / Buyer</span>
@@ -214,6 +219,7 @@ export default function ClientGeoPlotManagement({slug,commercial,canEdit,canAppr
     return <div key={row.plotId} className={"client-geo-entry"+(editing?" is-editing":"")}>
      <button type="button" className={"client-geo-table-row"+(editing?" is-active":"")}
       aria-expanded={editing} aria-controls={editing?"client-geo-editor-"+row.plotId:undefined}
+      disabled={!detailsReady||busy}
       onClick={()=>choose(row)}>
       <strong>{row.plotId}</strong>
       <span>{row.area?.value?row.area.value.toLocaleString("en-IN")+" "+row.area.unit:"—"}</span>
