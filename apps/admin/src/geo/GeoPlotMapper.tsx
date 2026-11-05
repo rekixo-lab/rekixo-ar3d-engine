@@ -54,6 +54,9 @@ type PointerPreview = {clientX:number;clientY:number;rawScreen:Point;screen:Poin
   point:Point;kind:"none"|"vertex"|"edge";pointerType:string};
 type PointerStart = {id:number;x:number;y:number;cancelled?:boolean};
 const ROLES: Role[] = ["front", "back", "depthA", "depthB"];
+const ROLE_COLORS:Record<Role,string>={
+  front:"#34d399",back:"#fb923c",depthA:"#60a5fa",depthB:"#c084fc"
+};
 const directions=GEO_COMPASS_DIRECTIONS.map(item=>item.id);
 const emptySide = (edges:number[]=[]):Side => ({edges,length:0,unit:"ft",roadFacing:false,source:"",verified:false});
 const blank = (id:string):Plot => ({id,corners:[],layout:"four",sides:{},
@@ -1542,7 +1545,7 @@ export default function GeoPlotMapper(){
           {working&&working.corners.length>0&&<>
             <polyline points={path(working.corners)} fill={working.corners.length>=3?"rgba(250,204,21,.22)":"none"}
               stroke="#ffd965" strokeWidth="2.5" strokeDasharray="7 4"/>
-            {showGuides&&ROLES.filter(role=>working.layout==="four"||role!=="depthB")
+            {showGuides&&mode!=="side"&&ROLES.filter(role=>working.layout==="four"||role!=="depthB")
                .map(role=>{
                  const side=working.sides[role],anchor=sideLabelAnchor(working.corners,side?.edges||[]);
                  if(!side||!anchor)return null;
@@ -1557,20 +1560,30 @@ export default function GeoPlotMapper(){
              {(mode==="side"||Boolean(sideCoverage&&!sideCoverage.ok))&&
               working.corners.length>=3&&working.corners.map((point,index)=>{
                 const [x1,y1]=project(point),[x2,y2]=project(working.corners[(index+1)%working.corners.length]);
-                const role=ROLES.find(item=>working.sides[item]?.edges.includes(index))||"";
+                const currentRole=ROLES.find(item=>working.sides[item]?.edges.includes(index))||"";
+                const previewRole=manualProposal&&previewIsCurrent?
+                  ROLES.find(item=>manualProposal.plot.sides[item]?.edges.includes(index)):
+                  sideEditKind==="manual"?
+                    ROLES.find(item=>manualSideLocks[item]?.includes(index)):null;
+                const manual=mode==="side"&&sideEditKind==="manual";
+                const activeRole=manual?previewRole:currentRole;
                 const missing=sideCoverage?.missingEdges.includes(index);
                 const duplicated=sideCoverage?.duplicateEdges.includes(index);
                 const bad=missing||duplicated;
                 return <g key={"side-edge-"+index} className="geo-plot-side-hit">
                   <line x1={x1} y1={y1} x2={x2} y2={y2}
-                    stroke={bad?"#ff555e":role===selectedRole?"#40ffb4":"#ffdc86"}
-                    strokeWidth={bad?"7":"5"} pointerEvents="none"/>
+                    stroke={bad?"#ff555e":activeRole?
+                      ROLE_COLORS[activeRole as Role]:manual?"#647784":
+                      currentRole===selectedRole?"#40ffb4":"#ffdc86"}
+                    strokeWidth={bad?"7":manual?(activeRole?"7":"3"):"5"}
+                    strokeLinecap="round" pointerEvents="none"/>
                   {bad&&<text x={(x1+x2)/2} y={(y1+y2)/2-9} textAnchor="middle"
                     fill="#fff" stroke="#9a192a" paintOrder="stroke" fontSize="12"
                     pointerEvents="none">Edge {index+1} !</text>}
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent"
-                    strokeWidth="22" pointerEvents={mode==="side"?"stroke":"none"}
-                    onPointerDown={e=>{if(mode!=="side")return;e.preventDefault();e.stopPropagation();assignSideOnCanvas(index);}}
+                    strokeWidth="22" pointerEvents={mode==="side"&&sideEditKind==="auto"?"stroke":"none"}
+                    onPointerDown={e=>{if(mode!=="side"||sideEditKind!=="auto")return;
+                      e.preventDefault();e.stopPropagation();assignSideOnCanvas(index);}}
                     onPointerUp={e=>e.stopPropagation()}
                     aria-label={"Assign edge "+(index+1)+" to "+selectedRole}/>
                 </g>;
@@ -1597,7 +1610,16 @@ export default function GeoPlotMapper(){
                   r={Math.max(4.5,10-Math.min((zoomPercent-100)/4900,1)*4)}
                   fill="#ffe49d" stroke="#182a3e" strokeWidth="2.5" pointerEvents="none"/>
                 <text x={x+12} y={y-10} fill="#fff" fontSize="13" stroke="#111"
-                  paintOrder="stroke" pointerEvents="none">{i+1}</text></g>;
+                  paintOrder="stroke" pointerEvents="none">{i+1}</text>
+                {mode==="side"&&sideEditKind==="manual"&&
+                  <circle cx={x} cy={y} r={manualStartCorner===i?21:17}
+                    fill={manualStartCorner===i?"#34d39944":"transparent"}
+                    stroke={manualStartCorner===i?"#34d399":"transparent"}
+                    strokeWidth="3" className="geo-plot-manual-corner-hit"
+                    aria-label={"Corner "+(i+1)+" for manual side range"}
+                    onPointerDown={e=>{e.preventDefault();e.stopPropagation();selectManualCorner(i);}}
+                    onPointerUp={e=>e.stopPropagation()}/>}
+                </g>;
             })}
           </>}
         </svg>}
@@ -1605,7 +1627,9 @@ export default function GeoPlotMapper(){
            <b>Plot {working.id}</b>
            <span>{shape==="four"?working.corners.length+"/4":working.corners.length+" (irregular)"} corners</span>
            <span>{mode==="draw"?"Mark Front edge first":mode==="edit"?"Drag numbered corner handles":
-             mode==="side"?"Tap highlighted boundary edges to assign "+selectedRole:
+             mode==="side"?(sideEditKind==="manual"?
+               (manualStartCorner===null?"Manual · tap START corner for "+selectedRole:
+                 "Manual · tap END corner for "+selectedRole):"Auto · tap boundary edge for "+selectedRole):
              pausedDrawing?"Paused · "+pausedDrawing.nextCorner+" is next · Resume Drawing":"Pan / pinch to inspect"}</span>
          </div>}
          {pausedDrawing&&<div className="geo-plot-paused-banner" role="status">
