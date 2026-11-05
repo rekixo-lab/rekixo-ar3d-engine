@@ -78,10 +78,11 @@ test("Client Geo status-first one-form editing and publish feedback on desktop, 
   await expect(firstRow).toHaveAttribute("aria-expanded","true");
   await expect(first.locator(".client-geo-editor--inline")).toBeVisible();
   await expect(first.getByRole("heading",{name:"Editing Plot 1"})).toBeVisible();
-  await expect(first.getByRole("radio",{name:"Available"})).toBeChecked();
+  await expect(first.getByRole("radio",{name:width===320?"Booked":"Available"})).toBeChecked();
   await expect(first.getByText("Private Notes")).toHaveCount(0);
   await expect(first.getByText("Source / signed evidence reference")).toHaveCount(0);
-  await expect(first.getByText("Booking Amount (₹)")).toHaveCount(0);
+  if(width===320)await expect(first.getByLabel("Booking Amount (₹)")).toBeVisible();
+  else await expect(first.getByText("Booking Amount (₹)")).toHaveCount(0);
   await expect(first.getByText("Sold Amount (₹)")).toHaveCount(0);
   await expect(first.getByRole("button",{name:"Save & Publish Status"})).toBeDisabled();
   await second.locator("button.client-geo-table-row").click();
