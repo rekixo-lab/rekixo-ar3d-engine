@@ -118,6 +118,12 @@ test("applying stale preview after Undo or another role edit is refused",()=>{
   const changed=structuredClone(p);
   changed.sides.front.edges=[6];
   assert.throws(()=>applyGeoManualSideProposal(changed,proposal),/changed since the side preview/);
+  const changedSource=structuredClone(p);
+  changedSource.sides.front.length=99;
+  assert.throws(()=>applyGeoManualSideProposal(changedSource,proposal),/changed since the side preview/);
+  const changedArea=structuredClone(p);
+  changedArea.area.verified=false;
+  assert.throws(()=>applyGeoManualSideProposal(changedArea,proposal),/changed since the side preview/);
 });
 
 test("no-change preview retains existing signed approvals and untouched commercial/source data",()=>{
