@@ -13,6 +13,7 @@ import {nextUnmappedInventory,parseGeoInventoryCsv,normalizeGeoInventoryRows,
   type GeoInventoryRow} from "../../../../shared/geo-plot-inventory.js";
 import {precisionSnap,zoomAnchorDelta,isMappingTap} from "../../../../shared/geo-mapper-pointer.js";
 import {inferFrontFirstSideGroups,roadFrontPreview} from "../../../../shared/geo-plot-smart-sides.js";
+import {inspectGeoPlotSideCoverage,repairGeoPlotSideCoverage} from "../../../../shared/geo-plot-side-integrity.js";
 import {geoInventoryReviewIssues} from "../../../../shared/geo-plot-source-review.js";
 import {assignFourCornerRoadFront,applyApprovedInventoryRow} from "../../../../shared/geo-plot-source-operations.js";
 import {cloneUnverifiedGeoPlot,geoPlotEvidenceManifest,geoPlotQualityReport} from "../../../../shared/geo-plot-stage3-review.js";
@@ -144,6 +145,15 @@ function parseRows(raw:string):string[][] {
   return out;
 }
 function csvCell(value:unknown){return '"'+String(value??"").replace(/"/g,'""').replace(/^[=+@-]/,"'$&")+'"';}
+function coverageError(coverage:ReturnType<typeof inspectGeoPlotSideCoverage>){
+  const problems:string[]=[];
+  if(coverage.missingEdges.length)problems.push("Unassigned edge(s): "+coverage.missingEdges.map(i=>i+1).join(", "));
+  if(coverage.duplicateEdges.length)problems.push("Duplicate edge(s): "+coverage.duplicateEdges.map(i=>i+1).join(", "));
+  if(coverage.missingRoles.length)problems.push("Missing side: "+coverage.missingRoles.join(", "));
+  if(coverage.disconnectedRoles.length)problems.push("Disconnected side: "+coverage.disconnectedRoles.join(", "));
+  if(coverage.invalidEdges.length)problems.push("Invalid side edge indices");
+  return problems.join(" · ")||"Side assignment requires review.";
+}
 export default function GeoPlotMapper(){
   const [options,setOptions]=useState<CloudProjectSummary[]>([]);
   const [slug,setSlug]=useState(()=>new URLSearchParams(location.search).get("project")||"");
@@ -266,6 +276,8 @@ export default function GeoPlotMapper(){
     setState(prev=>prev?{...prev,alignmentRevision:revision}:prev);
   },[]);
   const hasUnapplied=hasPendingPlotEdits(working,originalId?plots.find(p=>p.id===originalId):null);
+  const sideCoverage=useMemo(()=>working&&working.corners.length>=3?
+    inspectGeoPlotSideCoverage(working):null,[working]);
   const progress=useMemo(()=>visibleMappingProgress(inventoryRows,plots),[inventoryRows,plots]);
   useEffect(()=>{
     const key=draftStorageKey(slug);
@@ -835,8 +847,23 @@ export default function GeoPlotMapper(){
         " staged. Road, source lengths and facing need review before Verify.");
     }catch(error){setMessage("ERROR: "+String(error));}
   };
+  const repairWorkingSides=()=>{
+    if(!working||!sideCoverage||sideCoverage.ok||busy||!editable)return;
+    if(!window.confirm("Repair the unassigned/overlapping side groups in Plot "+working.id+
+      "? Polygon corners, approved CSV measurements and the live site will NOT change. "+
+      "Side/road/facing approvals will reset for review."))return;
+    try{
+      const repaired=repairGeoPlotSideCoverage(working);
+      setWorking(repaired);setMode("edit");
+      setMessage("Plot "+working.id+": all "+repaired.corners.length+
+        " edges are now assigned exactly once. Geometry and source lengths retained. "+
+        "Review the road-facing Front, dimensions and source approvals before saving.");
+    }catch(error){setMessage("ERROR: "+String(error));}
+  };
   const applyPlot=(openNext=false)=>{
     if(!working)return;const id=working.id.trim();if(!id||working.corners.length<3)throw Error("Plot number and at least 3 mapped corners required.");
+    const coverage=inspectGeoPlotSideCoverage(working);
+    if(!coverage.ok)throw Error(coverageError(coverage)+". Use Repair Sides; polygon remains unchanged.");
     if(plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId))throw Error("Duplicate plot ID.");
     const updated=[...plots.filter(p=>p.id!==(originalId||id)),{...working,id}]
       .sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
@@ -858,6 +885,11 @@ export default function GeoPlotMapper(){
     if(!id||working.corners.length<3||
       (shape==="four"&&working.corners.length!==4)){
       setMessage("ERROR: Finish the plot boundary before confirming.");return;
+    }
+    const coverage=inspectGeoPlotSideCoverage(working);
+    if(!coverage.ok){
+      setMessage("ERROR: Plot "+id+": "+coverageError(coverage)+
+        ". Select Repair Sides. Unsaved polygon corners are kept.");return;
     }
     if(inventoryRows.length&&!inventoryRows.some(row=>row.id.toLowerCase()===id.toLowerCase())){
       setMessage("ERROR: Plot "+id+" is not in the approved CSV. Cancel this unconfirmed Plot 37 and select Plot 1 from Inventory.");return;
@@ -1454,16 +1486,23 @@ export default function GeoPlotMapper(){
                  return <text key={role} className="geo-plot-map-side-label"
                    x={x} y={y-14} textAnchor="middle">{label+value}</text>;
                })}
-             {mode==="side"&&working.corners.length>=3&&working.corners.map((point,index)=>{
+             {(mode==="side"||Boolean(sideCoverage&&!sideCoverage.ok))&&
+              working.corners.length>=3&&working.corners.map((point,index)=>{
                 const [x1,y1]=project(point),[x2,y2]=project(working.corners[(index+1)%working.corners.length]);
                 const role=ROLES.find(item=>working.sides[item]?.edges.includes(index))||"";
+                const missing=sideCoverage?.missingEdges.includes(index);
+                const duplicated=sideCoverage?.duplicateEdges.includes(index);
+                const bad=missing||duplicated;
                 return <g key={"side-edge-"+index} className="geo-plot-side-hit">
                   <line x1={x1} y1={y1} x2={x2} y2={y2}
-                    stroke={role===selectedRole?"#40ffb4":"#ffdc86"} strokeWidth="5"
-                    pointerEvents="none"/>
+                    stroke={bad?"#ff555e":role===selectedRole?"#40ffb4":"#ffdc86"}
+                    strokeWidth={bad?"7":"5"} pointerEvents="none"/>
+                  {bad&&<text x={(x1+x2)/2} y={(y1+y2)/2-9} textAnchor="middle"
+                    fill="#fff" stroke="#9a192a" paintOrder="stroke" fontSize="12"
+                    pointerEvents="none">Edge {index+1} !</text>}
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent"
-                    strokeWidth="22" pointerEvents="stroke"
-                    onPointerDown={e=>{e.preventDefault();e.stopPropagation();assignSideOnCanvas(index);}}
+                    strokeWidth="22" pointerEvents={mode==="side"?"stroke":"none"}
+                    onPointerDown={e=>{if(mode!=="side")return;e.preventDefault();e.stopPropagation();assignSideOnCanvas(index);}}
                     onPointerUp={e=>e.stopPropagation()}
                     aria-label={"Assign edge "+(index+1)+" to "+selectedRole}/>
                 </g>;
@@ -1641,8 +1680,18 @@ export default function GeoPlotMapper(){
             Cancel this unfinished plot and select a CSV Plot ID before Confirm.
           </p>}
          {working&&working.corners.length>=3&&<div className="geo-plot-visual-side-panel" aria-label="Smart plot mapping overview">
+           {sideCoverage&&!sideCoverage.ok&&<div className="geo-plot-warning" role="alert">
+             <strong>Side assignment incomplete — {coverageError(sideCoverage)}</strong>
+             <p>Plot corners are safe. Repair fills every missing edge without remapping; check the corrected Front/Depth groups before verification.</p>
+             <button type="button" disabled={!editable||busy} onClick={repairWorkingSides}>
+               Repair Sides · Keep Polygon
+             </button>
+           </div>}
+           {sideCoverage?.ok&&<small className="geo-plot-coverage-ok">
+             ✓ All {sideCoverage.edgeCount} polygon edges assigned once
+           </small>}
            <strong>Smart sides · Plot {working.id}</strong>
-           <p className="geo-plot-hint">Initial Front = first drawn edge (corner 1 → 2); you can change Front on the map at any time. Other sides are suggested automatically. Check the real road before verification.</p>
+           <p className="geo-plot-hint">Initial Front = first drawn edge; Change Front swaps complete side groups, so no polygon edge is lost. For irregular plots, use connected-segment mode to adjust boundaries. Verify the real road before publishing.</p>
            <p className="geo-plot-hint">Front edge: {(working.sides.front?.edges[0]??0)+1} · Geo-facing suggestion: {roadFrontPreview(working,geo?.placement.headingDeg??Number.NaN,suggestGeoSideFacing)||"Check Geo North"}</p>
            {inferFrontFirstSideGroups(working.corners)?.reviewRequired&&
              <p className="geo-plot-warning">Complex irregular sides need visual review. The engine has not guessed a road side or source measurement.</p>}

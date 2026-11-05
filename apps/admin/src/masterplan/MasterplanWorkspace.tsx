@@ -4,6 +4,7 @@ import type { Asset } from "../studio/domain";
 import {fitImageFrame,imageWorldAt,panImageFrame,pinchImageFrame,zoomImageFrame} from "../../../../shared/masterplan-image-gestures.js";
 import {assignFourCornerRoadFront} from "../../../../shared/geo-plot-source-operations.js";
 import {inferFrontFirstSideGroups,nearestPlotBoundaryEdge} from "../../../../shared/geo-plot-smart-sides.js";
+import {inspectGeoPlotSideCoverage,repairGeoPlotSideCoverage} from "../../../../shared/geo-plot-side-integrity.js";
 import {packMasterplanRecovery,unpackMasterplanRecovery,reviewMasterplanCsv,invalidateMasterplanSourceProof,
   type MasterplanCsvReview} from "../../../../shared/masterplan-workflow.js";
 import "./masterplan-workspace.css";
@@ -96,6 +97,8 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   const pointerRef=useRef<Map<number,Point>>(new Map());
   const dragRef=useRef<number|null>(null);
   const workingRef=useRef(working);workingRef.current=working;
+  const sideCoverage=useMemo(()=>working&&working.corners.length>=3?
+    inspectGeoPlotSideCoverage(working):null,[working]);
   const load=useCallback(async()=>{
     if(!slug){setState(null);setDraft(null);return;}
     const id=slug;
@@ -360,6 +363,13 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
   }
   function apply(){
     if(!working||!draft) return;
+    const audit=inspectGeoPlotSideCoverage(working);
+    if(!audit.ok){
+      setError("Plot "+working.id+": incomplete sides. Unassigned edges "+
+        audit.missingEdges.map(x=>x+1).join(", ")+
+        ". Check duplicates/continuity and use Repair Sides.");
+      return;
+    }
     const id=working.id.trim();
     if(!id||working.corners.length<3){setError("Plot number and at least three polygon corners required.");return;}
     if(draft.plots.some(p=>p.id.toLowerCase()===id.toLowerCase()&&p.id!==originalId)){
@@ -523,6 +533,13 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
           {working&&<g>
             <polyline points={working.corners.map(p=>p[0]*draft.width+","+p[1]*draft.height).join(" ")}
               fill="rgba(245,201,54,.22)" stroke="#ffe084" strokeWidth={Math.max(2,frame.w/440)}/>
+            {sideCoverage&&!sideCoverage.ok&&[...new Set([...sideCoverage.missingEdges,...sideCoverage.duplicateEdges])].map(i=>{
+              const a=working.corners[i],b=working.corners[(i+1)%working.corners.length];
+              return <line key={"missing-"+i} x1={a[0]*draft.width} y1={a[1]*draft.height}
+                x2={b[0]*draft.width} y2={b[1]*draft.height}
+                stroke="#ff5964" strokeWidth={Math.max(3,frame.w/300)}
+                strokeLinecap="round" pointerEvents="none"/>;
+            })}
             {working.corners.map((p,i)=><circle key={i} cx={p[0]*draft.width} cy={p[1]*draft.height}
               r={Math.max(5,frame.w/140)} fill="#ffe7a1" stroke="#112734" strokeWidth={1.5}/>)}
           </g>}
@@ -615,6 +632,21 @@ export default function MasterplanWorkspace({mode}:{mode:Mode}){
               corners:p.corners.slice(0,-1),sides:assignSides(p.corners.slice(0,-1)),
                area:{...p.area,verified:false},facingVerified:false}))}>Undo Corner</button>
             <button disabled={working.corners.length<3} onClick={()=>setTool("edit")}>Drag Corners</button>
+            {sideCoverage&&!sideCoverage.ok&&<div className="masterplan-guidance" role="alert">
+              <strong>Side edges need repair</strong>
+              <p>Unassigned: {sideCoverage.missingEdges.map(i=>i+1).join(", ")||"none"} ·
+                Duplicated: {sideCoverage.duplicateEdges.map(i=>i+1).join(", ")||"none"} ·
+                Missing roles: {sideCoverage.missingRoles.join(", ")||"none"}</p>
+              <button type="button" disabled={busy} onClick={()=>{
+                if(!window.confirm("Repair only logical side assignments for Plot "+working.id+
+                  "? The original polygon, CSV measurements and published map remain unchanged. Reverify side assignments."))return;
+                try{
+                  editWorking(p=>repairGeoPlotSideCoverage(p));
+                  setStatus("Side coverage repaired. Review Front/Depth and approved dimensions.");
+                }catch(e){setError(String(e));}
+              }}>Repair Sides · Keep Polygon</button>
+            </div>}
+            {sideCoverage?.ok&&<small>✓ {sideCoverage.edgeCount} edges assigned exactly once</small>}
             {working.corners.length>=3&&<div className="masterplan-guidance">
               Initial Front = first tapped edge. After mapping, choose any road-facing edge to change Front; other sides update automatically.
               {inferFrontFirstSideGroups(working.corners)?.reviewRequired&&
