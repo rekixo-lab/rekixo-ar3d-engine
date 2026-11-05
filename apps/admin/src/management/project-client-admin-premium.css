@@ -424,3 +424,133 @@ button.client-geo-table-row.is-active{background:#1a534d;border-color:#70e5b4;bo
 @media(prefers-reduced-motion:reduce){
  .client-geo-list .client-geo-editor--inline{animation:none}
 }
+
+
+/* One-step, status-first Client Geo plot publishing. */
+.client-geo-list .client-geo-editor--inline .client-geo-status-chooser{
+ border:0;margin:12px 0 0;padding:0;min-width:0
+}
+.client-geo-status-chooser legend{
+ padding:0 0 9px;font-size:12px;font-weight:800;letter-spacing:.04em;
+ color:#d7f4ee
+}
+.client-geo-status-choices{
+ display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px
+}
+.client-geo-status-choice{
+ --state-color:#00dc84;
+ position:relative;display:flex;justify-content:center;align-items:center;gap:8px;
+ min-width:0;min-height:49px;padding:10px 7px;
+ border:1px solid #456473;border-radius:11px;
+ background:#0b2432;color:#c3d4da;cursor:pointer;
+ font-weight:800;font-size:13px;transition:border-color .16s,background .16s,box-shadow .16s
+}
+.client-geo-status-choice--booked{--state-color:#ffc20a}
+.client-geo-status-choice--sold{--state-color:#ff4052}
+.client-geo-status-choice input{
+ position:absolute!important;inset:0!important;width:100%!important;height:100%!important;
+ opacity:0;cursor:pointer;min-height:0!important;margin:0!important
+}
+.client-geo-status-choice:has(input:focus-visible){
+ outline:2px solid #e9f8ff;outline-offset:2px
+}
+.client-geo-status-choice:has(input:disabled){cursor:not-allowed;opacity:.64}
+.client-geo-status-choice.is-selected{
+ color:var(--state-color);border-color:var(--state-color);
+ background:color-mix(in srgb,var(--state-color) 10%,#0b2432);
+ box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--state-color) 35%,transparent),
+ 0 0 18px color-mix(in srgb,var(--state-color) 12%,transparent)
+}
+.client-geo-choice-dot{
+ width:10px;height:10px;flex:0 0 10px;border-radius:50%;
+ background:var(--state-color);box-shadow:0 0 10px color-mix(in srgb,var(--state-color) 50%,transparent)
+}
+.client-geo-status-choice:not(.is-selected) .client-geo-choice-dot{opacity:.58;box-shadow:none}
+.client-geo-list .client-geo-editor--inline .client-geo-editor-grid{
+ margin:12px 0 16px;row-gap:12px
+}
+.client-geo-list .client-geo-editor--inline .client-geo-editor-grid label{
+ font-weight:750;font-size:12px;color:#d8e7ec
+}
+.client-geo-editor-grid label small{font-size:11px;color:#97acb7;font-weight:500}
+.client-geo-list .client-geo-editor--inline .client-geo-editor-grid input:focus{
+ outline:2px solid #6be5bc;outline-offset:1px
+}
+.client-geo-available-note{
+ border:1px solid #286856;border-radius:10px;background:#0a342b;
+ padding:12px;color:#b5e7d4;font-size:12px;line-height:1.55
+}
+.client-geo-publish-actions{
+ position:sticky;bottom:0;z-index:2;display:grid;gap:9px;
+ padding:12px 0 1px;margin-top:12px;
+ background:linear-gradient(180deg,transparent,#102e39 14%,#102e39 100%);
+}
+.client-geo-publish-summary{
+ display:flex;align-items:center;justify-content:space-between;gap:10px;
+ color:#c4d9df;font-size:12px;font-weight:700
+}
+.client-geo-publish-summary .client-geo-status{font-size:12px!important;padding:6px 11px}
+.client-geo-list .client-geo-editor--inline .client-geo-publish-button{
+ min-height:47px;width:100%;border-radius:11px;
+ border:1px solid #46b999;background:linear-gradient(125deg,#137b64,#0c624f);
+ color:#f2fff9;font-size:13px;font-weight:850;
+ box-shadow:0 5px 15px #001d1c45
+}
+.client-geo-list .client-geo-editor--inline .client-geo-publish-button:disabled{
+ box-shadow:none
+}
+.client-geo-publish-success{
+ display:flex;align-items:center;gap:11px;
+ margin:0;padding:12px 13px;border-radius:11px;
+ border:1px solid #00dc8477;background:#073c30;
+ animation:client-geo-confirm-in .25s ease both;
+}
+.client-geo-publish-success--booked{border-color:#ffc20a99;background:#3b3316}
+.client-geo-publish-success--sold{border-color:#ff405299;background:#45202c}
+.client-geo-publish-success span:last-child{display:grid;gap:3px}
+.client-geo-publish-success b{font-size:13px;color:#f5fff9}
+.client-geo-publish-success small{font-size:11px;color:#cbdfd7}
+.client-geo-success-check,.client-geo-toast-check{
+ display:grid;place-items:center;flex:0 0 29px;width:29px;height:29px;
+ border-radius:50%;background:#00dc84;color:#06251d;
+ font-size:17px;font-weight:900;box-shadow:0 0 18px #00dc8466
+}
+.client-geo-publish-success--booked .client-geo-success-check,
+.client-geo-toast--booked .client-geo-toast-check{
+ background:#ffc20a;color:#2d2406;box-shadow:0 0 18px #ffc20a55
+}
+.client-geo-publish-success--sold .client-geo-success-check,
+.client-geo-toast--sold .client-geo-toast-check{
+ background:#ff4052;color:#fff;box-shadow:0 0 18px #ff405266
+}
+.client-geo-publish-error{margin:0}
+.client-geo-toast{
+ position:fixed;z-index:9999;right:20px;bottom:20px;
+ display:flex;align-items:center;gap:11px;width:min(345px,calc(100vw - 28px));
+ box-sizing:border-box;border:1px solid #00dc8499;border-radius:13px;
+ padding:13px 14px;background:#092d29;color:#f2fff9;
+ box-shadow:0 16px 50px #0009;animation:client-geo-confirm-in .3s ease both
+}
+.client-geo-toast--booked{border-color:#ffc20a99;background:#322c19}
+.client-geo-toast--sold{border-color:#ff405299;background:#38202b}
+.client-geo-toast>span:nth-child(2){display:grid;flex:1;gap:3px}
+.client-geo-toast b{font-size:13px}
+.client-geo-toast small{font-size:11px;color:#cfdfdf}
+.client-geo-manage .client-geo-toast button{
+ min-height:28px;padding:3px 8px;border:0;background:transparent;color:#d5e6e6;
+ font-size:20px;cursor:pointer
+}
+@keyframes client-geo-confirm-in{
+ from{opacity:0;transform:translateY(10px) scale(.98)}
+ to{opacity:1;transform:translateY(0) scale(1)}
+}
+@media(max-width:700px){
+ .client-geo-status-choices{gap:6px}
+ .client-geo-status-choice{min-height:47px;padding:9px 4px;gap:6px;font-size:12px}
+ .client-geo-publish-actions{padding:11px 0 1px}
+ .client-geo-toast{right:14px;bottom:14px}
+}
+@media(prefers-reduced-motion:reduce){
+ .client-geo-publish-success,.client-geo-toast{animation:none}
+ .client-geo-status-choice{transition:none}
+}
