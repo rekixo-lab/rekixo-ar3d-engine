@@ -16,3 +16,9 @@ export function roadFrontPreview<T extends {
   headingDeg:number,
   geoFacingSuggest:(corners:[number,number][],edges:number[],headingDeg:number)=>string|null
 ):string|null;
+export function nearestPlotBoundaryEdge(
+  corners:readonly (readonly [number,number])[],
+  point:readonly [number,number],
+  width?:number,
+  height?:number
+):{edge:number;distance:number}|null;
