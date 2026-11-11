@@ -529,7 +529,7 @@ export default function EngineDashboard() {
               <div>
                 <p>NEW ENGINE PROJECT</p>
                 <h2 id="engine-create-project-title">Create 3D Project</h2>
-                <span id="engine-create-project-description">Select a project type, then enter the basic details.</span>
+                <span id="engine-create-project-description">Choose one independent Engine project type, then enter the basic details.</span>
               </div>
               <button type="button" disabled={createBusy} onClick={() => setShowCreate(false)} aria-label="Close create project dialog">×</button>
             </header>
