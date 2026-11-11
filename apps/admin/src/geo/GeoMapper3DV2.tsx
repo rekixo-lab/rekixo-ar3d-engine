@@ -39,6 +39,7 @@ type IntegrationModel = {
   id: string;
   name: string;
   mimeType: string;
+  byteSize?: number;
   available?: boolean;
   url?: string;
   variant?: string;
@@ -413,6 +414,9 @@ export default function GeoMapper3DV2() {
   const geoDerivativeAvailable = Boolean(sourcePreviewAvailable && engine?.geoModel?.url &&
     engine?.model && engine.geoModel.sourceModelId === engine.model.id &&
     engine.geoModel.mimeType === "model/gltf-binary");
+  const heavyCanonicalWithoutLod = Boolean(sourcePreviewAvailable &&
+    Number(engine?.model?.byteSize || 0) > 64 * 1024 * 1024 &&
+    !geoDerivativeAvailable);
   const renderModel = useMemo(() => {
     if (!sourcePreviewAvailable) return null;
     const source = engine?.model;
@@ -765,6 +769,9 @@ export default function GeoMapper3DV2() {
               </select></label>
               <div className="geo3d-source-note"><strong>{sourceReleaseId === state.project.activeBuildingReleaseId ? "Active Building release" : "Historical Building release"}</strong><span>Verification deliberately requires the active immutable Building release so authoring cannot approve an unseen source.</span></div>
             </div>
+            {heavyCanonicalWithoutLod && <p role="alert" className="geo-v2-variant-note">
+              Large Building GLB: the public Geo site will download the full canonical model until a frame-verified Geo derivative is available. Build and visually review a compact map-only GLB before sharing the demo, especially on mobile.
+            </p>}
           </section>
 
           <section className="geo3d-workspace geo-v2-workspace--integrated">
