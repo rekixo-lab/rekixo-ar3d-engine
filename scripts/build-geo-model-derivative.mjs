@@ -4,7 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import { NodeIO, VertexLayout } from "@gltf-transform/core";
 import {
-  center,
   dedup,
   flatten,
   getBounds,
@@ -14,6 +13,7 @@ import {
   weld,
 } from "@gltf-transform/functions";
 import { MeshoptSimplifier } from "meshoptimizer";
+import { assessGeoFrameIntegrity } from "./asset-pipeline/geo-frame-integrity.mjs";
 
 function fail(message) {
   throw new Error(message);
@@ -198,6 +198,10 @@ async function buildCandidate(sourcePath, outputPath, ratio, error) {
   const document = await io.read(sourcePath);
 
   const root = document.getRoot();
+  const sourceScene = root.getDefaultScene() || root.listScenes()[0];
+  if (!sourceScene) fail("Source GLB has no scene.");
+  const originalBounds = getBounds(sourceScene);
+  const sourceBounds = { min: [...originalBounds.min], max: [...originalBounds.max] };
   const hasTextures = root.listTextures().length > 0;
 
   // Google Maps' official model sample is double-sided. Keep the map-only
@@ -225,7 +229,8 @@ async function buildCandidate(sourcePath, outputPath, ratio, error) {
 
   await MeshoptSimplifier.ready;
   await document.transform(
-    center({ pivot: "below" }),
+    // Preserve the canonical Building origin; Geo's saved WGS84 anchor and
+    // polygon mapping must never move when choosing the optimized model.
     weld(),
     dedup(),
     prune({
@@ -255,7 +260,7 @@ async function buildCandidate(sourcePath, outputPath, ratio, error) {
   await io.write(outputPath, document);
   const canonical = stripRedundantVertexStrides(fs.readFileSync(outputPath));
   fs.writeFileSync(outputPath, canonical);
-  return canonical;
+  return { bytes: canonical, sourceBounds };
 }
 
 const slug = String(process.argv[2] || "").trim().toLowerCase();
@@ -312,7 +317,7 @@ for (const attempt of attempts) {
     workDir,
     `geo-${String(attempt.ratio).replace(".", "_")}.glb`,
   );
-  const bytes = await buildCandidate(
+  const { bytes, sourceBounds } = await buildCandidate(
     sourcePath,
     candidatePath,
     attempt.ratio,
@@ -335,7 +340,15 @@ for (const attempt of attempts) {
   }
 
   const stats = await geometryStats(bytes);
-  const candidate = { ...attempt, path: candidatePath, bytes, stats };
+  const frame = assessGeoFrameIntegrity(sourceBounds, stats.bounds);
+  if (!frame.ok) {
+    console.log("REKIXO_GEO_CANDIDATE_REJECTED", JSON.stringify({
+      ratio: attempt.ratio, reason: "canonical-frame-drift",
+      maxDriftM: frame.maxDriftM, axes: frame.axes,
+    }));
+    continue;
+  }
+  const candidate = { ...attempt, path: candidatePath, bytes, stats, sourceBounds, frame };
   console.log(
     "REKIXO_GEO_CANDIDATE",
     JSON.stringify({
@@ -397,12 +410,10 @@ if (
   fail("Geo derivative must not retain vertex byteStride metadata.");
 
 const stats = chosen.stats;
-const [cx, , cz] = stats.bounds.center;
-const minY = stats.bounds.min[1];
-if (Math.abs(cx) > 0.05 || Math.abs(cz) > 0.05 || Math.abs(minY) > 0.05)
-  fail(
-    `Geo derivative origin is not base-centered: center=${stats.bounds.center.join(",")} minY=${minY}`,
-  );
+// Re-check the final candidate immediately before writing it to output.
+const finalFrame = assessGeoFrameIntegrity(chosen.sourceBounds, stats.bounds);
+if (!finalFrame.ok)
+  fail("Geo derivative does not preserve the canonical Building coordinate frame.");
 if (chosen.bytes.byteLength > 8_000_000)
   fail(
     `Geo derivative is still too large for reliable map rendering: ${chosen.bytes.byteLength} bytes`,
@@ -448,7 +459,10 @@ fs.writeFileSync(modelOut, chosen.bytes);
 const metadata = {
   format: "rekixo-geo-model-derivative",
   version: 1,
-  pipeline: "core-map-v4",
+  pipeline: "core-map-v5",
+  coordinateFrame: "canonical-model-local-v1",
+  sourceBounds: chosen.sourceBounds,
+  frameValidation: finalFrame,
   generator: "@gltf-transform/*@4.5.1",
   projectId: project.id,
   projectSlug: slug,
