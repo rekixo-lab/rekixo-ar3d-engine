@@ -50,6 +50,9 @@ jobs:
       - name: Maintainability budgets
         run: npm run test:maintainability
 
+      - name: Verify Blender operator script syntax
+        run: python3 -m py_compile scripts/asset-pipeline/convert-collada-to-glb.py
+
       - name: Unit and integration tests
         run: node --test tests/*.test.mjs
 
