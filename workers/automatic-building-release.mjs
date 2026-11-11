@@ -2,7 +2,9 @@ import { assertProjectAssetKey } from "./storage-boundary.mjs";
 
 const GLB_MAGIC = 0x46546c67;
 const GLB_JSON_CHUNK = 0x4e4f534a;
-const MAX_GLTF_JSON_BYTES = 8 * 1024 * 1024;
+// Must match the canonical processor: approved large GLBs may contain 8–32 MiB
+// of metadata even when their binary geometry is within the original cap.
+const MAX_GLTF_JSON_BYTES = 32 * 1024 * 1024;
 
 function validSha256(value) {
   return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
