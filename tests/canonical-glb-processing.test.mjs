@@ -45,6 +45,28 @@ test("canonical GLB header parser pins GLB 2.0 and verified source length", () =
   );
 });
 
+test("large client GLBs admit bounded 13 MiB JSON without dropping validation", () => {
+  const sourceBytes = 148_874_960;
+  const actualJson = 12_966_136; // Shreem Palace's verified original GLB header.
+  assert.deepEqual(parseGlbHeader(glbHeader({
+    byteLength: sourceBytes, jsonLength: actualJson,
+  }), sourceBytes), {
+    version: 2,
+    declaredLength: sourceBytes,
+    jsonChunkLength: actualJson,
+  });
+
+  assert.throws(
+    () => parseGlbHeader(glbHeader({
+      byteLength: 40 * 1024 * 1024,
+      jsonLength: 33 * 1024 * 1024,
+    }), 40 * 1024 * 1024),
+    /32 MiB validation limit/,
+  );
+  const release = fs.readFileSync("workers/automatic-building-release.mjs", "utf8");
+  assert.match(release, /MAX_GLTF_JSON_BYTES = 32 \* 1024 \* 1024/);
+});
+
 test("canonical GLB inspection rejects external dependencies instead of guessing", () => {
   const valid = inspectGlbJson({
     asset: { version: "2.0", generator: "fixture" },
