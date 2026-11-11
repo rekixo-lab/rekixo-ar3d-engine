@@ -718,7 +718,16 @@ async function readGeoDerivativeMetadata(
   if (
     metadata?.format !== "rekixo-geo-model-derivative" ||
     metadata?.version !== 1 ||
-    metadata?.pipeline !== "core-map-v4" ||
+    !["core-map-v4", "core-map-v5"].includes(metadata?.pipeline) ||
+    // V5 derivatives are generated only when the original metric frame is
+    // preserved. Continue serving historical V4 derivatives without changing
+    // any existing project's active release or asset pointers.
+    (metadata?.pipeline === "core-map-v5" && (
+      metadata.coordinateFrame !== "canonical-model-local-v1" ||
+      metadata.frameValidation?.ok !== true ||
+      !Number.isFinite(metadata.frameValidation?.maxDriftM) ||
+      metadata.frameValidation.maxDriftM > 0.5
+    )) ||
     metadata.projectSlug !== slug ||
     metadata.releaseId !== releaseId ||
     metadata.sourceModelId !== logicalId ||
