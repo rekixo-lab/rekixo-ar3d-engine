@@ -200,12 +200,9 @@ export default function SourcePackReview() {
   async function abandonDraft() {
     const pack = data?.latestPack;
     if (!pack || pack.status !== "draft" || busy) return;
-    if (!window.confirm(
-      "Discard this UNSEALED source review draft?\\n\\nAll uploaded/verified original files remain safe. " +
-      "No published Building or Geo version is affected. This unlocks model upload."
-    )) return;
+    if (!window.confirm("Discard UNSEALED review? Verified originals and published Building/Geo remain safe. This unlocks GLB upload.")) return;
     const next = await post({ action: "abandon-draft", packId: pack.id, confirm: "DISCARD DRAFT" }, "abandon");
-    if (next) setMessage("Unsealed review discarded safely. Original DAE remains verified. Upload your converted GLB now.");
+    if (next) setMessage("Review discarded. Original DAE remains verified; upload converted GLB now.");
   }
 
   function chooseAuthority(sourceFileId: string) {
@@ -416,18 +413,12 @@ export default function SourcePackReview() {
             <h3>Choose new model</h3>
             <p>Latest verified file is suggested. Same filenames are identified by checksum.</p>
           </div>
-          {!modelOptions.length && (
-            <div className="source-review__alert source-review__alert--error" role="status">
-              No eligible GLB/FBX geometry model is verified. DAE is kept as source evidence, but cannot
-              be selected as the canonical 3D Building. Discard only this unsealed review to unlock
-              uploading a converted GLB; the verified DAE file will remain saved.
-            </div>
-          )}
+          {!modelOptions.length && <p className="source-review__alert source-review__alert--error" role="status">
+            No GLB/FBX model verified. DAE is evidence only; discard this unsealed review to unlock upload. Verified DAE stays saved.
+          </p>}
           <div className="source-review__simple-actions">
-            <button type="button" disabled={Boolean(busy)} onClick={() => void abandonDraft()}>
-              Discard Unsealed Review & Unlock Upload
-            </button>
-            <span>Does not delete any original file, published version or project.</span>
+            <button type="button" disabled={Boolean(busy)} onClick={() => void abandonDraft()}>Discard Unsealed Review & Unlock Upload</button>
+            <span>Originals, releases and project are preserved.</span>
           </div>
           <label className="source-review__model-choice">
             Model file
