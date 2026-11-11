@@ -197,6 +197,14 @@ export default function SourcePackReview() {
     if (result) setMessage(`Source Pack v${result.latestPack?.version} review draft ready.`);
   }
 
+  async function abandonDraft() {
+    const pack = data?.latestPack;
+    if (!pack || pack.status !== "draft" || busy) return;
+    if (!window.confirm("Discard UNSEALED review? Verified originals and published Building/Geo remain safe. This unlocks GLB upload.")) return;
+    const next = await post({ action: "abandon-draft", packId: pack.id, confirm: "DISCARD DRAFT" }, "abandon");
+    if (next) setMessage("Review discarded. Original DAE remains verified; upload converted GLB now.");
+  }
+
   function chooseAuthority(sourceFileId: string) {
     setFiles((current) =>
       current.map((file) => ({
@@ -404,6 +412,13 @@ export default function SourcePackReview() {
           <div>
             <h3>Choose new model</h3>
             <p>Latest verified file is suggested. Same filenames are identified by checksum.</p>
+          </div>
+          {!modelOptions.length && <p className="source-review__alert source-review__alert--error" role="status">
+            No GLB/FBX model verified. DAE is evidence only; discard this unsealed review to unlock upload. Verified DAE stays saved.
+          </p>}
+          <div className="source-review__simple-actions">
+            <button type="button" disabled={Boolean(busy)} onClick={() => void abandonDraft()}>Discard Unsealed Review & Unlock Upload</button>
+            <span>Originals, releases and project are preserved.</span>
           </div>
           <label className="source-review__model-choice">
             Model file
