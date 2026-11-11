@@ -523,7 +523,8 @@ export default function EngineDashboard() {
       {showCreate ? (
         <div className="engine-overview-modal-backdrop" role="presentation">
           <section className="engine-overview-modal" role="dialog" aria-modal="true"
-            aria-labelledby="engine-create-project-title" aria-describedby="engine-create-project-description">
+            aria-labelledby="engine-create-project-title" aria-describedby="engine-create-project-description"
+            onKeyDown={(event) => { if (event.key === "Escape" && !createBusy) setShowCreate(false); }}>
             <header className="engine-overview-modal__head">
               <div>
                 <p>NEW ENGINE PROJECT</p>
@@ -547,7 +548,8 @@ export default function EngineDashboard() {
                         "Layout image, Geo calibration and plot management"}</small>
                     </span>
                     <input className="engine-overview-kind__radio" type="radio" name="engine-project-kind"
-                      value={kind} checked={createKind === kind} onChange={() => setCreateKind(kind)} />
+                      value={kind} checked={createKind === kind} autoFocus={createKind === kind}
+                      onChange={() => setCreateKind(kind)} />
                   </label>
                 ))}
               </fieldset>
@@ -555,7 +557,7 @@ export default function EngineDashboard() {
                 <label>
                   <span>Project name <em aria-hidden="true">*</em></span>
                   <input value={createName} onChange={(event) => setCreateName(event.target.value)}
-                    autoFocus required placeholder="e.g. Shreem Palace Demo" />
+                    required placeholder="e.g. Shreem Palace Demo" />
                 </label>
                 <label>
                   <span>Location</span>
