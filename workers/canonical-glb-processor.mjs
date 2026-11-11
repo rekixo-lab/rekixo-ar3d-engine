@@ -16,7 +16,9 @@ export const CANONICAL_MODEL_VERSION = 1;
 
 const GLB_MAGIC = 0x46546c67;
 const GLB_JSON_CHUNK = 0x4e4f534a;
-const MAX_GLB_JSON_BYTES = 8 * 1024 * 1024;
+// Bound the glTF JSON chunk separately from the 512 MiB original-model limit.
+// Large CAD/Blender exports can contain >8 MiB of node/mesh metadata.
+const MAX_GLB_JSON_BYTES = 32 * 1024 * 1024;
 const MAX_WORKER_CANONICAL_BYTES = 512 * 1024 * 1024;
 const STALE_RUNNER_MS = 15 * 60 * 1000;
 const MODEL_MIME = "model/gltf-binary";
@@ -69,7 +71,7 @@ export function parseGlbHeader(bytes, expectedByteSize) {
   if (jsonChunkType !== GLB_JSON_CHUNK)
     throw processingError("INVALID_GLB", "GLB first chunk must be the JSON chunk.");
   if (jsonChunkLength <= 0 || jsonChunkLength > MAX_GLB_JSON_BYTES)
-    throw processingError("GLB_JSON_LIMIT", "GLB JSON chunk is empty or exceeds the 8 MiB validation limit.");
+    throw processingError("GLB_JSON_LIMIT", "GLB JSON chunk is empty or exceeds the 32 MiB validation limit.");
   if (20 + jsonChunkLength > expectedByteSize)
     throw processingError("INVALID_GLB", "GLB JSON chunk exceeds the declared file length.");
 
