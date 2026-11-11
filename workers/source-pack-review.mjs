@@ -318,6 +318,30 @@ async function startDraft(env, actor, project) {
   return packResponse(env, project.id, await packById(env, project.id, packId));
 }
 
+// Discard only an unsealed review. Verified originals and all immutable ready/
+// superseded source packs remain untouched; a subsequent GLB upload can start
+// a new review containing every verified original (including the old DAE).
+async function abandonDraft(env, actor, project, body) {
+  const packId = typeof body.packId === "string" ? body.packId.trim() : "";
+  if (!packId || body.confirm !== "DISCARD DRAFT")
+    throw new Error("Explicit confirmation is required to discard a source review draft.");
+  const pack = await packById(env, project.id, packId);
+  if (!pack || pack.status !== "draft" || Number(pack.operator_approved) !== 0 || pack.manifest_sha256)
+    throw new Error("Only an unsealed source review draft can be discarded.");
+  const result = await env.DB.prepare(
+    `DELETE FROM source_packs_3d
+      WHERE id=? AND project_id=? AND status='draft'
+        AND operator_approved=0 AND manifest_sha256 IS NULL`,
+  ).bind(packId, project.id).run();
+  if (Number(result.meta?.changes || 0) !== 1)
+    throw new Error("Review draft changed concurrently. Refresh before retrying.");
+  await audit(env, actor, "source.pack_draft_discarded", project.id, packId, {
+    version: Number(pack.version),
+    verifiedOriginalsPreserved: true,
+  });
+  return packResponse(env, project.id, await latestPack(env, project.id));
+}
+
 async function saveReview(env, actor, project, body) {
   const packId = typeof body.packId === "string" ? body.packId.trim() : "";
   const pack = await packById(env, project.id, packId);
@@ -545,6 +569,7 @@ export async function handleSourcePackReviewRequest(
     const body = await readBody(request);
     let latestPackResult;
     if (body.action === "start-draft") latestPackResult = await startDraft(env, access.actor, project);
+    else if (body.action === "abandon-draft") latestPackResult = await abandonDraft(env, access.actor, project, body);
     else if (body.action === "save-review") latestPackResult = await saveReview(env, access.actor, project, body);
     else if (body.action === "seal") latestPackResult = await sealPack(env, access.actor, project, body);
     else return json({ error: "Unsupported source pack review action." }, { status: 400 });
