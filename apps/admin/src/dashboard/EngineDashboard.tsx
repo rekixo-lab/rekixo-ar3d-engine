@@ -522,65 +522,79 @@ export default function EngineDashboard() {
 
       {showCreate ? (
         <div className="engine-overview-modal-backdrop" role="presentation">
-          <section className="engine-overview-modal" role="dialog" aria-modal="true" aria-labelledby="engine-create-project-title">
-            <div className="engine-overview-modal__head">
+          <section className="engine-overview-modal" role="dialog" aria-modal="true"
+            aria-labelledby="engine-create-project-title" aria-describedby="engine-create-project-description">
+            <header className="engine-overview-modal__head">
               <div>
                 <p>NEW ENGINE PROJECT</p>
                 <h2 id="engine-create-project-title">Create 3D Project</h2>
-                <span>Choose one independent Engine project type. The right tools will appear automatically.</span>
+                <span id="engine-create-project-description">Select a project type, then enter the basic details.</span>
               </div>
-              <button type="button" onClick={() => setShowCreate(false)} aria-label="Close">×</button>
-            </div>
-            <fieldset className="engine-overview-kind-choices">
-              <legend>What are you building?</legend>
-              {(["building","building_geo","masterplan_geo"] as const).map(kind=>(
-                <label key={kind} className={createKind===kind?"engine-overview-kind active":"engine-overview-kind"}>
-                  <input type="radio" name="engine-project-kind" value={kind} checked={createKind===kind}
-                    onChange={()=>setCreateKind(kind)} />
-                  <span><b>{PROJECT_KIND_LABELS[kind]}</b>
-                    <small>{kind==="building"?"Customer website, floors, units and walkthrough":
-                      kind==="building_geo"?"Use an approved 3D Building model, place it on Geo map, then map 3D plots when applicable":
-                      "An approved layout image with Geo calibration, polygons and plots"}</small>
-                  </span>
+              <button type="button" disabled={createBusy} onClick={() => setShowCreate(false)} aria-label="Close create project dialog">×</button>
+            </header>
+            <div className="engine-overview-modal__body">
+              <fieldset className="engine-overview-kind-choices">
+                <legend>What are you building?</legend>
+                {(["building", "building_geo", "masterplan_geo"] as const).map((kind) => (
+                  <label key={kind} className={createKind === kind ? "engine-overview-kind active" : "engine-overview-kind"}>
+                    <span className="engine-overview-kind__icon" aria-hidden="true">
+                      {kind === "building" ? "▤" : kind === "building_geo" ? "⌖" : "▦"}
+                    </span>
+                    <span className="engine-overview-kind__copy">
+                      <b>{PROJECT_KIND_LABELS[kind]}</b>
+                      <small>{kind === "building" ? "3D customer website, floors, units and walkthrough" :
+                        kind === "building_geo" ? "3D Building on Google Maps with optional plot mapping" :
+                        "Layout image, Geo calibration and plot management"}</small>
+                    </span>
+                    <input className="engine-overview-kind__radio" type="radio" name="engine-project-kind"
+                      value={kind} checked={createKind === kind} onChange={() => setCreateKind(kind)} />
+                  </label>
+                ))}
+              </fieldset>
+              <div className="engine-overview-create-fields">
+                <label>
+                  <span>Project name <em aria-hidden="true">*</em></span>
+                  <input value={createName} onChange={(event) => setCreateName(event.target.value)}
+                    autoFocus required placeholder="e.g. Shreem Palace Demo" />
                 </label>
-              ))}
-            </fieldset>
-            <label>
-              <span>Project name</span>
-              <input value={createName} onChange={(event) => setCreateName(event.target.value)} autoFocus placeholder="Example Residence" />
-            </label>
-            <label>
-              <span>Location</span>
-              <input value={createLocation} onChange={(event) => setCreateLocation(event.target.value)} placeholder="City / site" />
-            </label>
-            <label>
-              <span>Customer Call number (optional)</span>
-              <input type="tel" value={createCallNumber} maxLength={25} autoComplete="tel"
-                onChange={event=>setCreateCallNumber(event.target.value)}
-                placeholder="+91 98765 43210" />
-            </label>
-            <label>
-              <span>Customer WhatsApp number (optional)</span>
-              <input type="tel" value={createWhatsappNumber} maxLength={25} autoComplete="off"
-                onChange={event=>setCreateWhatsappNumber(event.target.value)}
-                placeholder="+91 98765 43210" />
-            </label>
-            <label className="engine-overview-create-public-contact">
-              <input type="checkbox" checked={createPublicContacts}
-                onChange={event=>setCreatePublicContacts(event.target.checked)}/>
-              <span>Show these numbers on the public Geo site's Call and WhatsApp buttons</span>
-            </label>
-            <small>Public sharing is optional and OFF by default. Private Client Admin numbers are never used.</small>
-            {createError ? <div className="engine-overview-create-error">{createError}</div> : null}
-            <div className="engine-overview-modal__actions">
-              <button className="engine-control-button" type="button" disabled={createBusy} onClick={() => setShowCreate(false)}>Cancel</button>
-              <button className="engine-control-button engine-control-button--primary" type="button" disabled={createBusy} onClick={() => void createProject()}>
-                {createBusy ? "Creating…" : "Create "+PROJECT_KIND_LABELS[createKind]}
-              </button>
+                <label>
+                  <span>Location</span>
+                  <input value={createLocation} onChange={(event) => setCreateLocation(event.target.value)}
+                    placeholder="City / site" />
+                </label>
+                <label>
+                  <span>Customer Call number <small>(optional)</small></span>
+                  <input type="tel" value={createCallNumber} maxLength={25} autoComplete="tel"
+                    onChange={(event) => setCreateCallNumber(event.target.value)}
+                    placeholder="+91 98765 43210" />
+                </label>
+                <label>
+                  <span>Customer WhatsApp number <small>(optional)</small></span>
+                  <input type="tel" value={createWhatsappNumber} maxLength={25} autoComplete="off"
+                    onChange={(event) => setCreateWhatsappNumber(event.target.value)}
+                    placeholder="+91 98765 43210" />
+                </label>
+              </div>
+              <label className="engine-overview-create-public-contact">
+                <input type="checkbox" checked={createPublicContacts}
+                  onChange={(event) => setCreatePublicContacts(event.target.checked)} />
+                <span>Show these numbers on the public Geo site's Call and WhatsApp buttons</span>
+              </label>
+              <p className="engine-overview-create-privacy">Public sharing is optional and OFF by default. Private Client Admin numbers are never used.</p>
+              {createError ? <div className="engine-overview-create-error" role="alert">{createError}</div> : null}
             </div>
+            <footer className="engine-overview-modal__actions">
+              <span className="engine-overview-modal__selection">Selected: <strong>{PROJECT_KIND_LABELS[createKind]}</strong></span>
+              <div className="engine-overview-modal__buttons">
+                <button className="engine-control-button" type="button" disabled={createBusy} onClick={() => setShowCreate(false)}>Cancel</button>
+                <button className="engine-control-button engine-control-button--primary" type="button"
+                  disabled={createBusy} onClick={() => void createProject()}>
+                  {createBusy ? "Creating…" : "Create Project"}
+                </button>
+              </div>
+            </footer>
           </section>
         </div>
-      ) : null}
     </div>
   );
 }
