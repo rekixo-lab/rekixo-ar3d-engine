@@ -1050,7 +1050,14 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
     <div ref={sceneRef} className="geo-integrated-scene"
       style={{"--geo-map-north-rotation":(geoMapNorthRotation(
         cameraPreset("overview",data.placement.headingDeg).heading)??0)+"deg"} as CSSProperties}>
-      <div ref={hostRef} className="geo-integrated-map" aria-label={`${data.project.name} integrated 3D geographic scene`} />
+      <div ref={hostRef} className="geo-integrated-map"
+        style={data.project.slug===DHOLERA_GLB_DEMO_SLUG&&!demoSceneReady
+          ?{opacity:0,pointerEvents:"none"}:undefined}
+        aria-label={`${data.project.name} integrated 3D geographic scene`} />
+      {data.project.slug===DHOLERA_GLB_DEMO_SLUG&&!demoSceneReady&&!failure&&
+        <div className="geo-demo-preparing" role="status">Preparing 3D map view…</div>}
+      {data.project.slug===DHOLERA_GLB_DEMO_SLUG&&demoSceneReady&&
+        <div className="geo-demo-view-note">Concept demo · visual scale</div>}
       <button type="button" className="geo-map-compass"
         aria-label="Map compass. Tap to face north."
         title="Geographic true north · tap to reset map bearing"
