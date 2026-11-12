@@ -23,19 +23,21 @@ export function GeoExplore3D({modelUrl,modelName}:{
   modelName:string;
 }) {
   const [view,setView]=useState<GeoExploreView>("default");
+  const [cameraViewRequest,setCameraViewRequest]=useState(0);
   return (
     <section className="geo-explore-stage" aria-label="Independent 3D building and township viewer">
       <div className="geo-explore-view-tabs" role="group" aria-label="Explore 3D camera views">
         {VIEWS.map(item=><button key={item.id} type="button"
           aria-pressed={view===item.id}
           className={view===item.id?"is-active":""}
-          onClick={()=>setView(item.id)}>{item.label}</button>)}
+          onClick={()=>{setView(item.id);setCameraViewRequest(id=>id+1);}}>{item.label}</button>)}
       </div>
       <Viewer3D
         modelUrl={modelUrl}
         modelLabel={modelName}
         presentationView={view}
         geoExploreMode
+        cameraViewRequest={cameraViewRequest}
         allowInteriorControls={false}
         allowWalkControls={false}
         compactUi={false}
