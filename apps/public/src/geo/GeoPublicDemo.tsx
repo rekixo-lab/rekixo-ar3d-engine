@@ -733,31 +733,29 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           const animating=plotLayer?.tickSelection(performance.now(),reducedMotion)??false;
           renderer.render(scene, camera);
           renderer.resetState();
-          // Google supplies the actual perspective/tilt camera. Fit this one
-          // conceptual demo with its post-placement GLB bounds in SCREEN PIXELS.
-          // This only moves the public camera, never the saved metric 3D source.
-          if (demoFitPending && !demoFitWaiting && demoModelBounds && demoFitFrame === undefined) {
-            const host = hostRef.current;
-            const viewport = {width:host?.clientWidth || 0,height:host?.clientHeight || 0};
-            const projected = dholeraProjectedModelSize(
+          // Dholera concept DEMO: wait until Google settles at its actual
+          // native satellite zoom. The published WGS84/metric GLB remain
+          // unchanged; only the customer presentation model can be enlarged.
+          if (demoCameraIdle && demoModelRoot && demoModelBounds && !demoPresentationDone) {
+            demoPresentationDone=true;
+            const viewport={width:hostRef.current?.clientWidth||0,
+              height:hostRef.current?.clientHeight||0};
+            const pixels=dholeraProjectedModelSize(
               data.project.slug,demoModelBounds,camera.projectionMatrix.elements,viewport,
             );
-            const correction = dholeraDemoZoomCorrection(data.project.slug,projected,viewport);
-            if (correction === null || Math.abs(correction) <= 0.09 || demoFitAttempts >= 3) {
-              demoFitPending = false;
-            } else {
-              demoFitWaiting = true;
-              demoFitAttempts++;
-              demoFitFrame = window.requestAnimationFrame(() => {
-                demoFitFrame = undefined;
-                if (cancelled) return;
-                // Native Google Maps handles site-specific maximum zoom;
-                // never fake zoom by enlarging GLB geometry or changing pins.
-                const current = map.getZoom?.() ?? 20;
-                map.setZoom(Math.max(0,current + correction));
-                overlay?.requestRedraw();
-              });
+            const boost=dholeraDemoPresentationBoost(data.project.slug,pixels,viewport,
+              Boolean(data.plotMapping?.plots?.length))??1;
+            if (boost>1.01) {
+              const centerBefore=demoModelBounds.getCenter(new THREE.Vector3());
+              demoModelRoot.scale.multiplyScalar(boost);
+              demoModelRoot.updateMatrixWorld(true);
+              const centerAfter=new THREE.Box3().setFromObject(demoModelRoot)
+                .getCenter(new THREE.Vector3());
+              demoModelRoot.position.add(centerBefore.sub(centerAfter));
+              demoModelRoot.updateMatrixWorld(true);
             }
+            setDemoSceneReady(true);
+            overlay?.requestRedraw();
           }
           // Limit the persistent prism reflection to roughly 29 FPS.
           // Do not redraw while deselected, hidden, or reduced-motion.
