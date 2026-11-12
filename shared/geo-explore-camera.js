@@ -25,7 +25,7 @@ export function geoExploreCameraShot(bounds, aspect, view="full") {
   const sideLength=Math.hypot(dir.z,dir.x);
   const right={x:dir.z/sideLength,y:0,z:-dir.x/sideLength};
   const up={
-    x:dir.y*right.z*(-1), // cross(dir,right)
+    x:dir.y*right.z, // cross(dir,right)
     y:dir.z*right.x-dir.x*right.z,
     z:dir.x*right.y-dir.y*right.x,
   };
