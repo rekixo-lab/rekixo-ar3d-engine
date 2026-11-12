@@ -20,12 +20,12 @@ test("Dholera GLB map hides native satellite zoom bounce until stable demo is re
     expect(before.width).toBeCloseTo(before.sceneWidth!,0);
     expect(before.height).toBeCloseTo(before.sceneHeight!,0);
     expect(Number(before.z)).toBeGreaterThan(0);
-    await page.locator(".geo-demo-preparing").remove();
+    await page.locator(".geo-demo-preparing").evaluate(el=>el.remove());
     await page.locator(".geo-integrated-scene").evaluate(el=>{
       el.insertAdjacentHTML("beforeend",'<div class="geo-demo-view-note">Concept demo · visual scale</div>');
     });
     await expect(page.locator(".geo-demo-view-note")).toBeVisible();
-    const label=await page.locator(".geo-demo-view-note").evaluate(el=>getComputedStyle(el));
-    expect(label.pointerEvents).toBe("none");
+    const pointerEvents=await page.locator(".geo-demo-view-note").evaluate(el=>getComputedStyle(el).pointerEvents);
+    expect(pointerEvents).toBe("none");
   }
 });
