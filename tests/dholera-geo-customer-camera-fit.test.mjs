@@ -60,7 +60,8 @@ test("fit zoom makes small demo larger but never clips its viewport target or in
   assert.equal(dholeraDemoZoomCorrection(slug,{width:0,height:20},viewport),null);
   assert.doesNotMatch(source,/map\.setZoom\(Math\.max\(0,current \+ correction\)\)/,
     "load-time camera must not iterate zoom after Google clamps it");
-  assert.match(source,/dholeraProjectedModelSize\(/);
+  assert.doesNotMatch(source,/dholeraProjectedModelSize\(/,
+    "Map must not trigger screen-size geometry compensation");
   assert.match(source,/demoCameraIdle && demoModelRoot && demoModelBounds/);
   assert.match(source,/cameraActionRef\.current\?\.\("overview"\)/);
   assert.match(source,/demoCameraIdle=false; \/\/ user zoom is always authoritative/);
@@ -94,23 +95,17 @@ test("Dholera first completed GLB load targets a large metric footprint without 
   }
 });
 
-test("Dholera presentation fallback fills a capped native satellite zoom viewport",()=>{
-  const viewport={width:1300,height:460};
-  const boost=dholeraDemoPresentationBoost(slug,{width:290,height:24},viewport);
-  assert.ok(boost>3.3&&boost<3.55,"roughly 22% wide colony gets enlarged to ~78% width");
-  assert.equal(dholeraDemoPresentationBoost(slug,{width:1700,height:700},viewport),1,
-    "never automatically shrink already-large 3D model");
-  assert.equal(dholeraDemoPresentationBoost(slug,{width:10,height:1},{width:3000,height:900}),3.75);
-  assert.equal(dholeraDemoPresentationBoost("shreem-palace-demo-a6532789",
-    {width:290,height:24},viewport),null);
-  assert.equal(dholeraDemoPresentationBoost(slug,{width:290,height:24},viewport,true),null,
-    "do not visually magnify a project with official mapped plots");
-  assert.equal(dholeraDemoPresentationBoost(slug,{width:0,height:24},viewport),null);
-  assert.match(source,/demoModelRoot\.scale\.multiplyScalar\(boost\)/);
-  assert.match(source,/demoModelRoot\.position\.add\(centerBefore\.sub\(centerAfter\)\)/);
+test("Geo Map never magnifies the canonical GLB for presentation",()=>{
+  // Boost calculator is historical test coverage only; it is deliberately
+  // absent from the live Google Maps renderer. Explore 3D owns close-ups.
+  assert.equal(dholeraDemoPresentationBoost(slug,{width:10,height:1},
+    {width:3000,height:900},true),null);
+  assert.doesNotMatch(source,/demoModelRoot\.scale\.multiplyScalar\(boost\)/);
+  assert.doesNotMatch(source,/dholeraDemoPresentationBoost\(data\.project\.slug/);
+  assert.match(source,/Geo Map displays the published rigid WGS84 placement/);
   assert.match(source,/setDemoSceneReady\(true\)/);
   assert.match(source,/geo-demo-preparing/);
-  assert.match(source,/Concept demo · visual scale/);
+  assert.doesNotMatch(source,/Concept demo · visual scale/);
 });
 
 test("first Dholera render never requests higher unsupported zoom after model load",()=>{
