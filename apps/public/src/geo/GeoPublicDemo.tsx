@@ -804,6 +804,19 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
                 scale: data.placement.scale,
               },
             );
+            if (isDholeraDemo) {
+              modelRoot.updateMatrixWorld(true);
+              const placedBounds = new THREE.Box3().setFromObject(modelRoot);
+              const focusCenter = !placedBounds.isEmpty()
+                ? dholeraDemoFocusCenter(data.project.slug,
+                    {lat:center.lat,lng:center.lng}, placedBounds)
+                : null;
+              if (focusCenter) {
+                demoModelBounds = placedBounds;
+                demoFocusCenter = focusCenter;
+                cameraActionRef.current?.("overview");
+              }
+            }
             if(candidateLayer){
               // Same original X/Z frame as the model; placement is shared.
               plotLayer=candidateLayer;
@@ -854,12 +867,27 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           setZoomNotice("");
           // Start presets 50% closer using fractional zoom. Google's native
           // location-dependent zoom bound still applies, without rescaling GLB.
-          if(map.moveCamera)map.moveCamera({ center, ...preset });
-          else {
-            map.setCenter(center);
-            map.setZoom(preset.zoom);
-            map.setHeading?.(preset.heading);
-            map.setTilt?.(preset.tilt);
+          if (demoFocusCenter) {
+            demoFitPending = true;
+            demoFitWaiting = true;
+            demoFitAttempts = 0;
+            // Start close, then compute exact pixel fit using Google's camera.
+            const fittedPreset = {...preset,zoom:Math.max(20.5,preset.zoom)};
+            if (map.moveCamera) map.moveCamera({center:demoFocusCenter,...fittedPreset});
+            else {
+              map.setCenter(demoFocusCenter);
+              map.setZoom(fittedPreset.zoom);
+              map.setHeading?.(fittedPreset.heading);
+              map.setTilt?.(fittedPreset.tilt);
+            }
+          } else {
+            if(map.moveCamera)map.moveCamera({ center, ...preset });
+            else {
+              map.setCenter(center);
+              map.setZoom(preset.zoom);
+              map.setHeading?.(preset.heading);
+              map.setTilt?.(preset.tilt);
+            }
           }
           updateCompassHeading(preset.heading);
           overlay?.requestRedraw();
@@ -875,6 +903,8 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           const requested = Math.max(0, current + step);
           if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
           setZoomNotice("");
+          demoFitPending = false; // manual zoom wins
+          demoFitWaiting = false;
           map.setZoom(requested);
           if (step > 0) {
             zoomCheckTimer = window.setTimeout(() => {
@@ -941,6 +971,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
       clearSelectionRedrawTimer();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
+      if (demoFitFrame !== undefined) window.cancelAnimationFrame(demoFitFrame);
       cameraActionRef.current = null;
       reenterActionRef.current = null;
       zoomActionRef.current = null;
