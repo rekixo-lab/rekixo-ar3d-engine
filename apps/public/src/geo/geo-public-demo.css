@@ -1006,3 +1006,59 @@
   border-radius:6px;padding:5px 8px;background:rgba(4,19,30,.87);
   color:#d8e9ed;font-size:10px;pointer-events:none;
 }
+
+/* Customer Geo / Explore split. Two heavy GLB contexts must never coexist:
+   React renders only the selected mode. The map remains geographic truth. */
+.geo-experience-switch{
+  width:min(1500px,100%);margin:8px auto 12px;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+}
+.geo-experience-switch button,
+.geo-explore-view-tabs button{
+  border:1px solid #304963;border-radius:10px;
+  background:#0b1c2b;color:#d9e6f2;padding:9px 15px;
+  font-size:12px;font-weight:750;cursor:pointer;min-height:37px;
+}
+.geo-experience-switch button.is-active,
+.geo-explore-view-tabs button.is-active{
+  background:#103c30;border-color:#18bb82;color:#f4fff9;
+}
+.geo-experience-switch button:focus-visible,
+.geo-explore-view-tabs button:focus-visible{
+  outline:2px solid #8af5cd;outline-offset:2px;
+}
+.geo-experience-switch button:disabled{opacity:.4;cursor:not-allowed}
+.geo-experience-switch > span{color:#91abbb;font-size:11px;margin-left:6px}
+.geo-explore-stage{width:min(1500px,100%);margin:0 auto;min-width:0}
+.geo-explore-view-tabs{
+  display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+  padding:0 0 10px;
+}
+.geo-explore-view-tabs button{padding:7px 13px;min-height:32px;font-size:11px}
+.geo-explore-stage > .viewer-shell{
+  height:min(74vh,840px);min-height:460px;width:100%;
+  border-radius:18px;
+}
+.geo-explore-stage .viewer-toolbar{right:12px;left:12px;max-width:calc(100% - 24px)}
+.geo-explore-stage .viewer-actions{flex-wrap:wrap;justify-content:flex-end}
+.geo-explore-stage .viewer-actions .viewer-action:first-child{
+  display:inline-flex!important;align-items:center;justify-content:center;
+}
+.geo-explore-hint{
+  margin:8px 0 12px;text-align:center;color:#92a8b7;
+  font-size:11px;line-height:1.45;
+}
+@media (max-width:700px){
+  .geo-experience-switch{gap:6px;margin:6px auto 10px}
+  .geo-experience-switch button{flex:1 1 120px;padding:7px 9px}
+  .geo-experience-switch > span{width:100%;margin-left:0;font-size:10px}
+  .geo-explore-view-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px}
+  .geo-explore-view-tabs button{min-width:0;padding:7px 2px;font-size:9px}
+  .geo-explore-stage > .viewer-shell{
+    min-height:350px;height:calc(100dvh - 235px);border-radius:13px;
+  }
+  .geo-explore-hint{font-size:10px}
+}
+@media (max-height:550px) and (min-width:701px){
+  .geo-explore-stage > .viewer-shell{min-height:300px;height:70dvh}
+}
