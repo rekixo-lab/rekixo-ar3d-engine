@@ -78,3 +78,26 @@ export function dholeraProjectedModelSize(slug, bounds, matrix, viewport) {
       }
   return {width:maxX-minX,height:maxY-minY};
 }
+
+/**
+ * First close camera for a long, shallow conceptual GLB. Use its *saved-scale*
+ * ENU footprint rather than transient Google WebGL clip bounds during loading.
+ * Google still owns its native maximum zoom and perspective.
+ */
+export function dholeraDemoGroundTargetZoom(slug, bounds, latitude, viewport) {
+  if (slug !== DHOLERA_GLB_DEMO_SLUG || !finite(latitude) || Math.abs(latitude) > 85) return null;
+  const min=bounds?.min, max=bounds?.max;
+  const width=viewport?.width,height=viewport?.height;
+  if (!min || !max || ![min.x,min.y,max.x,max.y,width,height].every(finite) ||
+      width <= 0 || height <= 0) return null;
+  const eastExtent=max.x-min.x,northExtent=max.y-min.y;
+  if (eastExtent <= 0 || northExtent < 0) return null;
+  // Latitude-correct spherical Mercator metres/pixel at zoom zero.
+  const metresPerPixelAtZoomZero=156543.03392804097*Math.cos(latitude*Math.PI/180);
+  const requiredMetresPerPixel=Math.max(
+    eastExtent/(width*0.83),
+    northExtent/(height*0.90),
+  );
+  if (!(requiredMetresPerPixel>0) || !(metresPerPixelAtZoomZero>0)) return null;
+  return Math.max(0,Math.log2(metresPerPixelAtZoomZero/requiredMetresPerPixel));
+}
