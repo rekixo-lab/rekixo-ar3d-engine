@@ -16,7 +16,7 @@ import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shar
 import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
 import {closerGeoCameraZoom} from "../../../../shared/geo-camera-zoom.js";
-import {DHOLERA_GLB_DEMO_SLUG,dholeraDemoFocusCenter,dholeraProjectedModelSize,dholeraDemoPresentationBoost} from "../../../../shared/dholera-demo-geo-camera.js";
+import {DHOLERA_GLB_DEMO_SLUG,dholeraDemoFocusCenter} from "../../../../shared/dholera-demo-geo-camera.js";
 import {projectClientAdminUrl} from "../../../../shared/project-client-admin-url.js";
 import {geoCallHref} from "../../../../shared/geo-public-contact-links.js";
 import "./geo-public-demo.css";
@@ -735,27 +735,11 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           const animating=plotLayer?.tickSelection(performance.now(),reducedMotion)??false;
           renderer.render(scene, camera);
           renderer.resetState();
-          // Dholera concept DEMO: wait until Google settles at its actual
-          // native satellite zoom. The published WGS84/metric GLB remain
-          // unchanged; only the customer presentation model can be enlarged.
+          // Geo Map displays the published rigid WGS84 placement at its
+          // original saved scale. Never enlarge geometry just to defeat
+          // Google's satellite camera zoom limit; Explore 3D handles this.
           if (demoCameraIdle && demoModelRoot && demoModelBounds && !demoPresentationDone) {
             demoPresentationDone=true;
-            const viewport={width:hostRef.current?.clientWidth||0,
-              height:hostRef.current?.clientHeight||0};
-            const pixels=dholeraProjectedModelSize(
-              data.project.slug,demoModelBounds,camera.projectionMatrix.elements,viewport,
-            );
-            const boost=dholeraDemoPresentationBoost(data.project.slug,pixels,viewport,
-              Boolean(data.plotMapping?.plots?.length))??1;
-            if (boost>1.01) {
-              const centerBefore=demoModelBounds.getCenter(new THREE.Vector3());
-              demoModelRoot.scale.multiplyScalar(boost);
-              demoModelRoot.updateMatrixWorld(true);
-              const centerAfter=new THREE.Box3().setFromObject(demoModelRoot)
-                .getCenter(new THREE.Vector3());
-              demoModelRoot.position.add(centerBefore.sub(centerAfter));
-              demoModelRoot.updateMatrixWorld(true);
-            }
             setDemoSceneReady(true);
             overlay?.requestRedraw();
           }
@@ -1059,8 +1043,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
         aria-label={`${data.project.name} integrated 3D geographic scene`} />
       {data.project.slug===DHOLERA_GLB_DEMO_SLUG&&!demoSceneReady&&!failure&&
         <div className="geo-demo-preparing" role="status">Preparing 3D map view…</div>}
-      {data.project.slug===DHOLERA_GLB_DEMO_SLUG&&demoSceneReady&&
-        <div className="geo-demo-view-note">Concept demo · visual scale</div>}
+
       <button type="button" className="geo-map-compass"
         aria-label="Map compass. Tap to face north."
         title="Geographic true north · tap to reset map bearing"
