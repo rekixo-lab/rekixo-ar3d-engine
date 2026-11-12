@@ -838,12 +838,19 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
                 : null;
               if (focusCenter) {
                 demoModelBounds = placedBounds;
+                demoModelRoot = modelRoot;
                 demoFocusCenter = focusCenter;
                 demoGroundTargetZoom = dholeraDemoGroundTargetZoom(
                   data.project.slug,placedBounds,focusCenter.lat,
                   {width:hostRef.current?.clientWidth||0,height:hostRef.current?.clientHeight||0},
                 );
                 cameraActionRef.current?.("overview");
+                // Fallback if Maps does not emit idle after a zoom clamp.
+                demoReadyTimer=window.setTimeout(()=>{
+                  if(cancelled||demoPresentationDone)return;
+                  demoCameraIdle=true;
+                  overlay?.requestRedraw();
+                },1200);
               }
             }
             if(candidateLayer){
