@@ -14,7 +14,7 @@ import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shar
 import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
 import {closerGeoCameraZoom} from "../../../../shared/geo-camera-zoom.js";
-import {DHOLERA_GLB_DEMO_SLUG,dholeraDemoFocusCenter,dholeraProjectedModelSize,dholeraDemoGroundTargetZoom,dholeraDemoPresentationBoost} from "../../../../shared/dholera-demo-geo-camera.js";
+import {DHOLERA_GLB_DEMO_SLUG,dholeraDemoFocusCenter,dholeraProjectedModelSize,dholeraDemoPresentationBoost} from "../../../../shared/dholera-demo-geo-camera.js";
 import {projectClientAdminUrl} from "../../../../shared/project-client-admin-url.js";
 import {geoCallHref} from "../../../../shared/geo-public-contact-links.js";
 import "./geo-public-demo.css";
@@ -468,7 +468,6 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
     const isDholeraDemo = data.project.slug === DHOLERA_GLB_DEMO_SLUG;
     let demoModelBounds: THREE.Box3 | null = null;
     let demoFocusCenter: {lat:number;lng:number} | null = null;
-    let demoGroundTargetZoom: number | null = null;
     let demoModelRoot:THREE.Group|null=null;
     let demoPresentationDone=false, demoCameraIdle=false;
     let demoReadyTimer:number|undefined;
@@ -510,7 +509,8 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           lat: data.placement.anchor.latitude,
           lng: data.placement.anchor.longitude,
         };
-        const initialCamera = cameraPreset("overview", data.placement.headingDeg);
+        const initialCamera = {...cameraPreset("overview",data.placement.headingDeg),
+          ...(isDholeraDemo?{zoom:20}:{})};
         const touchCapable = navigator.maxTouchPoints>0 ||
           window.matchMedia?.("(pointer:coarse)").matches;
         const map = new google.maps.Map(hostRef.current, {
@@ -840,10 +840,6 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
                 demoModelBounds = placedBounds;
                 demoModelRoot = modelRoot;
                 demoFocusCenter = focusCenter;
-                demoGroundTargetZoom = dholeraDemoGroundTargetZoom(
-                  data.project.slug,placedBounds,focusCenter.lat,
-                  {width:hostRef.current?.clientWidth||0,height:hostRef.current?.clientHeight||0},
-                );
                 cameraActionRef.current?.("overview");
                 // Fallback if Maps does not emit idle after a zoom clamp.
                 demoReadyTimer=window.setTimeout(()=>{
@@ -906,11 +902,9 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           if (demoFocusCenter) {
             // No iterative Google zoom on load: satellite zoom can be
             // clamped asynchronously and otherwise appears to snap back.
-            // Start near the native close camera for this actual, scaled GLB.
-            // Never reset to a wider Google zoom AFTER its model has loaded.
-            const fittedPreset = {...preset,zoom:Math.max(
-              map.getZoom?.()??0,demoGroundTargetZoom??20.5,preset.zoom,
-            )};
+            // At GLB load preserve Google's ACTUAL zoom (already clamped
+            // for satellite imagery). Re-enter can restore zoom 20 on demand.
+            const fittedPreset={...preset,zoom:demoPresentationDone?20:(map.getZoom?.()??20)};
             if (map.moveCamera) map.moveCamera({center:demoFocusCenter,...fittedPreset});
             else {
               map.setCenter(demoFocusCenter);
@@ -919,10 +913,11 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
               map.setTilt?.(fittedPreset.tilt);
             }
           } else {
-            if(map.moveCamera)map.moveCamera({ center, ...preset });
+            const initialPreset=isDholeraDemo?{...preset,zoom:20}:preset;
+            if(map.moveCamera)map.moveCamera({ center, ...initialPreset });
             else {
               map.setCenter(center);
-              map.setZoom(preset.zoom);
+              map.setZoom(initialPreset.zoom);
               map.setHeading?.(preset.heading);
               map.setTilt?.(preset.tilt);
             }
