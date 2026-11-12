@@ -87,6 +87,8 @@ interface Viewer3DProps {
   presentationView?: PresentationView;
   /** Map-independent, bounds-aware 3D presentation of a published Geo GLB. */
   geoExploreMode?: boolean;
+  /** Allows reselecting the same camera button to refocus after manual orbit. */
+  cameraViewRequest?: number;
   initialFloor?: number | null;
   initialExploded?: boolean;
   compactUi?: boolean;
@@ -122,6 +124,7 @@ export function Viewer3D({
   initialWalkFloor = null,
   presentationView = "default",
   geoExploreMode = false,
+  cameraViewRequest = 0,
   initialFloor = null,
   initialExploded = false,
   compactUi = false,
@@ -1746,7 +1749,7 @@ export function Viewer3D({
 
   useEffect(() => {
     presentationRef.current?.(presentationView);
-  }, [presentationView]);
+  }, [presentationView,cameraViewRequest]);
 
   useEffect(() => {
     experienceRef.current?.(experienceMode);
