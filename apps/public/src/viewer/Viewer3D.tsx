@@ -1646,8 +1646,11 @@ export function Viewer3D({
       } else {
         controls.update();
       }
-      if (clientPresentation && modelBounds && !walkActive) {
-        camera.position.y = Math.max(camera.position.y, modelBounds.min.y + 0.4);
+      if ((clientPresentation || geoExploreMode) && modelBounds && !walkActive) {
+        if (clientPresentation)
+          camera.position.y = Math.max(camera.position.y, modelBounds.min.y + 0.4);
+        // A large township needs near/far clipping planes that follow the
+        // orbit camera, particularly when visitors zoom into one villa.
         updateCameraDepthRange(camera, controls.target, modelBounds);
       }
       renderer.render(scene, camera);
