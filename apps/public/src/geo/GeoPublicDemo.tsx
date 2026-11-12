@@ -14,6 +14,7 @@ import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shar
 import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
 import {closerGeoCameraZoom} from "../../../../shared/geo-camera-zoom.js";
+import {DHOLERA_GLB_DEMO_SLUG,dholeraDemoFocusCenter,dholeraDemoZoomCorrection,dholeraProjectedModelSize} from "../../../../shared/dholera-demo-geo-camera.js";
 import {projectClientAdminUrl} from "../../../../shared/project-client-admin-url.js";
 import {geoCallHref} from "../../../../shared/geo-public-contact-links.js";
 import "./geo-public-demo.css";
@@ -461,6 +462,15 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
     let contextRestored = false;
     let zoomCheckTimer: number | undefined;
     let activeCameraView: GeoCameraView = "overview";
+    // Dholera concept demo only: fit the camera to placed geometry, never
+    // change the saved metric GLB, transform, pins or other live projects.
+    const isDholeraDemo = data.project.slug === DHOLERA_GLB_DEMO_SLUG;
+    let demoModelBounds: THREE.Box3 | null = null;
+    let demoFocusCenter: {lat:number;lng:number} | null = null;
+    let demoFitPending = false;
+    let demoFitWaiting = false;
+    let demoFitAttempts = 0;
+    let demoFitFrame: number | undefined;
     const reducedMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches??false;
 
     const clearSelectionRedrawTimer = () => {
@@ -899,6 +909,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           overlay?.requestRedraw();
         });
         mapIdle = map.addListener("idle", () => {
+          if (demoFitPending) demoFitWaiting = false;
           overlay?.requestRedraw();
           updateCompassHeading(map.getHeading?.());
           refreshPlotPolygons?.(true);
