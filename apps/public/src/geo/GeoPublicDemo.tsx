@@ -912,12 +912,20 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
               map.setHeading?.(fittedPreset.heading);
               map.setTilt?.(fittedPreset.tilt);
             }
-          } else {
-            const initialPreset=isDholeraDemo?{...preset,zoom:20}:preset;
+          } else if (isDholeraDemo) {
+            const initialPreset={...preset,zoom:20};
             if(map.moveCamera)map.moveCamera({ center, ...initialPreset });
             else {
               map.setCenter(center);
               map.setZoom(initialPreset.zoom);
+              map.setHeading?.(preset.heading);
+              map.setTilt?.(preset.tilt);
+            }
+          } else {
+            if(map.moveCamera)map.moveCamera({ center, ...preset });
+            else {
+              map.setCenter(center);
+              map.setZoom(preset.zoom);
               map.setHeading?.(preset.heading);
               map.setTilt?.(preset.tilt);
             }
