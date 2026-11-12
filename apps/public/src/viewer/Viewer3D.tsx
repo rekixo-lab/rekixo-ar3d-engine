@@ -59,6 +59,7 @@ import { createExteriorSky } from "./exteriorSky";
 import { createPremiumPresentationMotion } from "./premiumPresentationMotion";
 import { exteriorCameraView, type ExteriorView } from "./exteriorCamera";
 import { createPreviewBuilding } from "./viewerPreview";
+import {geoExploreCameraShot} from "../../../../shared/geo-explore-camera.js";
 import { disposeViewerObject } from "./viewerResources";
 import type { FloorVisibilityController } from "./floorVisibility";
 
@@ -84,6 +85,10 @@ interface Viewer3DProps {
   initialWalk?: boolean;
   initialWalkFloor?: number | null;
   presentationView?: PresentationView;
+  /** Map-independent, bounds-aware 3D presentation of a published Geo GLB. */
+  geoExploreMode?: boolean;
+  /** Allows reselecting the same camera button to refocus after manual orbit. */
+  cameraViewRequest?: number;
   initialFloor?: number | null;
   initialExploded?: boolean;
   compactUi?: boolean;
@@ -118,6 +123,8 @@ export function Viewer3D({
   initialWalk = false,
   initialWalkFloor = null,
   presentationView = "default",
+  geoExploreMode = false,
+  cameraViewRequest = 0,
   initialFloor = null,
   initialExploded = false,
   compactUi = false,
@@ -1016,6 +1023,19 @@ export function Viewer3D({
         usePreset && cameraPreset
           ? applyPreset(cameraPreset, camera, controls)
           : fitCamera(object, camera, controls);
+      if (geoExploreMode && modelBounds) {
+        const shot = geoExploreCameraShot(modelBounds, camera.aspect, "full");
+        if (shot) {
+          camera.position.set(shot.position.x,shot.position.y,shot.position.z);
+          controls.target.set(shot.target.x,shot.target.y,shot.target.z);
+          camera.fov = shot.fov;
+          camera.updateProjectionMatrix();
+          controls.minDistance = shot.minDistance;
+          controls.maxDistance = shot.maxDistance;
+          controls.update();
+          homeView = {position:camera.position.clone(),target:controls.target.clone(),fov:camera.fov};
+        }
+      }
 
       const bounds = modelBounds;
       // Frame the measured building, not the much wider site/paving mesh.
@@ -1179,7 +1199,21 @@ export function Viewer3D({
 
       const setView = (view: PresentationView, instant = false) => {
         if (walkActive || currentExperienceMode === "interior") return;
-        const targetView = viewTarget(view);
+        let targetView = viewTarget(view);
+        if (geoExploreMode && modelBounds) {
+          const kind = view === "top" ? "top" : view === "aerial" ? "aerial" :
+            view === "building" ? "close" : "full";
+          const shot = geoExploreCameraShot(modelBounds,camera.aspect,kind);
+          if (shot) {
+            targetView = {
+              position:new THREE.Vector3(shot.position.x,shot.position.y,shot.position.z),
+              target:new THREE.Vector3(shot.target.x,shot.target.y,shot.target.z),
+              fov:shot.fov,
+            };
+            controls.minDistance = shot.minDistance;
+            controls.maxDistance = shot.maxDistance;
+          }
+        }
         if (!targetView) return;
         // Preserve the reference angle while fitting the complete source model
         // inside both landscape and narrow portrait viewports.
@@ -1615,8 +1649,11 @@ export function Viewer3D({
       } else {
         controls.update();
       }
-      if (clientPresentation && modelBounds && !walkActive) {
-        camera.position.y = Math.max(camera.position.y, modelBounds.min.y + 0.4);
+      if ((clientPresentation || geoExploreMode) && modelBounds && !walkActive) {
+        if (clientPresentation)
+          camera.position.y = Math.max(camera.position.y, modelBounds.min.y + 0.4);
+        // A large township needs near/far clipping planes that follow the
+        // orbit camera, particularly when visitors zoom into one villa.
         updateCameraDepthRange(camera, controls.target, modelBounds);
       }
       renderer.render(scene, camera);
@@ -1699,6 +1736,7 @@ export function Viewer3D({
     sourcePresentation,
     buildingPresentation,
     clientPresentation,
+    geoExploreMode,
     modelUrl,
     cameraPreset,
     interactionMode,
@@ -1711,7 +1749,7 @@ export function Viewer3D({
 
   useEffect(() => {
     presentationRef.current?.(presentationView);
-  }, [presentationView]);
+  }, [presentationView,cameraViewRequest]);
 
   useEffect(() => {
     experienceRef.current?.(experienceMode);
