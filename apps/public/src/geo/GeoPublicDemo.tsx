@@ -1051,8 +1051,6 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
       style={{"--geo-map-north-rotation":(geoMapNorthRotation(
         cameraPreset("overview",data.placement.headingDeg).heading)??0)+"deg"} as CSSProperties}>
       <div ref={hostRef} className="geo-integrated-map"
-        style={data.project.slug===DHOLERA_GLB_DEMO_SLUG&&!demoSceneReady
-          ?{opacity:0,pointerEvents:"none"}:undefined}
         aria-label={`${data.project.name} integrated 3D geographic scene`} />
       {data.project.slug===DHOLERA_GLB_DEMO_SLUG&&!demoSceneReady&&!failure&&
         <div className="geo-demo-preparing" role="status">Preparing 3D map view…</div>}
