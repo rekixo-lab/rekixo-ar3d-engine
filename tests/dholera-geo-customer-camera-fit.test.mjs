@@ -68,7 +68,8 @@ test("fit zoom makes small demo larger but never clips its viewport target or in
   assert.doesNotMatch(source,/modelRoot\.scale\.setScalar|model\.scale\.multiplyScalar/);
   assert.match(source,/zoom:demoPresentationDone\?20:\(map\.getZoom\?\.\(\)\?\?20\)/,
     "GLB load must preserve Google native map zoom without asking for an unsupported higher zoom");
-  assert.match(source,/map\.getZoom\?\.\(\)\?\?0,demoGroundTargetZoom\?\?20\.5,preset\.zoom/);
+  assert.doesNotMatch(source,/demoGroundTargetZoom\?\?20\.5/,
+    "never ask Google for the unavailable high zoom on loaded Dholera GLB");
 });
 
 test("Dholera first completed GLB load targets a large metric footprint without snap zoom-out",()=>{
