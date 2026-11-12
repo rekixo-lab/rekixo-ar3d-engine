@@ -14,7 +14,7 @@ import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shar
 import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
 import {closerGeoCameraZoom} from "../../../../shared/geo-camera-zoom.js";
-import {DHOLERA_GLB_DEMO_SLUG,dholeraDemoFocusCenter,dholeraDemoZoomCorrection,dholeraProjectedModelSize} from "../../../../shared/dholera-demo-geo-camera.js";
+import {DHOLERA_GLB_DEMO_SLUG,dholeraDemoFocusCenter,dholeraDemoZoomCorrection,dholeraProjectedModelSize,dholeraDemoGroundTargetZoom} from "../../../../shared/dholera-demo-geo-camera.js";
 import {projectClientAdminUrl} from "../../../../shared/project-client-admin-url.js";
 import {geoCallHref} from "../../../../shared/geo-public-contact-links.js";
 import "./geo-public-demo.css";
@@ -467,6 +467,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
     const isDholeraDemo = data.project.slug === DHOLERA_GLB_DEMO_SLUG;
     let demoModelBounds: THREE.Box3 | null = null;
     let demoFocusCenter: {lat:number;lng:number} | null = null;
+    let demoGroundTargetZoom: number | null = null;
     let demoFitPending = false;
     let demoFitWaiting = false;
     let demoFitAttempts = 0;
@@ -840,6 +841,10 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
               if (focusCenter) {
                 demoModelBounds = placedBounds;
                 demoFocusCenter = focusCenter;
+                demoGroundTargetZoom = dholeraDemoGroundTargetZoom(
+                  data.project.slug,placedBounds,focusCenter.lat,
+                  {width:hostRef.current?.clientWidth||0,height:hostRef.current?.clientHeight||0},
+                );
                 cameraActionRef.current?.("overview");
               }
             }
@@ -897,8 +902,11 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
             demoFitPending = true;
             demoFitWaiting = true;
             demoFitAttempts = 0;
-            // Start close, then compute exact pixel fit using Google's camera.
-            const fittedPreset = {...preset,zoom:Math.max(20.5,preset.zoom)};
+            // Start near the native close camera for this actual, scaled GLB.
+            // Never reset to a wider Google zoom AFTER its model has loaded.
+            const fittedPreset = {...preset,zoom:Math.max(
+              map.getZoom?.()??0,demoGroundTargetZoom??20.5,preset.zoom,
+            )};
             if (map.moveCamera) map.moveCamera({center:demoFocusCenter,...fittedPreset});
             else {
               map.setCenter(demoFocusCenter);

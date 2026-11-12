@@ -18,3 +18,9 @@ export function dholeraDemoZoomCorrection(
   rendered:GeoViewport|null,
   viewport:GeoViewport,
 ):number|null;
+export function dholeraDemoGroundTargetZoom(
+  slug:string,
+  bounds:GeoBounds3,
+  latitude:number,
+  viewport:GeoViewport,
+):number|null;

@@ -6,6 +6,7 @@ import {
   dholeraDemoFocusCenter,
   dholeraProjectedModelSize,
   dholeraDemoZoomCorrection,
+  dholeraDemoGroundTargetZoom,
 } from "../shared/dholera-demo-geo-camera.js";
 
 const slug=DHOLERA_GLB_DEMO_SLUG;
@@ -51,8 +52,9 @@ test("projection pixel bounds measure model corners, not guessed satellite zoom"
 test("fit zoom makes small demo larger but never clips its viewport target or invents maxZoom",()=>{
   const viewport={width:1200,height:600};
   assert.equal(dholeraDemoZoomCorrection(slug,{width:100,height:40},viewport),1.4);
-  assert.equal(dholeraDemoZoomCorrection(slug,{width:2000,height:1200},viewport),-1.4);
-  const near=dholeraDemoZoomCorrection(slug,{width:948,height:396},viewport);
+  assert.equal(dholeraDemoZoomCorrection(slug,{width:2000,height:1200},viewport),0,
+    "once model has loaded, an automatic zoom-out must never occur");
+  const near=dholeraDemoZoomCorrection(slug,{width:1032,height:480},viewport);
   assert.ok(Math.abs(near)<1e-12);
   assert.equal(dholeraDemoZoomCorrection(slug,{width:0,height:20},viewport),null);
   assert.match(source,/dholeraDemoZoomCorrection\(data\.project\.slug,projected,viewport\)/);
@@ -62,4 +64,28 @@ test("fit zoom makes small demo larger but never clips its viewport target or in
   assert.match(source,/demoFitPending = false; \/\/ manual zoom wins/);
   assert.match(source,/window\.cancelAnimationFrame\(demoFitFrame\)/);
   assert.doesNotMatch(source,/modelRoot\.scale\.setScalar|model\.scale\.multiplyScalar/);
+  assert.match(source,/demoGroundTargetZoom = dholeraDemoGroundTargetZoom/);
+  assert.match(source,/map\.getZoom\?\.\(\)\?\?0,demoGroundTargetZoom\?\?20\.5,preset\.zoom/);
+});
+
+test("Dholera first completed GLB load targets a large metric footprint without snap zoom-out",()=>{
+  const model={
+    min:{x:0,y:0,z:0},
+    max:{x:41.27,y:8.85,z:0.93},
+  };
+  const desktop=dholeraDemoGroundTargetZoom(slug,model,20.4789419,{width:1300,height:460});
+  const mobile=dholeraDemoGroundTargetZoom(slug,model,20.4789419,{width:390,height:600});
+  assert.ok(desktop>21.4 && desktop<22.5,"desktop camera should fill most width at native zoom");
+  assert.ok(mobile<desktop && mobile>19.5,"smaller screens reduce requested zoom");
+  assert.equal(dholeraDemoGroundTargetZoom("shreem-palace-demo-a6532789",model,20.47,{width:1300,height:460}),null);
+  assert.equal(dholeraDemoGroundTargetZoom(slug,model,100,{width:1300,height:460}),null);
+  assert.equal(dholeraDemoGroundTargetZoom(slug,model,20.47,{width:0,height:460}),null);
+  const view={width:1300,height:460};
+  for(const rendered of [
+    {width:1000,height:1000},{width:3000,height:40},{width:400,height:500},
+    {width:5000,height:5000},
+  ]){
+    assert.ok(dholeraDemoZoomCorrection(slug,rendered,view)>=0,
+      "camera fit must never produce a negative correction even for transient tall GLB bounds");
+  }
 });
