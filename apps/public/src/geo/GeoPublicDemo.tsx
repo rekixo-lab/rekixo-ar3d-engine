@@ -4,6 +4,8 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { Viewer3D } from "../viewer/Viewer3D";
+import { GeoExplore3D } from "./GeoExplore3D";
+import {initialGeoExperienceMode,type GeoExperienceMode} from "../../../../shared/geo-experience-mode.js";
 import { applyRigidBuildingPlacement } from "./geoRigidTransform";
 import { buildModelGeoPlotLayer,pickModelGeoPlot,type ModelPlotLayer } from "./geoPlotModelOverlay";
 import { loadPublicBranding, type PublicProjectBranding } from "../branding";
@@ -1195,6 +1197,7 @@ export function slugFromGeoPathname(pathname: string) {
 export default function GeoPublicDemo() {
   const slug = useMemo(() => slugFromGeoPathname(window.location.pathname), []);
   const [data, setData] = useState<GeoPayload>();
+  const [displayMode,setDisplayMode] = useState<GeoExperienceMode>(()=>initialGeoExperienceMode(slug));
   const [liveStatus,setLiveStatus]=useState<GeoStatusSnapshot|null>(null);
   const [mappingChanged,setMappingChanged]=useState(false);
   const [branding, setBranding] = useState<PublicProjectBranding | null>(null);
@@ -1236,6 +1239,11 @@ export default function GeoPublicDemo() {
       });
     return () => controller.abort();
   }, [slug]);
+
+  // Projects with official mapped plots open geographic inventory first.
+  useEffect(()=>{
+    if(data?.plotMapping?.plots?.length)setDisplayMode("map");
+  },[data?.project.slug,data?.plotMapping?.version]);
 
   // Poll only approved status facts: no model reload, camera reset or geometry
   // mutation. Also refresh immediately when a customer returns to the tab.
@@ -1360,7 +1368,23 @@ export default function GeoPublicDemo() {
         </article>
       </section>
 
-      {data.maps.configured && data.maps.apiKey && data.maps.mapId ? (
+      <nav className="geo-experience-switch" aria-label="Choose geographic map or interactive 3D model">
+        <button type="button" className={displayMode==="explore"?"is-active":""}
+          aria-pressed={displayMode==="explore"} onClick={()=>setDisplayMode("explore")}>
+          Explore 3D
+        </button>
+        <button type="button" className={displayMode==="map"?"is-active":""}
+          aria-pressed={displayMode==="map"} onClick={()=>setDisplayMode("map")}
+          disabled={!data.maps.configured||!data.maps.apiKey||!data.maps.mapId}>
+          Geo Map
+        </button>
+        <span>{displayMode==="explore"
+          ?"Independent orbit, zoom and full-model view"
+          :"Published geographic position and original saved scale"}</span>
+      </nav>
+      {displayMode==="explore" ? (
+        <GeoExplore3D modelUrl={data.model.url} modelName={data.model.name}/>
+      ) : data.maps.configured && data.maps.apiKey && data.maps.mapId ? (
         <div className="geo-public-map-layout">
           <IntegratedGeoScene data={data} toolbarContainer={toolbarContainer} modelSiteHref={`/3Dprojects/${encodeURIComponent(slug)}`} notices={notices} liveStatus={liveStatus}/>
           <div ref={setToolbarContainer} className="geo-public-toolbar-slot" aria-label="Map camera controls" />
