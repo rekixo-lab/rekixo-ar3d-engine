@@ -39,11 +39,15 @@ export function dholeraDemoZoomCorrection(slug, rendered, viewport) {
   const { width: viewWidth, height: viewHeight } = viewport || {};
   if (![width, height, viewWidth, viewHeight].every(finite) ||
       width <= 0 || height <= 0 || viewWidth <= 0 || viewHeight <= 0) return null;
-  const widthFactor = (viewWidth * 0.79) / width;
-  const heightFactor = (viewHeight * 0.66) / height;
+  // This is a close-up promotional camera, NOT a geometry correction.
+  // Previous symmetric fitting shrank the already correctly framed model
+  // after loading whenever Google reported transient oversized clip bounds.
+  // Never zoom OUT automatically: only fill remaining screen room on zoom IN.
+  const widthFactor = (viewWidth * 0.86) / width;
+  const heightFactor = (viewHeight * 0.80) / height;
   const ratio = Math.min(widthFactor, heightFactor);
   if (!finite(ratio) || ratio <= 0) return null;
-  return Math.max(-1.4, Math.min(1.4, Math.log2(ratio)));
+  return Math.max(0, Math.min(1.4, Math.log2(ratio)));
 }
 
 /**
