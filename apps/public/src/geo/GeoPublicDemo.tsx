@@ -965,8 +965,11 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           overlay?.requestRedraw();
         });
         mapIdle = map.addListener("idle", () => {
-          if (demoFitPending) demoFitWaiting = false;
           overlay?.requestRedraw();
+          if (demoFitPending) {
+            demoFitWaiting = false;
+            overlay?.requestRedraw();
+          }
           updateCompassHeading(map.getHeading?.());
           refreshPlotPolygons?.(true);
         });
