@@ -14,7 +14,7 @@ import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shar
 import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
 import {closerGeoCameraZoom} from "../../../../shared/geo-camera-zoom.js";
-import {DHOLERA_GLB_DEMO_SLUG,dholeraDemoFocusCenter,dholeraDemoZoomCorrection,dholeraProjectedModelSize,dholeraDemoGroundTargetZoom} from "../../../../shared/dholera-demo-geo-camera.js";
+import {DHOLERA_GLB_DEMO_SLUG,dholeraDemoFocusCenter,dholeraProjectedModelSize,dholeraDemoGroundTargetZoom,dholeraDemoPresentationBoost} from "../../../../shared/dholera-demo-geo-camera.js";
 import {projectClientAdminUrl} from "../../../../shared/project-client-admin-url.js";
 import {geoCallHref} from "../../../../shared/geo-public-contact-links.js";
 import "./geo-public-demo.css";
@@ -407,6 +407,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
   const [satelliteMaxZoom, setSatelliteMaxZoom] = useState<number | null>(null);
   const [zoomNotice, setZoomNotice] = useState("");
   const [failure, setFailure] = useState("");
+  const [demoSceneReady,setDemoSceneReady] = useState(false);
   const [statusEnabled,setStatusEnabled]=useState(false);
   const [statusFilter,setStatusFilter]=useState<GeoPlotStatus|null>(null);
   // Status updates are isolated from the immutable GLB/mapping data prop:
@@ -468,10 +469,9 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
     let demoModelBounds: THREE.Box3 | null = null;
     let demoFocusCenter: {lat:number;lng:number} | null = null;
     let demoGroundTargetZoom: number | null = null;
-    let demoFitPending = false;
-    let demoFitWaiting = false;
-    let demoFitAttempts = 0;
-    let demoFitFrame: number | undefined;
+    let demoModelRoot:THREE.Group|null=null;
+    let demoPresentationDone=false, demoCameraIdle=false;
+    let demoReadyTimer:number|undefined;
     const reducedMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches??false;
 
     const clearSelectionRedrawTimer = () => {
@@ -899,9 +899,8 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           // Start presets 50% closer using fractional zoom. Google's native
           // location-dependent zoom bound still applies, without rescaling GLB.
           if (demoFocusCenter) {
-            demoFitPending = true;
-            demoFitWaiting = true;
-            demoFitAttempts = 0;
+            // No iterative Google zoom on load: satellite zoom can be
+            // clamped asynchronously and otherwise appears to snap back.
             // Start near the native close camera for this actual, scaled GLB.
             // Never reset to a wider Google zoom AFTER its model has loaded.
             const fittedPreset = {...preset,zoom:Math.max(
@@ -937,8 +936,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           const requested = Math.max(0, current + step);
           if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
           setZoomNotice("");
-          demoFitPending = false; // manual zoom wins
-          demoFitWaiting = false;
+          demoCameraIdle=false; // user zoom is always authoritative
           map.setZoom(requested);
           if (step > 0) {
             zoomCheckTimer = window.setTimeout(() => {
@@ -974,8 +972,8 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
         });
         mapIdle = map.addListener("idle", () => {
           overlay?.requestRedraw();
-          if (demoFitPending) {
-            demoFitWaiting = false;
+          if (demoModelRoot && !demoPresentationDone) {
+            demoCameraIdle=true;
             overlay?.requestRedraw();
           }
           updateCompassHeading(map.getHeading?.());
@@ -1008,7 +1006,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
       clearSelectionRedrawTimer();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
-      if (demoFitFrame !== undefined) window.cancelAnimationFrame(demoFitFrame);
+      if (demoReadyTimer !== undefined) window.clearTimeout(demoReadyTimer);
       cameraActionRef.current = null;
       reenterActionRef.current = null;
       zoomActionRef.current = null;
