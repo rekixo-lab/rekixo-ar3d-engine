@@ -16,7 +16,7 @@ test("only two demo projects default to immersive 3D; mapped and other inventory
   }
   assert.equal(initialGeoExperienceMode("satharai-jyoti-paradise"),"map");
   assert.equal(initialGeoExperienceMode("shree-dungar-residency"),"map");
-  assert.match(publicGeo,/if\(data\?\.plotMapping\?\.plots\?\.length\)setDisplayMode\("map"\)/);
+  assert.match(publicGeo,/setDisplayMode\(initialGeoExperienceMode\(slug,Boolean\(body\.plotMapping\?\.plots\?\.length\)\)\)/);
   assert.match(publicGeo,/aria-pressed=\{displayMode==="explore"\}/);
   assert.match(publicGeo,/aria-pressed=\{displayMode==="map"\}/);
 });
