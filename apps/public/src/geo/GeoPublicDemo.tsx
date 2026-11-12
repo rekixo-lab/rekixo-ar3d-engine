@@ -732,6 +732,32 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           const animating=plotLayer?.tickSelection(performance.now(),reducedMotion)??false;
           renderer.render(scene, camera);
           renderer.resetState();
+          // Google supplies the actual perspective/tilt camera. Fit this one
+          // conceptual demo with its post-placement GLB bounds in SCREEN PIXELS.
+          // This only moves the public camera, never the saved metric 3D source.
+          if (demoFitPending && !demoFitWaiting && demoModelBounds && demoFitFrame === undefined) {
+            const host = hostRef.current;
+            const viewport = {width:host?.clientWidth || 0,height:host?.clientHeight || 0};
+            const projected = dholeraProjectedModelSize(
+              data.project.slug,demoModelBounds,camera.projectionMatrix.elements,viewport,
+            );
+            const correction = dholeraDemoZoomCorrection(data.project.slug,projected,viewport);
+            if (correction === null || Math.abs(correction) <= 0.09 || demoFitAttempts >= 3) {
+              demoFitPending = false;
+            } else {
+              demoFitWaiting = true;
+              demoFitAttempts++;
+              demoFitFrame = window.requestAnimationFrame(() => {
+                demoFitFrame = undefined;
+                if (cancelled) return;
+                // Native Google Maps handles site-specific maximum zoom;
+                // never fake zoom by enlarging GLB geometry or changing pins.
+                const current = map.getZoom?.() ?? 20;
+                map.setZoom(Math.max(0,current + correction));
+                overlay?.requestRedraw();
+              });
+            }
+          }
           // Limit the persistent prism reflection to roughly 29 FPS.
           // Do not redraw while deselected, hidden, or reduced-motion.
           if(animating && !document.hidden && selectionRedrawTimer===undefined){
