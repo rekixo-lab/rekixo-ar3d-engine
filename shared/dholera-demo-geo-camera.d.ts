@@ -24,3 +24,7 @@ export function dholeraDemoGroundTargetZoom(
   latitude:number,
   viewport:GeoViewport,
 ):number|null;
+export function dholeraDemoPresentationBoost(
+  slug:string,projected:GeoViewport|null,viewport:GeoViewport,
+  hasMappedPlots?:boolean,
+):number|null;

@@ -14,7 +14,7 @@ import {geoPathBounds,visibleGeoPlotPaths,type GeoBounds} from "../../../../shar
 import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../shared/geo-plot-status.js";
 import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
 import {closerGeoCameraZoom} from "../../../../shared/geo-camera-zoom.js";
-import {DHOLERA_GLB_DEMO_SLUG,dholeraDemoFocusCenter,dholeraDemoZoomCorrection,dholeraProjectedModelSize,dholeraDemoGroundTargetZoom} from "../../../../shared/dholera-demo-geo-camera.js";
+import {DHOLERA_GLB_DEMO_SLUG,dholeraDemoFocusCenter,dholeraProjectedModelSize,dholeraDemoPresentationBoost} from "../../../../shared/dholera-demo-geo-camera.js";
 import {projectClientAdminUrl} from "../../../../shared/project-client-admin-url.js";
 import {geoCallHref} from "../../../../shared/geo-public-contact-links.js";
 import "./geo-public-demo.css";
@@ -407,6 +407,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
   const [satelliteMaxZoom, setSatelliteMaxZoom] = useState<number | null>(null);
   const [zoomNotice, setZoomNotice] = useState("");
   const [failure, setFailure] = useState("");
+  const [demoSceneReady,setDemoSceneReady] = useState(false);
   const [statusEnabled,setStatusEnabled]=useState(false);
   const [statusFilter,setStatusFilter]=useState<GeoPlotStatus|null>(null);
   // Status updates are isolated from the immutable GLB/mapping data prop:
@@ -467,11 +468,9 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
     const isDholeraDemo = data.project.slug === DHOLERA_GLB_DEMO_SLUG;
     let demoModelBounds: THREE.Box3 | null = null;
     let demoFocusCenter: {lat:number;lng:number} | null = null;
-    let demoGroundTargetZoom: number | null = null;
-    let demoFitPending = false;
-    let demoFitWaiting = false;
-    let demoFitAttempts = 0;
-    let demoFitFrame: number | undefined;
+    let demoModelRoot:THREE.Group|null=null;
+    let demoPresentationDone=false, demoCameraIdle=false;
+    let demoReadyTimer:number|undefined;
     const reducedMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches??false;
 
     const clearSelectionRedrawTimer = () => {
@@ -510,7 +509,8 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           lat: data.placement.anchor.latitude,
           lng: data.placement.anchor.longitude,
         };
-        const initialCamera = cameraPreset("overview", data.placement.headingDeg);
+        const initialCamera = {...cameraPreset("overview",data.placement.headingDeg),
+          ...(isDholeraDemo?{zoom:20}:{})};
         const touchCapable = navigator.maxTouchPoints>0 ||
           window.matchMedia?.("(pointer:coarse)").matches;
         const map = new google.maps.Map(hostRef.current, {
@@ -733,31 +733,29 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           const animating=plotLayer?.tickSelection(performance.now(),reducedMotion)??false;
           renderer.render(scene, camera);
           renderer.resetState();
-          // Google supplies the actual perspective/tilt camera. Fit this one
-          // conceptual demo with its post-placement GLB bounds in SCREEN PIXELS.
-          // This only moves the public camera, never the saved metric 3D source.
-          if (demoFitPending && !demoFitWaiting && demoModelBounds && demoFitFrame === undefined) {
-            const host = hostRef.current;
-            const viewport = {width:host?.clientWidth || 0,height:host?.clientHeight || 0};
-            const projected = dholeraProjectedModelSize(
+          // Dholera concept DEMO: wait until Google settles at its actual
+          // native satellite zoom. The published WGS84/metric GLB remain
+          // unchanged; only the customer presentation model can be enlarged.
+          if (demoCameraIdle && demoModelRoot && demoModelBounds && !demoPresentationDone) {
+            demoPresentationDone=true;
+            const viewport={width:hostRef.current?.clientWidth||0,
+              height:hostRef.current?.clientHeight||0};
+            const pixels=dholeraProjectedModelSize(
               data.project.slug,demoModelBounds,camera.projectionMatrix.elements,viewport,
             );
-            const correction = dholeraDemoZoomCorrection(data.project.slug,projected,viewport);
-            if (correction === null || Math.abs(correction) <= 0.09 || demoFitAttempts >= 3) {
-              demoFitPending = false;
-            } else {
-              demoFitWaiting = true;
-              demoFitAttempts++;
-              demoFitFrame = window.requestAnimationFrame(() => {
-                demoFitFrame = undefined;
-                if (cancelled) return;
-                // Native Google Maps handles site-specific maximum zoom;
-                // never fake zoom by enlarging GLB geometry or changing pins.
-                const current = map.getZoom?.() ?? 20;
-                map.setZoom(Math.max(0,current + correction));
-                overlay?.requestRedraw();
-              });
+            const boost=dholeraDemoPresentationBoost(data.project.slug,pixels,viewport,
+              Boolean(data.plotMapping?.plots?.length))??1;
+            if (boost>1.01) {
+              const centerBefore=demoModelBounds.getCenter(new THREE.Vector3());
+              demoModelRoot.scale.multiplyScalar(boost);
+              demoModelRoot.updateMatrixWorld(true);
+              const centerAfter=new THREE.Box3().setFromObject(demoModelRoot)
+                .getCenter(new THREE.Vector3());
+              demoModelRoot.position.add(centerBefore.sub(centerAfter));
+              demoModelRoot.updateMatrixWorld(true);
             }
+            setDemoSceneReady(true);
+            overlay?.requestRedraw();
           }
           // Limit the persistent prism reflection to roughly 29 FPS.
           // Do not redraw while deselected, hidden, or reduced-motion.
@@ -840,12 +838,15 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
                 : null;
               if (focusCenter) {
                 demoModelBounds = placedBounds;
+                demoModelRoot = modelRoot;
                 demoFocusCenter = focusCenter;
-                demoGroundTargetZoom = dholeraDemoGroundTargetZoom(
-                  data.project.slug,placedBounds,focusCenter.lat,
-                  {width:hostRef.current?.clientWidth||0,height:hostRef.current?.clientHeight||0},
-                );
                 cameraActionRef.current?.("overview");
+                // Fallback if Maps does not emit idle after a zoom clamp.
+                demoReadyTimer=window.setTimeout(()=>{
+                  if(cancelled||demoPresentationDone)return;
+                  demoCameraIdle=true;
+                  overlay?.requestRedraw();
+                },1200);
               }
             }
             if(candidateLayer){
@@ -899,20 +900,26 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           // Start presets 50% closer using fractional zoom. Google's native
           // location-dependent zoom bound still applies, without rescaling GLB.
           if (demoFocusCenter) {
-            demoFitPending = true;
-            demoFitWaiting = true;
-            demoFitAttempts = 0;
-            // Start near the native close camera for this actual, scaled GLB.
-            // Never reset to a wider Google zoom AFTER its model has loaded.
-            const fittedPreset = {...preset,zoom:Math.max(
-              map.getZoom?.()??0,demoGroundTargetZoom??20.5,preset.zoom,
-            )};
+            // No iterative Google zoom on load: satellite zoom can be
+            // clamped asynchronously and otherwise appears to snap back.
+            // At GLB load preserve Google's ACTUAL zoom (already clamped
+            // for satellite imagery). Re-enter can restore zoom 20 on demand.
+            const fittedPreset={...preset,zoom:demoPresentationDone?20:(map.getZoom?.()??20)};
             if (map.moveCamera) map.moveCamera({center:demoFocusCenter,...fittedPreset});
             else {
               map.setCenter(demoFocusCenter);
               map.setZoom(fittedPreset.zoom);
               map.setHeading?.(fittedPreset.heading);
               map.setTilt?.(fittedPreset.tilt);
+            }
+          } else if (isDholeraDemo) {
+            const initialPreset={...preset,zoom:20};
+            if(map.moveCamera)map.moveCamera({ center, ...initialPreset });
+            else {
+              map.setCenter(center);
+              map.setZoom(initialPreset.zoom);
+              map.setHeading?.(preset.heading);
+              map.setTilt?.(preset.tilt);
             }
           } else {
             if(map.moveCamera)map.moveCamera({ center, ...preset });
@@ -937,8 +944,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           const requested = Math.max(0, current + step);
           if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
           setZoomNotice("");
-          demoFitPending = false; // manual zoom wins
-          demoFitWaiting = false;
+          demoCameraIdle=false; // user zoom is always authoritative
           map.setZoom(requested);
           if (step > 0) {
             zoomCheckTimer = window.setTimeout(() => {
@@ -974,8 +980,8 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
         });
         mapIdle = map.addListener("idle", () => {
           overlay?.requestRedraw();
-          if (demoFitPending) {
-            demoFitWaiting = false;
+          if (demoModelRoot && !demoPresentationDone) {
+            demoCameraIdle=true;
             overlay?.requestRedraw();
           }
           updateCompassHeading(map.getHeading?.());
@@ -1008,7 +1014,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
       clearSelectionRedrawTimer();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
-      if (demoFitFrame !== undefined) window.cancelAnimationFrame(demoFitFrame);
+      if (demoReadyTimer !== undefined) window.clearTimeout(demoReadyTimer);
       cameraActionRef.current = null;
       reenterActionRef.current = null;
       zoomActionRef.current = null;
@@ -1047,7 +1053,12 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
     <div ref={sceneRef} className="geo-integrated-scene"
       style={{"--geo-map-north-rotation":(geoMapNorthRotation(
         cameraPreset("overview",data.placement.headingDeg).heading)??0)+"deg"} as CSSProperties}>
-      <div ref={hostRef} className="geo-integrated-map" aria-label={`${data.project.name} integrated 3D geographic scene`} />
+      <div ref={hostRef} className="geo-integrated-map"
+        aria-label={`${data.project.name} integrated 3D geographic scene`} />
+      {data.project.slug===DHOLERA_GLB_DEMO_SLUG&&!demoSceneReady&&!failure&&
+        <div className="geo-demo-preparing" role="status">Preparing 3D map view…</div>}
+      {data.project.slug===DHOLERA_GLB_DEMO_SLUG&&demoSceneReady&&
+        <div className="geo-demo-view-note">Concept demo · visual scale</div>}
       <button type="button" className="geo-map-compass"
         aria-label="Map compass. Tap to face north."
         title="Geographic true north · tap to reset map bearing"

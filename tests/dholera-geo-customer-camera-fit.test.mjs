@@ -7,6 +7,7 @@ import {
   dholeraProjectedModelSize,
   dholeraDemoZoomCorrection,
   dholeraDemoGroundTargetZoom,
+  dholeraDemoPresentationBoost,
 } from "../shared/dholera-demo-geo-camera.js";
 
 const slug=DHOLERA_GLB_DEMO_SLUG;
@@ -57,15 +58,18 @@ test("fit zoom makes small demo larger but never clips its viewport target or in
   const near=dholeraDemoZoomCorrection(slug,{width:1032,height:480},viewport);
   assert.ok(Math.abs(near)<1e-12);
   assert.equal(dholeraDemoZoomCorrection(slug,{width:0,height:20},viewport),null);
-  assert.match(source,/dholeraDemoZoomCorrection\(data\.project\.slug,projected,viewport\)/);
+  assert.doesNotMatch(source,/map\.setZoom\(Math\.max\(0,current \+ correction\)\)/,
+    "load-time camera must not iterate zoom after Google clamps it");
   assert.match(source,/dholeraProjectedModelSize\(/);
-  assert.match(source,/demoFitAttempts >= 3/);
+  assert.match(source,/demoCameraIdle && demoModelRoot && demoModelBounds/);
   assert.match(source,/cameraActionRef\.current\?\.\("overview"\)/);
-  assert.match(source,/demoFitPending = false; \/\/ manual zoom wins/);
-  assert.match(source,/window\.cancelAnimationFrame\(demoFitFrame\)/);
+  assert.match(source,/demoCameraIdle=false; \/\/ user zoom is always authoritative/);
+  assert.match(source,/window\.clearTimeout\(demoReadyTimer\)/);
   assert.doesNotMatch(source,/modelRoot\.scale\.setScalar|model\.scale\.multiplyScalar/);
-  assert.match(source,/demoGroundTargetZoom = dholeraDemoGroundTargetZoom/);
-  assert.match(source,/map\.getZoom\?\.\(\)\?\?0,demoGroundTargetZoom\?\?20\.5,preset\.zoom/);
+  assert.match(source,/zoom:demoPresentationDone\?20:\(map\.getZoom\?\.\(\)\?\?20\)/,
+    "GLB load must preserve Google native map zoom without asking for an unsupported higher zoom");
+  assert.doesNotMatch(source,/demoGroundTargetZoom\?\?20\.5/,
+    "never ask Google for the unavailable high zoom on loaded Dholera GLB");
 });
 
 test("Dholera first completed GLB load targets a large metric footprint without snap zoom-out",()=>{
@@ -88,4 +92,31 @@ test("Dholera first completed GLB load targets a large metric footprint without 
     assert.ok(dholeraDemoZoomCorrection(slug,rendered,view)>=0,
       "camera fit must never produce a negative correction even for transient tall GLB bounds");
   }
+});
+
+test("Dholera presentation fallback fills a capped native satellite zoom viewport",()=>{
+  const viewport={width:1300,height:460};
+  const boost=dholeraDemoPresentationBoost(slug,{width:290,height:24},viewport);
+  assert.ok(boost>3.3&&boost<3.55,"roughly 22% wide colony gets enlarged to ~78% width");
+  assert.equal(dholeraDemoPresentationBoost(slug,{width:1700,height:700},viewport),1,
+    "never automatically shrink already-large 3D model");
+  assert.equal(dholeraDemoPresentationBoost(slug,{width:10,height:1},{width:3000,height:900}),3.75);
+  assert.equal(dholeraDemoPresentationBoost("shreem-palace-demo-a6532789",
+    {width:290,height:24},viewport),null);
+  assert.equal(dholeraDemoPresentationBoost(slug,{width:290,height:24},viewport,true),null,
+    "do not visually magnify a project with official mapped plots");
+  assert.equal(dholeraDemoPresentationBoost(slug,{width:0,height:24},viewport),null);
+  assert.match(source,/demoModelRoot\.scale\.multiplyScalar\(boost\)/);
+  assert.match(source,/demoModelRoot\.position\.add\(centerBefore\.sub\(centerAfter\)\)/);
+  assert.match(source,/setDemoSceneReady\(true\)/);
+  assert.match(source,/geo-demo-preparing/);
+  assert.match(source,/Concept demo · visual scale/);
+});
+
+test("first Dholera render never requests higher unsupported zoom after model load",()=>{
+  assert.match(source,/\.\.\.\(isDholeraDemo\?\{zoom:20\}:\{\}\)/);
+  assert.doesNotMatch(source,/demoGroundTargetZoom = dholeraDemoGroundTargetZoom/);
+  assert.match(source,/demoPresentationDone\?20:\(map\.getZoom\?\.\(\)\?\?20\)/);
+  assert.match(source,/if \(demoCameraIdle && demoModelRoot && demoModelBounds && !demoPresentationDone\)/);
+  assert.doesNotMatch(source,/demoFitPending/);
 });

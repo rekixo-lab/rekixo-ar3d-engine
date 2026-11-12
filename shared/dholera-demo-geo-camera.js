@@ -101,3 +101,23 @@ export function dholeraDemoGroundTargetZoom(slug, bounds, latitude, viewport) {
   if (!(requiredMetresPerPixel>0) || !(metresPerPixelAtZoomZero>0)) return null;
   return Math.max(0,Math.log2(metresPerPixelAtZoomZero/requiredMetresPerPixel));
 }
+
+/**
+ * Concept-demo only: when the satellite provider clamps camera zoom, use a
+ * presentation-only enlargement of the loaded GLB around its visual center.
+ * Keep original model, published metre-frame transform and geographic anchor
+ * completely unchanged. Never use this for measurement or a mapped plot site.
+ */
+export function dholeraDemoPresentationBoost(slug, projected, viewport, hasMappedPlots = false) {
+  if (slug !== DHOLERA_GLB_DEMO_SLUG || hasMappedPlots) return null;
+  const {width,height} = projected || {};
+  const {width:screenWidth,height:screenHeight} = viewport || {};
+  if (![width,height,screenWidth,screenHeight].every(finite) ||
+      width <= 2 || height <= 0 || screenWidth <= 0 || screenHeight <= 0)
+    return null;
+  const desired = Math.min(screenWidth * 0.78 / width, screenHeight * 0.73 / height);
+  if (!finite(desired) || desired <= 0) return null;
+  // User already sees a large model at close camera? Never downscale it.
+  // Cap enlargement for stability on small screens and oblique camera angles.
+  return Math.max(1,Math.min(3.75,desired));
+}
