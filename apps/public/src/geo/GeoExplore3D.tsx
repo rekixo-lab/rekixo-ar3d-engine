@@ -35,6 +35,7 @@ export function GeoExplore3D({modelUrl,modelName}:{
         modelUrl={modelUrl}
         modelLabel={modelName}
         presentationView={view}
+        geoExploreMode
         allowInteriorControls={false}
         allowWalkControls={false}
         compactUi={false}
