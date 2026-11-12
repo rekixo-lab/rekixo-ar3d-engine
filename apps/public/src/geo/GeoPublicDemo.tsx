@@ -1213,6 +1213,9 @@ export default function GeoPublicDemo() {
         return body;
       })
       .then((body) => {
+        // Resolve the first mode before the heavy Viewer3D can mount.
+        // Inventory with mapped plots must not flash/download Explore first.
+        setDisplayMode(initialGeoExperienceMode(slug,Boolean(body.plotMapping?.plots?.length)));
         setData(body);
         setError("");
       })
@@ -1222,11 +1225,6 @@ export default function GeoPublicDemo() {
       });
     return () => controller.abort();
   }, [slug]);
-
-  // Projects with official mapped plots open geographic inventory first.
-  useEffect(()=>{
-    if(data?.plotMapping?.plots?.length)setDisplayMode("map");
-  },[data?.project.slug,data?.plotMapping?.version]);
 
   // Poll only approved status facts: no model reload, camera reset or geometry
   // mutation. Also refresh immediately when a customer returns to the tab.
