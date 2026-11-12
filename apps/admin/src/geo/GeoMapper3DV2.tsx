@@ -871,6 +871,9 @@ export default function GeoMapper3DV2() {
                           <option key={anchor.id} value={anchor.id}>{anchor.name} · {anchor.kind}</option>)}
                       </select></label>
                     </div>
+                    {Number(form.scale)>0 && Number(form.scale)<0.5 && (
+                      <p className="geo3d-help" role="status">Scale audit: This uniform Geo scale reduces the source model's length, width AND height. Confirm actual model units and measured site dimensions before publishing; use Explore 3D for closer viewing instead of artificially enlarging the geographic model.</p>
+                    )}
                     <div className="geo-v2-editor-anchor-creator">
                       <h4>Create / select new model anchor</h4>
                       <div className="geo-v2-editor-position-grid">
@@ -939,6 +942,9 @@ export default function GeoMapper3DV2() {
               <label><span>HEIGHT MODE</span><select value={form.heightMode} onChange={(event) => patch("heightMode", event.target.value as GeoHeightMode)}><option value="ground-clamped">ground-clamped</option><option value="ground-relative">ground-relative</option><option value="absolute">absolute</option></select></label>
               <label><span>MODEL ANCHOR</span><select data-geo-model-anchor value={form.modelAnchorId} onChange={(event) => patch("modelAnchorId", event.target.value)}><option value="">Select explicit anchor</option>{state.anchors.filter((anchor) => anchor.sourceBuildingReleaseId === sourceReleaseId).map((anchor) => <option key={anchor.id} value={anchor.id}>{anchor.name} · {anchor.kind}</option>)}</select></label>
             </div>
+            {Number(form.scale)>0 && Number(form.scale)<0.5 && (
+              <p className="geo3d-help" role="status">Scale audit: source length, width and height are all reduced. Check original model units and physical site measurements; changing Zoom cannot correct wrong geometry scale.</p>
+            )}
             <div className="geo3d-save-row"><button type="button" onClick={() => setShowAnchorEditor(value => !value)}>
                 {showAnchorEditor ? "Hide Anchor Setup" : "Add Building Anchor"}
               </button></div>
