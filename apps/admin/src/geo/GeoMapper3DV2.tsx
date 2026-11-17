@@ -19,6 +19,7 @@ import GeoGuidedRigidAlignment, {
   type GeoGuidedPairDraft,
 } from "./GeoGuidedRigidAlignment";
 import GeoEasyReplace from "./GeoEasyReplace";
+import GeoSimplePlacementTools from "./GeoSimplePlacementTools";
 import GeoIntegratedAuthoringMap, {
   type GeoAlignmentMapTarget,
   type GeoIntegratedPreviewState,
@@ -283,7 +284,7 @@ export default function GeoMapper3DV2() {
   const [focusMode, setFocusMode] = useState(false);
   const [dockOpen, setDockOpen] = useState(true);
   const [showAnchorEditor, setShowAnchorEditor] = useState(false);
-  const [editorTab, setEditorTab] = useState<"corners" | "fine" | "position" | "release">("corners");
+  const [editorTab, setEditorTab] = useState<"corners" | "fine" | "position" | "release">("fine");
   const [previewVariant, setPreviewVariant] = useState<"canonical" | "geo">("canonical");
   const [mapsApiKey, setMapsApiKey] = useState("");
   const [configuredMapsApiKey, setConfiguredMapsApiKey] = useState("");
@@ -502,7 +503,7 @@ export default function GeoMapper3DV2() {
     setFocusMode((open) => {
       if (!open) {
         setDockOpen(true);
-        setEditorTab("corners");
+        setEditorTab("fine");
       }
       return !open;
     });
@@ -820,13 +821,23 @@ export default function GeoMapper3DV2() {
                 </div>
                 <div className={`geo-v2-guided-dock${focusMode ? " geo-v2-guided-dock--editor" : ""}`}>
                   {focusMode && <nav className="geo-v2-editor-tabs" role="tablist" aria-label="Geo editor tools">
-                    {([["corners", "Corners"], ["fine", "Fine Tune"], ["position", "Position"], ["release", "Release"]] as const).map(([tab, label]) => (
+                    {([["corners", "Match points"], ["fine", "Adjust model"], ["position", "Advanced"], ["release", "Publish"]] as const).map(([tab, label]) => (
                       <button type="button" key={tab} role="tab" aria-selected={editorTab === tab}
                         onClick={() => setEditorTab(tab)}>{label}</button>
                     ))}
                   </nav>}
                   <div className={`geo-v2-editor-guide${focusMode ? ` geo-v2-editor-guide--${editorTab}` : ""}`}>
-                  <GeoGuidedRigidAlignment
+                  {focusMode && editorTab === "fine" ? <GeoSimplePlacementTools
+                    coordinate={previewCoordinate}
+                    anchor={selectedAnchor}
+                    pairs={guidedPairs}
+                    scale={form.scale}
+                    headingDeg={form.headingDeg}
+                    onScale={(value) => patch("scale", value)}
+                    onApplyMeasuredFit={applyGuidedSolution}
+                    onFineAdjust={fineAdjustGuided}
+                    onMatchPoints={() => setEditorTab("corners")}
+                  /> : <GeoGuidedRigidAlignment
                   modelUrl={renderModel?.url || null}
                   modelName={renderModel?.name || "Building"}
                   coordinate={previewCoordinate}
@@ -842,7 +853,7 @@ export default function GeoMapper3DV2() {
                   onAllowScaleChange={setGuidedAllowScale}
                   onApply={applyGuidedSolution}
                   onFineAdjust={fineAdjustGuided}
-                /></div>
+                />}</div>
                   {focusMode && editorTab === "position" && <section className="geo-v2-editor-position" aria-label="Geo placement and model anchor">
                     <h4>WGS84 · Site Position</h4>
                     <p>Use the same verified project coordinates, heading and uniform scale as the main editor.</p>
@@ -909,7 +920,7 @@ export default function GeoMapper3DV2() {
                   <span>{error || message || (guidedTargetId ? `Pick ${guidedTargetId} on Satellite Map now` : guidedSourceId ? `Pick ${guidedSourceId} on the model preview now` : verificationBlocker || "Ready to verify current saved Geo revision")}</span>
                 </div>
                 <div className="geo-v2-editor-footer-actions">
-                  <button type="button" onClick={() => setEditorTab("corners")}>4-point Fit</button>
+                  <button type="button" onClick={() => setEditorTab("corners")}>Match Points</button>
                   <button type="button" className="geo-v2-editor-save" disabled={busy || !previewCoordinate || !previewPlacement}
                     onClick={() => void run(save)}>{busy ? "Working…" : "Save Draft"}</button>
                   <button type="button" disabled={busy || Boolean(verificationBlocker)}
