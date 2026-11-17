@@ -834,6 +834,7 @@ export default function GeoMapper3DV2() {
                     scale={form.scale}
                     headingDeg={form.headingDeg}
                     onScale={(value) => patch("scale", value)}
+                    onApplyMeasuredFit={applyGuidedSolution}
                     onFineAdjust={fineAdjustGuided}
                     onMatchPoints={() => setEditorTab("corners")}
                   /> : <GeoGuidedRigidAlignment
