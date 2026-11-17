@@ -1015,8 +1015,8 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           overlay?.requestRedraw();
         });
         mapIdle = map.addListener("idle", () => {
-          if(isTruesoilFarms&&truesoilFitCamera)truesoilFitSettled=true;
           overlay?.requestRedraw();
+          if(isTruesoilFarms&&truesoilFitCamera)truesoilFitSettled=true;
           if (demoModelRoot && !demoPresentationDone) {
             demoCameraIdle=true;
             overlay?.requestRedraw();
