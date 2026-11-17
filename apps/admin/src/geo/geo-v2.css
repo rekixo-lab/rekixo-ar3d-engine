@@ -992,3 +992,9 @@
   .geo-v2-simple-tools { padding:10px; }
   .geo-v2-simple-action-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
+
+
+.geo-v2-simple-fit { display:grid; gap:7px; border:1px solid #2e8f7c; border-radius:10px; padding:11px; background:#102e2d; }
+.geo-v2-simple-fit strong { color:#a9f3de; font-size:12px; }
+.geo-v2-simple-fit p { margin:0; font-size:11px; line-height:1.5; color:#c0e6dd; }
+.geo-v2-simple-fit button { border-color:#38bba3; background:#126150; }
