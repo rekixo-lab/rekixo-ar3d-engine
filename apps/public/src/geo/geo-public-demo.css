@@ -1062,3 +1062,7 @@
 @media (max-height:550px) and (min-width:701px){
   .geo-explore-stage > .viewer-shell{min-height:300px;height:70dvh}
 }
+
+/* Truesoil only: do not show the off-center anchor-camera while the saved-scale
+   GLB is verified and its north-up geographic overview is being calculated. */
+.geo-truesoil-preparing{z-index:5;pointer-events:auto}
