@@ -39,6 +39,9 @@ test("Size adjustment is intuitive and uniform, preserving older advanced survey
 test("Bad P1–P4 fit is visibly flagged and cannot silently auto-publish",()=>{
   assert.match(simple,/solveGeoGuidedRigidAlignment/);
   assert.match(simple,/fit\.errorM > 2/);
+  assert.match(simple,/fit\.errorM <= 2/);
+  assert.match(simple,/onApplyMeasuredFit\(fit\.solution!\)/);
+  assert.match(mapper,/onApplyMeasuredFit=\{applyGuidedSolution\}/);
   assert.match(simple,/role="alert"/);
   assert.match(simple,/Re-pick matching corners/);
   assert.match(simple,/Nothing is published automatically/);
