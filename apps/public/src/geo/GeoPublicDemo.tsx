@@ -17,6 +17,7 @@ import {summarizeApprovedGeoPlotStatuses,type GeoPlotStatus} from "../../../../s
 import {createGeoOneFingerOrbit,type GeoOrbitController} from "../../../../shared/geo-touch-orbit.js";
 import {closerGeoCameraZoom} from "../../../../shared/geo-camera-zoom.js";
 import {DHOLERA_GLB_DEMO_SLUG,dholeraDemoFocusCenter} from "../../../../shared/dholera-demo-geo-camera.js";
+import {TRUESOIL_FARMS_GEO_SLUG,truesoilFarmsOpeningPreset,truesoilFarmsFitCamera} from "../../../../shared/truesoil-farms-geo-camera.js";
 import {projectClientAdminUrl} from "../../../../shared/project-client-admin-url.js";
 import {geoCallHref} from "../../../../shared/geo-public-contact-links.js";
 import "./geo-public-demo.css";
@@ -410,6 +411,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
   const [zoomNotice, setZoomNotice] = useState("");
   const [failure, setFailure] = useState("");
   const [demoSceneReady,setDemoSceneReady] = useState(false);
+  const [truesoilSceneReady,setTruesoilSceneReady] = useState(false);
   const [statusEnabled,setStatusEnabled]=useState(false);
   const [statusFilter,setStatusFilter]=useState<GeoPlotStatus|null>(null);
   // Status updates are isolated from the immutable GLB/mapping data prop:
@@ -468,6 +470,12 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
     // Dholera concept demo only: fit the camera to placed geometry, never
     // change the saved metric GLB, transform, pins or other live projects.
     const isDholeraDemo = data.project.slug === DHOLERA_GLB_DEMO_SLUG;
+    // Exactly one published client opts into the north-up, footprint-fitted
+    // opening view. It does not modify any saved placement or plot geometry.
+    const isTruesoilFarms = data.project.slug === TRUESOIL_FARMS_GEO_SLUG;
+    let truesoilFitCamera:ReturnType<typeof truesoilFarmsFitCamera>=null;
+    let truesoilFitSettled=false,truesoilReadySent=false;
+    let truesoilReadyTimer:number|undefined;
     let demoModelBounds: THREE.Box3 | null = null;
     let demoFocusCenter: {lat:number;lng:number} | null = null;
     let demoModelRoot:THREE.Group|null=null;
@@ -512,7 +520,8 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           lng: data.placement.anchor.longitude,
         };
         const initialCamera = {...cameraPreset("overview",data.placement.headingDeg),
-          ...(isDholeraDemo?{zoom:20}:{})};
+          ...(isDholeraDemo?{zoom:20}:{}),
+          ...(truesoilFarmsOpeningPreset(data.project.slug,"overview")||{})};
         const touchCapable = navigator.maxTouchPoints>0 ||
           window.matchMedia?.("(pointer:coarse)").matches;
         const map = new google.maps.Map(hostRef.current, {
@@ -735,6 +744,13 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           const animating=plotLayer?.tickSelection(performance.now(),reducedMotion)??false;
           renderer.render(scene, camera);
           renderer.resetState();
+          // Reveal Truesoil only after its fitted camera has settled and
+          // a WebGL frame has actually rendered at that map position.
+          if(isTruesoilFarms&&truesoilFitSettled&&truesoilFitCamera&&!truesoilReadySent){
+            truesoilReadySent=true;
+            if(truesoilReadyTimer!==undefined)window.clearTimeout(truesoilReadyTimer);
+            setTruesoilSceneReady(true);
+          }
           // Geo Map displays the published rigid WGS84 placement at its
           // original saved scale. Never enlarge geometry just to defeat
           // Google's satellite camera zoom limit; Explore 3D handles this.
@@ -815,6 +831,30 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
                 scale: data.placement.scale,
               },
             );
+            if(isTruesoilFarms){
+              modelRoot.updateMatrixWorld(true);
+              const placedBounds=new THREE.Box3().setFromObject(modelRoot);
+              const mapHost=hostRef.current;
+              truesoilFitCamera=!placedBounds.isEmpty()&&mapHost
+                ?truesoilFarmsFitCamera(data.project.slug,
+                    {lat:center.lat,lng:center.lng},placedBounds,
+                    {width:mapHost.clientWidth,height:mapHost.clientHeight})
+                :null;
+              if(truesoilFitCamera){
+                // Do this once after the verified GLB has arrived. Subsequent
+                // idle/resize events never reset a user's pan/zoom/orbit.
+                cameraActionRef.current?.("overview");
+                truesoilReadyTimer=window.setTimeout(()=>{
+                  if(cancelled||truesoilReadySent)return;
+                  truesoilReadySent=true;
+                  setTruesoilSceneReady(true);
+                },1600);
+              }else{
+                // Fail open to a safe top-down map if bounds are unavailable.
+                truesoilReadySent=true;
+                setTruesoilSceneReady(true);
+              }
+            }
             if (isDholeraDemo) {
               modelRoot.updateMatrixWorld(true);
               const placedBounds = new THREE.Box3().setFromObject(modelRoot);
@@ -879,13 +919,23 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           });
 
         const applyCamera = (view: GeoCameraView) => {
-          const preset = cameraPreset(view, data.placement.headingDeg);
+          const preset = {...cameraPreset(view, data.placement.headingDeg),
+            ...(truesoilFarmsOpeningPreset(data.project.slug,view)||{})};
           activeCameraView = view;
           setCameraView(view);
           setZoomNotice("");
           // Start presets 50% closer using fractional zoom. Google's native
           // location-dependent zoom bound still applies, without rescaling GLB.
-          if (demoFocusCenter) {
+          if(isTruesoilFarms&&truesoilFitCamera){
+            const target=view==="overview"?{...preset,...truesoilFitCamera}:preset;
+            if(map.moveCamera)map.moveCamera({center:truesoilFitCamera.center,...target});
+            else{
+              map.setCenter(truesoilFitCamera.center);
+              map.setZoom(target.zoom);
+              map.setHeading?.(target.heading);
+              map.setTilt?.(target.tilt);
+            }
+          } else if (demoFocusCenter) {
             // No iterative Google zoom on load: satellite zoom can be
             // clamped asynchronously and otherwise appears to snap back.
             // At GLB load preserve Google's ACTUAL zoom (already clamped
@@ -965,6 +1015,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
           overlay?.requestRedraw();
         });
         mapIdle = map.addListener("idle", () => {
+          if(isTruesoilFarms&&truesoilFitCamera)truesoilFitSettled=true;
           overlay?.requestRedraw();
           if (demoModelRoot && !demoPresentationDone) {
             demoCameraIdle=true;
@@ -1001,6 +1052,7 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
       document.removeEventListener("visibilitychange", onVisibilityChange);
       if (zoomCheckTimer !== undefined) window.clearTimeout(zoomCheckTimer);
       if (demoReadyTimer !== undefined) window.clearTimeout(demoReadyTimer);
+      if (truesoilReadyTimer !== undefined) window.clearTimeout(truesoilReadyTimer);
       cameraActionRef.current = null;
       reenterActionRef.current = null;
       zoomActionRef.current = null;
@@ -1043,6 +1095,10 @@ function IntegratedGeoScene({ data, toolbarContainer, modelSiteHref, notices, li
         aria-label={`${data.project.name} integrated 3D geographic scene`} />
       {data.project.slug===DHOLERA_GLB_DEMO_SLUG&&!demoSceneReady&&!failure&&
         <div className="geo-demo-preparing" role="status">Preparing 3D map view…</div>}
+      {data.project.slug===TRUESOIL_FARMS_GEO_SLUG&&!truesoilSceneReady&&!failure&&
+        <div className="geo-demo-preparing geo-truesoil-preparing" role="status">
+          Preparing centered aerial overview…
+        </div>}
 
       <button type="button" className="geo-map-compass"
         aria-label="Map compass. Tap to face north."
