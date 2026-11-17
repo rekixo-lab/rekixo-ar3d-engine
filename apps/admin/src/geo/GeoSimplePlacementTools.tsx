@@ -1,4 +1,4 @@
-import { solveGeoGuidedRigidAlignment } from "@rekixo/3d-engine-core";
+import { solveGeoGuidedRigidAlignment, type GeoGuidedRigidSolution } from "@rekixo/3d-engine-core";
 import { useMemo, useState } from "react";
 import type { GeoGuidedPairDraft, GeoGuidedFineDelta } from "./GeoGuidedRigidAlignment";
 import type { GeoV2Anchor } from "./geoV2Api";
@@ -11,12 +11,13 @@ type Props = {
   scale: string;
   headingDeg: string;
   onScale(value: string): void;
+  onApplyMeasuredFit(solution: GeoGuidedRigidSolution): void;
   onFineAdjust(delta: GeoGuidedFineDelta): void;
   onMatchPoints(): void;
 };
 
 export default function GeoSimplePlacementTools({
-  coordinate, anchor, pairs, scale, headingDeg, onScale, onFineAdjust, onMatchPoints,
+  coordinate, anchor, pairs, scale, headingDeg, onScale, onApplyMeasuredFit, onFineAdjust, onMatchPoints,
 }: Props) {
   const [moveStep, setMoveStep] = useState(1);
   const currentScale = Number(scale);
@@ -31,11 +32,12 @@ export default function GeoSimplePlacementTools({
         coordinate, { x: anchor.xM, y: anchor.yM, z: anchor.zM },
         matched, { allowScale: true, allowExtendedScale: true },
       );
-      return { errorM: result.maxErrorM, message: "" };
+      return { errorM: result.maxErrorM, message: "", solution: result };
     } catch (error) {
       return {
         errorM: Number.POSITIVE_INFINITY,
         message: error instanceof Error ? error.message : "Selected points do not match.",
+        solution: null,
       };
     }
   }, [coordinate, anchor, count, pairs]);
@@ -50,6 +52,11 @@ export default function GeoSimplePlacementTools({
       <p>{fit.message || `The selected 3D and satellite corners disagree by up to ${fit.errorM.toFixed(1)} m.`}
         {" "}Moving or shrinking alone will not fix incorrectly paired corners.</p>
       <button type="button" onClick={onMatchPoints}>Re-pick matching corners</button>
+    </div>}
+    {fit?.solution && fit.errorM <= 2 && <div className="geo-v2-simple-fit" role="status">
+      <strong>Corner match is consistent (within {fit.errorM.toFixed(2)} m)</strong>
+      <p>Suggested uniform size: {(fit.solution.scale * 100).toFixed(0)}%. Confirm the GLB units and real land boundaries before saving.</p>
+      <button type="button" onClick={() => onApplyMeasuredFit(fit.solution!)}>Apply measured size, move and rotation</button>
     </div>}
     <div className="geo-v2-simple-section">
       <div className="geo-v2-simple-section-heading">
