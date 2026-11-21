@@ -51,3 +51,9 @@ test("Published masterplan and showcase do not display Rekixo branding",()=>{
  assert.doesNotMatch(masterplan,/>\s*REKIXO\s*·/i);
  assert.doesNotMatch(showcase,/>\s*REKIXO\s*·/i);
 });
+
+test("Production Admin verification checks the new neutral document title exactly",()=>{
+ const verify=read("scripts/verify-design-admin.mjs");
+ assert.match(verify,/html\.includes\("<title>AR 3D Projects<\/title>"\)/);
+ assert.doesNotMatch(verify,/html\.includes\("<title>Rekixo 3D Projects<\/title>"\)/);
+});
